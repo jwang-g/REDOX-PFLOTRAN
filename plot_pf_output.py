@@ -20,6 +20,33 @@ def read_tecfile(filename):
     converters=dict(((n,convertfunc) for n in range(len(header))))
     return pandas.read_table(filename,skiprows=1,names=header,header=None,delim_whitespace=True,index_col=0,converters=converters)
 
+def read_hdf5file(filename):
+    import h5py
+    data_file=h5py.File(filename)
+    element_names=list(data_file)
+    timepoints=element_names[2:]
+    output_fields=list(data_file[timepoints[0]])
+    import xarray,numpy
+    time_axis=numpy.array([float(t[t.find(':')+1:-1].strip()) for t in timepoints])
+    coords=list(data_file['Coordinates'])
+    datashape=data_file[timepoints[0]][output_fields[0]].value.shape
+    data_coords={'time':time_axis}
+    for num,coord in enumerate(coords):
+        data_coords[coord]=numpy.arange(datashape[num])
+    data_out=xarray.Dataset(coords=data_coords)
+    data_dict={}
+    for field in output_fields:
+        data_dict[field]=(numpy.zeros((len(time_axis),datashape[0],datashape[1],datashape[2])))
+    for tnum,timepoint in enumerate(timepoints):
+        print('Timepoint: ',timepoint)
+        vals=data_file[timepoint]
+        for field in output_fields:
+            data_dict[field][tnum,:,:,:]=vals[field].value
+    
+    for field in output_fields:
+        data_out[field]=(('time',coords[0],coords[1],coords[2]),data_dict[field])
+    return data_out.sortby('time')
+
 if __name__=='__main__':
     # data=read_tecfile('CLM-CN-obs-0.tec')*100**3
     #
@@ -51,7 +78,19 @@ if __name__=='__main__':
     #
     #
     # tight_layout()
+    
+    import sys
+    if len(sys.argv)==1:
+        filename='test3d-obs-0.tec'
+    else:
+        filename=sys.argv[1]
 
-    read_tecfile('test3d-obs-0.tec').plot()
+    if filename.endswith('.tec'):
+        data=read_tecfile(filename)
+        data.plot()
+    elif filename.endswith('.h5'):
+        data=read_hdf5file(filename).plot()
+        for var in data:
+            data[var].plot()
 
     show()
