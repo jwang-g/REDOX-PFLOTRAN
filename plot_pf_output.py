@@ -2,13 +2,23 @@ from pylab import *
 
 import pandas
 
-def read_tecfile(filename):
+def read_tecfile(filename,convert_units_to=None,saturation=None):
     f=open(filename,'r')
     headerline=f.readline()
-    header=[x[:x.find('[')].strip(' "') for x in headerline.split(',')]
-    lines=f.readlines()
-
     f.close()
+    colnames=headerline.split(',')
+    header=[]
+    units={}
+    for col in colnames:
+        if '[' in col:
+            name=col[:col.find('[')].strip(' "')
+            unit=col[col.find('[')+1:col.find(']')]
+        else:
+            name=col.strip('"').split()[0]
+            unit='NA'
+        header.append(name)
+        units[name]=unit
+
 
     # This converter stuff is necessary because pflotran doesn't produce the right text format when exponent is <= E-100
     def convertfunc(strval):
@@ -18,7 +28,50 @@ def read_tecfile(filename):
             return float(strval)
 
     converters=dict(((n,convertfunc) for n in range(len(header))))
-    return pandas.read_table(filename,skiprows=1,names=header,header=None,delim_whitespace=True,index_col=0,converters=converters)
+    
+    data=pandas.read_table(filename,skiprows=1,names=header,header=None,delim_whitespace=True,index_col=0,converters=converters)
+    
+    if convert_units_to is not None:
+        data,units=convert_units(data,units,convert_units_to)
+    else:
+        print('Note: not converting units')
+        
+    return data,units
+    
+def convert_units(data,units,convert_units_to):
+    out=data.copy()
+    units_out=units.copy()
+    water_molar_density=55.345 # mol/L
+    saturation = 1.0 # Assuming we are always doing chemistry under saturated conditions (even if it is tricking Pflotran)
+    if 'Porosity' in data.columns:
+        porosity=data['Porosity']
+    else:
+        raise ValueError('Porosity must be included in output file to calculate unit changes')
+    
+    if convert_units_to=='M':
+        print('Converting all concentration units to M equivalent assuming saturation')
+        for col in data.columns:
+            if units[col] == 'mol/m^3':
+                print(col)
+                # Convert from mol[x]/m^3[bulk] to equivalent mol[x]/L[H2O]:  /(1000L/m^3*saturation*porosity) (m^3[H2O]/m^3[bulk])
+                out[col]=data[col]/(1000*saturation*porosity)
+                units_out[col]='M'
+                
+    elif convert_units_to=='mol/m^3':
+        print('Converting all concentration units to mol/m^3')
+        for col in data.columns:
+            if units[col] == 'M':
+                print(col)
+                # Convert from mol[x]/L[H2O] to mol[x]/m^3[bulk]: Divide by porosity*saturation*1000
+                out[col]=data[col]/(1000*saturation*porosity)
+                units_out[col]='mol/m^3'
+
+    else:
+        raise ValueError('Units %s not supported. Must be "M" or "mol/m^3"'%convert_units_to)
+        
+    return out,units_out
+    
+
 
 def read_hdf5file(filename):
     import h5py
@@ -86,11 +139,14 @@ if __name__=='__main__':
         filename=sys.argv[1]
 
     if filename.endswith('.tec'):
-        data=read_tecfile(filename)
-        data.plot()
+        data,units=read_tecfile(filename,convert_units_to='M')
+        data.loc[:,pandas.Series(units)=='M'].plot()
+    elif filename.endswith('mas.dat'):
+        data,units=read_tecfile(filename)
+        data.loc[:,pandas.Series(units)=='mol'].plot()
     elif filename.endswith('.h5'):
-        data=read_hdf5file(filename).plot()
-        for var in data:
+        data=read_hdf5file(filename)
+        for var in data.variables:
             data[var].plot()
 
     show()

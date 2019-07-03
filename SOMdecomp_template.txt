@@ -6,7 +6,7 @@ SIMULATION
   PROCESS_MODELS
     SUBSURFACE_TRANSPORT transport
       GLOBAL_IMPLICIT
-      !NUMERICAL_JACOBIAN
+      NUMERICAL_JACOBIAN
     /
   /
 
@@ -38,72 +38,17 @@ CHEMISTRY
   /
   
   IMMOBILE_SPECIES
-    POM
-    SOIL_MICROBES
-    SOM2
-  /
-  GAS_SPECIES
-    CO2(g)*
+    [INSERT_IMMOBILE_SPECIES_HERE]
   /
   REACTION_SANDBOX
-    SOMDECOMP
-      POOLS
-        POM    15.d0
-        SOIL_MICROBES 10.d0
-        SOM2     10.d0
-        DOM1   20.d0
-      /
-      # POM decomposition
-      REACTION
-        UPSTREAM_POOL POM
-        DOWNSTREAM_POOL SOIL_MICROBES 0.6d0
-        TURNOVER_TIME 0.5d0 y
-        #MONOD # Note, in my experience a modified monod function that normalizes by substrate biomass works better
-        #  SPECIES_NAME SOIL_MICROBES 
-        #  HALF_SATURATION_CONSTANT 0.1d-3
-        #/
-      /
-      # Turnover of microbial biomass
-      REACTION
-        UPSTREAM_POOL SOIL_MICROBES
-        DOWNSTREAM_POOL SOM2 0.1d0
-        TURNOVER_TIME 0.1d0 y
-        # Inhibit turnover at very small concentrations so some residual biomass remains under adverse conditions
-        #INHIBITION
-        #  SPECIES_NAME SOIL_MICROBES
-        #  TYPE INVERSE_MONOD
-        #  INHIBITION_CONSTANT 1.0d-11
-        #/
-      /
-      # Microbial decomposition of SOM2
-      REACTION
-        UPSTREAM_POOL SOM2
-        DOWNSTREAM_POOL SOIL_MICROBES 0.1d0
-        TURNOVER_TIME 10.d0 y
-        #MONOD 
-        #  SPECIES_NAME SOIL_MICROBES
-        #  HALF_SATURATION_CONSTANT 0.1d-3
-        #/
-      /
-      # Dissolution into DOM
-      REACTION
-        UPSTREAM_POOL POM
-        DOWNSTREAM_POOL DOM1 1.0d0
-        TURNOVER_TIME 0.1d0 y
-        #INHIBITION # High DOM accumulation will stop the dissolving process (reaching equilibrium)
-        #  SPECIES_NAME DOM1
-        #  TYPE MONOD
-        #  INHIBITION_CONSTANT 1.d-12
-        #/
-      /
-    /
-  /
+    [INSERT_SOMDECOMP_HERE]
+  / # End of REACTION_SANDBOX
   
 
-  TRUNCATE_CONCENTRATION 1.d-15
+  #TRUNCATE_CONCENTRATION 1.d-16
 
 
- # LOG_FORMULATION
+  LOG_FORMULATION
   DATABASE ./test3d.dat
 
   OUTPUT
@@ -126,9 +71,7 @@ CONSTRAINT initial
     NH4+        1.d-15   T
     /
   IMMOBILE     # [mol/m^3 bulk]
-    POM          1.d-8
-    SOIL_MICROBES  1.d-10
-    SOM2      1.d-13
+    [INSERT_IMMOBILE_CONSTRAINTS_HERE]
     /
   
 END
@@ -193,12 +136,18 @@ OUTPUT
   SCREEN PERIODIC 10
   #PERIODIC TIMESTEP 1
   #FORMAT HDF5
+  VARIABLES
+    POROSITY
+    /
   FORMAT TECPLOT POINT
+  MASS_BALANCE_FILE
+    PERIODIC TIMESTEP 1
+  /
 END
 
 #=========================== times ============================================
 TIME
-  FINAL_TIME 2.d0 y
+  FINAL_TIME 1.d1 y
   INITIAL_TIMESTEP_SIZE 0.5d0 h
   MAXIMUM_TIMESTEP_SIZE 12.d0 h
 END
