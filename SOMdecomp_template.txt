@@ -28,21 +28,21 @@ REFERENCE_LIQUID_DENSITY 1.d3
 #=========================== chemistry ========================================
 CHEMISTRY
   PRIMARY_SPECIES
-    DOM1
-    CO2(aq)
+    # DOM1
+    # CO2(aq)
     NH4+
+    [INSERT_PRIMARY_SPECIES_HERE]
   /
   DECOUPLED_EQUILIBRIUM_REACTIONS
-    CO2(aq)
+    # CO2(aq)
     NH4+
   /
   
   IMMOBILE_SPECIES
     [INSERT_IMMOBILE_SPECIES_HERE]
   /
-  REACTION_SANDBOX
-    [INSERT_SOMDECOMP_HERE]
-  / # End of REACTION_SANDBOX
+
+    [INSERT_REACTIONS_HERE]
   
 
   #TRUNCATE_CONCENTRATION 1.d-16
@@ -66,9 +66,10 @@ END
 #=========================== transport constraints ============================
 CONSTRAINT initial
   CONCENTRATIONS 
-    DOM1        1.d-15     T
-    CO2(aq)    1.d-15     T
+    # DOM1        1.d-15     T
+    # CO2(aq)    1.d-15     T
     NH4+        1.d-15   T
+    [INSERT_CONCENTRATION_CONSTRAINTS_HERE]
     /
   IMMOBILE     # [mol/m^3 bulk]
     [INSERT_IMMOBILE_CONSTRAINTS_HERE]
