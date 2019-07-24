@@ -103,7 +103,7 @@ class PF_network_writer(PF_writer):
             insert_immobile_constraints_text='[INSERT_IMMOBILE_CONSTRAINTS_HERE]',
             insert_concentration_constraints_text='[INSERT_CONCENTRATION_CONSTRAINTS_HERE]',
             insert_primary_species_text='[INSERT_PRIMARY_SPECIES_HERE]',
-            indent_spaces=2):
+            indent_spaces=2,length_days=None):
         base_indent=0
         with open(templatefile_name,'r') as templatefile:
             template_lines=templatefile.readlines()
@@ -154,8 +154,14 @@ class PF_network_writer(PF_writer):
                     outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: Beginning of auto-inserted concentration constraints ####\n')
                     for pool in self.network.nodes:
                         if not self.network.nodes[pool]['immobile']:
-                            outputfile.write(' '*(base_indent+indent_spaces) + (pool).ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval'])+'\n')
+                            if isinstance(self.network.nodes[pool]['initval'],str):
+                                outputfile.write(' '*(base_indent+indent_spaces) + (pool).ljust(20) + self.network.nodes[pool]['initval']+'\n')
+                            else:
+                                outputfile.write(' '*(base_indent+indent_spaces) + (pool).ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval'])+'\n')
+                                
                     outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: End of auto-inserted concentration constraints ####\n')
+                elif 'FINAL_TIME' in line and length_days is not None:
+                    outputfile.write(' '*(base_indent+indent_spaces) + 'FINAL_TIME {ndays:1.1e} d\n'.format(ndays=length_days))
                 else:
                     if not line.isspace():
                         base_indent=len(line)-len(line.lstrip())
@@ -165,10 +171,10 @@ class PF_network_writer(PF_writer):
 
         
         
-    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.tec',print_output=False):
+    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.tec',print_output=False,length_days=None):
         inputdeck=simulation_name+'_generated.in'
         print('Setting up input deck in %s'%inputdeck)
-        self.write_into_input_deck(template_file,inputdeck)
+        self.write_into_input_deck(template_file,inputdeck,length_days=length_days)
         import subprocess
         cmd='{pflotran_exe:s} -pflotranin {simname:s}_generated.in'.format(pflotran_exe=pflotran_exe,simname=simulation_name)
         print('Running cmd: %s'%cmd)
@@ -299,8 +305,6 @@ class decomp_network(nx.MultiDiGraph):
         self.add_node(name,immobile=immobile,**pool_data)
         if CN is not None:
             self.nodes[name]['CN']=CN
-        elif 'CO2' not in name:
-            print('Note: Pool %s has flexible CN ratio'%name)
         self.nodes[name]['initval']=initval
     def add_reaction(self,reaction):
         reaction_data=reaction.copy()

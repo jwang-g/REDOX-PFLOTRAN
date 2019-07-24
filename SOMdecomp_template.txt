@@ -27,6 +27,9 @@ REFERENCE_LIQUID_DENSITY 1.d3
 
 #=========================== chemistry ========================================
 CHEMISTRY
+  MINERALS
+    Fe(OH)3
+  /
   PRIMARY_SPECIES
     # DOM1
     # CO2(aq)
@@ -38,22 +41,41 @@ CHEMISTRY
     NH4+
   /
   
+  SECONDARY_SPECIES
+    CO2(aq)
+    OH-
+    FeCO3+
+    FeCO3(aq)
+  /
+  
   IMMOBILE_SPECIES
     [INSERT_IMMOBILE_SPECIES_HERE]
   /
+  
+  GAS_SPECIES
+    CO2(g)
+  /
 
+
+  MINERAL_KINETICS
+    Fe(OH)3
+      RATE_CONSTANT 1.d-3 mol/m^2-sec
+      /
+  /
+  
     [INSERT_REACTIONS_HERE]
   
 
-  #TRUNCATE_CONCENTRATION 1.d-16
+  # TRUNCATE_CONCENTRATION 1.d-20
 
 
   LOG_FORMULATION
-  DATABASE ./test3d.dat
+  DATABASE ./hanford.dat
 
   OUTPUT
     !PH
     TOTAL
+    FREE_ION
     PRIMARY_SPECIES
     SECONDARY_SPECIES
     GASES
@@ -74,13 +96,16 @@ CONSTRAINT initial
   IMMOBILE     # [mol/m^3 bulk]
     [INSERT_IMMOBILE_CONSTRAINTS_HERE]
     /
+    MINERALS
+      Fe(OH)3      1.75d4  1. m^2/m^3
+    /
   
 END
 
 #=========================== solver options ===================================
 LINEAR_SOLVER TRANSPORT
-  !SOLVER DIRECT
-  SOLVER ITERATIVE     ! default: ITERATIVE or KRYLOV: KSP_TYPE of BCGS and PC_TYPE of BJACOBI, if not modified below
+  SOLVER DIRECT
+  !SOLVER ITERATIVE     ! default: ITERATIVE or KRYLOV: KSP_TYPE of BCGS and PC_TYPE of BJACOBI, if not modified below
   PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
   KSP_TYPE fgmres      ! default: BCGS. NOT much difference 
 END
