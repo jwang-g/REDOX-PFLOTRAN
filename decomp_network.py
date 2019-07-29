@@ -97,76 +97,140 @@ class PF_network_writer(PF_writer):
             
 
 
-    def write_into_input_deck(self,templatefile_name,outputfile_name,
-            insert_reactions_text='[INSERT_REACTIONS_HERE]',
-            insert_imspecies_text='[INSERT_IMMOBILE_SPECIES_HERE]',
-            insert_immobile_constraints_text='[INSERT_IMMOBILE_CONSTRAINTS_HERE]',
-            insert_concentration_constraints_text='[INSERT_CONCENTRATION_CONSTRAINTS_HERE]',
-            insert_primary_species_text='[INSERT_PRIMARY_SPECIES_HERE]',
+    def write_into_input_deck(self,templatefile_name,outputfile_name,constraintname='initial',
             indent_spaces=2,length_days=None):
         base_indent=0
         with open(templatefile_name,'r') as templatefile:
             template_lines=templatefile.readlines()
-        with open(outputfile_name,'w') as outputfile:
-            for line in template_lines:
-                if insert_reactions_text in line:
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: Beginning of auto-inserted SOMDECOMP reactions ####\n')
-                    outputfile.write(self.write_all_reactions(base_indent=base_indent+indent_spaces,indent_spaces=indent_spaces))
-                    outputfile.write(' '*(base_indent+indent_spaces) + '#### NOTE: End of auto-inserted SOMDECOMP reactions ####\n\n')
-                elif insert_imspecies_text in line:
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: Beginning of auto-inserted immobile species ####\n')
-                    for pool in self.network.nodes:
-                        if not self.network.nodes[pool]['immobile']:
-                            continue
+    
+        for line in template_lines:
+            if 'CHEMISTRY' in line and not line.strip().startswith('#'):
+                self.output = self.output + line
+                # Start of chemistry block
+                # Primary species
+                self.increase_level('PRIMARY_SPECIES')
+                self.add_line('#### NOTE: Beginning of auto-inserted primary species ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='primary':
+                        self.add_line( pool )
+                self.add_line( '#### NOTE: End of auto-inserted primary species ####')
+                self.decrease_level()
+                
+                # Assume that all primary species should be put into decoupled eq reactions just in case
+                self.increase_level('DECOUPLED_EQUILIBRIUM_REACTIONS')
+                self.add_line( '#### NOTE: Beginning of auto-inserted primary species ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='primary':
+                        self.add_line( pool )
+                self.add_line( '#### NOTE: End of auto-inserted primary species ####')
+                self.decrease_level()
+                
+                # Secondary species
+                self.increase_level('SECONDARY_SPECIES')
+                self.add_line('#### NOTE: Beginning of auto-inserted secondary species ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='secondary':
+                        self.add_line( pool )
+                self.add_line( '#### NOTE: End of auto-inserted secondary species ####')
+                self.decrease_level()
+                
+                # Minerals
+                self.increase_level('MINERALS')
+                self.add_line( '#### NOTE: Beginning of auto-inserted secondary species ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='mineral':
+                        self.add_line( pool)
+                self.add_line( '#### NOTE: End of auto-inserted secondary species ####')
+                self.decrease_level()
+                
+                # Mineral kinetics
+                self.increase_level('MINERAL_KINETICS')
+                self.add_line( '#### NOTE: Beginning of auto-inserted secondary species ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='mineral':
+                        self.increase_level(pool)
+                        self.add_line('RATE_CONSTANT  ' + self.network.nodes[pool]['rate'])
+                        self.decrease_level()
+                self.add_line( '#### NOTE: End of auto-inserted secondary species ####')
+                self.decrease_level()
+                
+                # Immobile species
+                self.increase_level('IMMOBILE_SPECIES')
+                self.add_line( '#### NOTE: Beginning of auto-inserted immobile species ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='immobile':
                         if 'CN' in self.network.nodes[pool]:
-                            outputfile.write(' '*(base_indent+indent_spaces) + pool + '\n')
+                            self.add_line( pool)
                         else:
-                            outputfile.write(' '*(base_indent+indent_spaces) + pool + 'C\n')
-                            outputfile.write(' '*(base_indent+indent_spaces) + pool + 'N\n')
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: End of auto-inserted immobile species ####\n')
-                elif insert_primary_species_text in line:
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: Beginning of auto-inserted primary species ####\n')
-                    for pool in self.network.nodes:
-                        if not self.network.nodes[pool]['immobile']:
-                            outputfile.write(' '*(base_indent+indent_spaces) + pool + '\n')
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: End of auto-inserted primary species ####\n')
-                elif 'DECOUPLED_EQUILIBRIUM_REACTIONS' in line:
-                    outputfile.write(line)
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: Beginning of auto-inserted primary species ####\n')
-                    for pool in self.network.nodes:
-                        if not self.network.nodes[pool]['immobile']:
-                            outputfile.write(' '*(base_indent+indent_spaces) + pool + '\n')
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: End of auto-inserted primary species ####\n')
-                elif insert_immobile_constraints_text in line:
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: Beginning of auto-inserted immobile species ####\n')
-                    for pool in self.network.nodes:
-                        if not self.network.nodes[pool]['immobile']:
-                            continue
-                        if 'CN' in self.network.nodes[pool]:
-                            outputfile.write(' '*(base_indent+indent_spaces) + pool.ljust(20) + ' {const:1.1e}'.format(const=self.network.nodes[pool]['initval'])+'\n')
+                            self.add_line( pool + 'C')
+                            self.add_line( pool + 'N')
+                self.add_line( '#### NOTE: End of auto-inserted immobile species ####')
+                self.decrease_level()
+                
+                # Gas species
+                self.increase_level('GAS_SPECIES')
+                self.add_line( '#### NOTE: Beginning of auto-inserted gas species ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='gas':
+                        self.add_line( pool)
+                self.add_line( '#### NOTE: End of auto-inserted gas species ####')
+                self.decrease_level()
+                
+                # Reactions
+                self.add_line( '#### NOTE: Beginning of auto-inserted reactions ####')
+                self.write_all_reactions(base_indent=base_indent+indent_spaces,indent_spaces=indent_spaces)
+                self.add_line( '#### NOTE: End of auto-inserted reactions ####')
+            
+            elif line.strip().startswith('CONSTRAINT') and line.strip().endswith(constraintname):
+                self.output = self.output + line
+                self.increase_level('IMMOBILE')
+                self.add_line( '#### NOTE: Beginning of auto-inserted immobile species ####')
+                for pool in self.network.nodes:
+                    if not self.network.nodes[pool]['kind']=='immobile':
+                        continue
+                    if 'CN' in self.network.nodes[pool]:
+                        self.add_line( pool.ljust(20) + ' {const:1.1e}'.format(const=self.network.nodes[pool]['initval']))
+                    else:
+                        if 'initCN' not in self.network.nodes[pool]:
+                            raise ValueError('initCN must be provided for flexible CN pools: pool %s'%pool)
+                        self.add_line( (pool+'C').ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval']))
+                        self.add_line( (pool+'N').ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval']/self.network.nodes[pool]['initCN']))
+                self.add_line( '#### NOTE: End of auto-inserted immobile species ####')
+                self.decrease_level()
+                
+                self.increase_level('CONCENTRATIONS')
+                self.add_line( '#### NOTE: Beginning of auto-inserted concentration constraints ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='primary':
+                        if isinstance(self.network.nodes[pool]['initval'],str):
+                            self.add_line( (pool).ljust(20) + self.network.nodes[pool]['initval'])
                         else:
-                            if 'initCN' not in self.network.nodes[pool]:
-                                raise ValueError('initCN must be provided for flexible CN pools: pool %s'%pool)
-                            outputfile.write(' '*(base_indent+indent_spaces) + (pool+'C').ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval'])+'\n')
-                            outputfile.write(' '*(base_indent+indent_spaces) + (pool+'N').ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval']/self.network.nodes[pool]['initCN'])+'\n')
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: End of auto-inserted immobile species ####\n')
-                elif insert_concentration_constraints_text in line:
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: Beginning of auto-inserted concentration constraints ####\n')
-                    for pool in self.network.nodes:
-                        if not self.network.nodes[pool]['immobile']:
-                            if isinstance(self.network.nodes[pool]['initval'],str):
-                                outputfile.write(' '*(base_indent+indent_spaces) + (pool).ljust(20) + self.network.nodes[pool]['initval']+'\n')
-                            else:
-                                outputfile.write(' '*(base_indent+indent_spaces) + (pool).ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval'])+'\n')
-                                
-                    outputfile.write('\n' + ' '*(base_indent+indent_spaces) + '#### NOTE: End of auto-inserted concentration constraints ####\n')
-                elif 'FINAL_TIME' in line and length_days is not None:
-                    outputfile.write(' '*(base_indent+indent_spaces) + 'FINAL_TIME {ndays:1.1e} d\n'.format(ndays=length_days))
-                else:
-                    if not line.isspace():
-                        base_indent=len(line)-len(line.lstrip())
-                    outputfile.write(line)
+                            self.add_line( (pool).ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval']))
+                            
+                self.add_line( '#### NOTE: End of auto-inserted concentration constraints ####')
+                self.decrease_level()
+                
+                self.increase_level('MINERALS')
+                self.add_line( '#### NOTE: Beginning of auto-inserted mineral constraints ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='mineral':
+                        if isinstance(self.network.nodes[pool]['initval'],str):
+                            self.add_line( (pool).ljust(20) + self.network.nodes[pool]['initval'])
+                        else:
+                            self.add_line( (pool).ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval']))
+                            
+                self.add_line( '#### NOTE: End of auto-inserted mineral constraints ####')
+                self.decrease_level()
+                
+            elif 'FINAL_TIME' in line and length_days is not None:
+                self.add_line( 'FINAL_TIME {ndays:1.1e} d\n'.format(ndays=length_days))
+            else:
+                if not line.isspace():
+                    base_indent=len(line)-len(line.lstrip())
+                self.output = self.output + line
                     
+        with open(outputfile_name,'w') as outputfile:
+            outputfile.write(self.output)
         return
 
         
@@ -300,9 +364,9 @@ class decomp_network(nx.MultiDiGraph):
         pool_data=pool.copy()
         CN=pool_data.pop('CN',None)
         name=pool_data.pop('name')
-        immobile=pool_data.pop('immobile',True)
+        kind=pool_data.pop('kind')
         initval=pool_data.pop('initval',1e-15)
-        self.add_node(name,immobile=immobile,**pool_data)
+        self.add_node(name,kind=kind,**pool_data)
         if CN is not None:
             self.nodes[name]['CN']=CN
         self.nodes[name]['initval']=initval
@@ -330,7 +394,8 @@ class decomp_network(nx.MultiDiGraph):
         
 
 
-def make_nodecolors(nodes,POMcol='C0',microbecol='C1',DOMcol='C2',MAOMcol='C3',littercol='g',CWDcol='brown'):
+def make_nodecolors(nodes,POMcol='C0',microbecol='C1',DOMcol='C2',MAOMcol='C3',littercol='g',CWDcol='brown',
+                            mineralcol='C4',primarycol='C5',secondarycol='C7',gascol='C7'):
     colors=[]
     for node in nodes:
         if 'MICROBES' in node:
@@ -343,7 +408,39 @@ def make_nodecolors(nodes,POMcol='C0',microbecol='C1',DOMcol='C2',MAOMcol='C3',l
             colors.append(littercol)
         elif 'CWD' in node:
             colors.append(CWDcol)
+        elif 'kind' in nodes[node]:
+            if nodes[node]['kind']=='mineral':
+                colors.append(mineralcol)
+            elif nodes[node]['kind']=='primary':
+                colors.append(primarycol)
+            elif nodes[node]['kind']=='secondary':
+                colors.append(secondarycol)
+            elif nodes[node]['kind']=='gas':
+                colors.append(gascol)
+            else:
+                 colors.append(primarycol)
         else:
             colors.append(POMcol)
     return colors
     
+def get_reaction_from_database(filename,pool):
+    with open(filename,'r') as dbase:
+        for line in dbase:
+            if line.startswith("'%s'"%pool['name']):
+                out=nx.MultiDiGraph()
+                lsplit=line.split()
+                if pool['kind']=='secondary':
+                    offset=1
+                elif pool['kind']=='mineral':
+                    offset=2
+                elif pool['kind']=='gas':
+                    offset=2
+                else:
+                    raise TypeError('Pool must be secondary, mineral, or gas')
+                nspecies=int(lsplit[offset])
+                for specnum in range(nspecies):
+                    out.add_edge(pool['name'],lsplit[offset+2+specnum*2].strip("'"),reactiontype='equilibrium')
+                    out.add_edge(lsplit[offset+2+specnum*2].strip("'"),pool['name'],reactiontype='equilibrium')
+                return out
+        raise ValueError('Species %s not found in database'%pool['name'])
+

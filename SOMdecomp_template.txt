@@ -27,44 +27,7 @@ REFERENCE_LIQUID_DENSITY 1.d3
 
 #=========================== chemistry ========================================
 CHEMISTRY
-  MINERALS
-    Fe(OH)3
-  /
-  PRIMARY_SPECIES
-    # DOM1
-    # CO2(aq)
-    NH4+
-    [INSERT_PRIMARY_SPECIES_HERE]
-  /
-  DECOUPLED_EQUILIBRIUM_REACTIONS
-    # CO2(aq)
-    NH4+
-  /
-  
-  SECONDARY_SPECIES
-    CO2(aq)
-    OH-
-    FeCO3+
-    FeCO3(aq)
-  /
-  
-  IMMOBILE_SPECIES
-    [INSERT_IMMOBILE_SPECIES_HERE]
-  /
-  
-  GAS_SPECIES
-    CO2(g)
-  /
 
-
-  MINERAL_KINETICS
-    Fe(OH)3
-      RATE_CONSTANT 1.d-3 mol/m^2-sec
-      /
-  /
-  
-    [INSERT_REACTIONS_HERE]
-  
 
   # TRUNCATE_CONCENTRATION 1.d-20
 
@@ -87,18 +50,7 @@ END
 
 #=========================== transport constraints ============================
 CONSTRAINT initial
-  CONCENTRATIONS 
-    # DOM1        1.d-15     T
-    # CO2(aq)    1.d-15     T
-    NH4+        1.d-15   T
-    [INSERT_CONCENTRATION_CONSTRAINTS_HERE]
-    /
-  IMMOBILE     # [mol/m^3 bulk]
-    [INSERT_IMMOBILE_CONSTRAINTS_HERE]
-    /
-    MINERALS
-      Fe(OH)3      1.75d4  1. m^2/m^3
-    /
+
   
 END
 
