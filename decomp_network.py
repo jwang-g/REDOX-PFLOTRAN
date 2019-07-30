@@ -85,11 +85,21 @@ class PF_network_writer(PF_writer):
         
             # Write out all the reactions
             already_done=[]
+            CO2name = None
             for ins,outs,reaction in sandbox_reacts.edges(data='reaction'):
                 if reaction['name'] in already_done:
                     continue
                 already_done.append(reaction['name'])
                 self.output = self.output + PF_sandbox_reaction_writer(reaction,base_indent=self.current_indent()).write_reaction()
+                # Figure out which CO2 species is used in these reactions. Assumes all reactions use the same one so any can be picked
+                for spec in ['HCO3-','CO2(g)','CO2(aq)','CO2(g)*']:
+                    if spec in reaction['product_pools']:
+                        CO2name=spec
+                        
+            if CO2name is None:
+                print('WARNING: CO2 name not found in SOMDECOMP reactions')
+            else:
+                self.add_line('CO2_SPECIES_NAME '+CO2name)
             
         for lev in range(len(self.level)):
             self.decrease_level()
@@ -159,7 +169,7 @@ class PF_network_writer(PF_writer):
                 self.add_line( '#### NOTE: Beginning of auto-inserted immobile species ####')
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='immobile':
-                        if 'CN' in self.network.nodes[pool]:
+                        if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin']:
                             self.add_line( pool)
                         else:
                             self.add_line( pool + 'C')
@@ -188,7 +198,7 @@ class PF_network_writer(PF_writer):
                 for pool in self.network.nodes:
                     if not self.network.nodes[pool]['kind']=='immobile':
                         continue
-                    if 'CN' in self.network.nodes[pool]:
+                    if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin']:
                         self.add_line( pool.ljust(20) + ' {const:1.1e}'.format(const=self.network.nodes[pool]['initval']))
                     else:
                         if 'initCN' not in self.network.nodes[pool]:
@@ -278,6 +288,8 @@ class PF_sandbox_reaction_writer(PF_writer):
                 self.increase_level('MONOD')
                 self.add_line('SPECIES_NAME'.ljust(20)+monod['species'])
                 self.add_line('HALF_SATURATION_CONSTANT'+' {const:1.1e}'.format(const=monod['k']))
+                if 'threshold' in monod:
+                    self.add_line('THRESHOLD_CONCENTRATION {const:1.1e}'.format(const=monod['threshold']))
                 self.decrease_level()
         for inhib in reaction_data.pop('inhibition_terms',[]):
                 self.increase_level('INHIBITION')
