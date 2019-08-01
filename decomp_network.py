@@ -107,7 +107,7 @@ class PF_network_writer(PF_writer):
             
 
 
-    def write_into_input_deck(self,templatefile_name,outputfile_name,constraintname='initial',
+    def write_into_input_deck(self,templatefile_name,outputfile_name,
             indent_spaces=2,length_days=None):
         base_indent=0
         with open(templatefile_name,'r') as templatefile:
@@ -191,20 +191,22 @@ class PF_network_writer(PF_writer):
                 self.write_all_reactions(base_indent=base_indent+indent_spaces,indent_spaces=indent_spaces)
                 self.add_line( '#### NOTE: End of auto-inserted reactions ####')
             
-            elif line.strip().startswith('CONSTRAINT') and line.strip().endswith(constraintname):
+            elif len(line.split())>=2 and line.split()[0]=='CONSTRAINT':
+                constraintname=line.split()[1]
                 self.output = self.output + line
                 self.increase_level('IMMOBILE')
                 self.add_line( '#### NOTE: Beginning of auto-inserted immobile species ####')
                 for pool in self.network.nodes:
                     if not self.network.nodes[pool]['kind']=='immobile':
                         continue
+                    constraint=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)
                     if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin']:
-                        self.add_line( pool.ljust(20) + ' {const:1.1e}'.format(const=self.network.nodes[pool]['initval']))
+                        self.add_line( pool.ljust(20) + ' {const:1.1e}'.format(const=constraint))
                     else:
                         if 'initCN' not in self.network.nodes[pool]:
                             raise ValueError('initCN must be provided for flexible CN pools: pool %s'%pool)
-                        self.add_line( (pool+'C').ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval']))
-                        self.add_line( (pool+'N').ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval']/self.network.nodes[pool]['initCN']))
+                        self.add_line( (pool+'C').ljust(20) + '{const:1.1e}'.format(const=constraint))
+                        self.add_line( (pool+'N').ljust(20) + '{const:1.1e}'.format(const=constraint/self.network.nodes[pool]['initCN']))
                 self.add_line( '#### NOTE: End of auto-inserted immobile species ####')
                 self.decrease_level()
                 
@@ -212,10 +214,11 @@ class PF_network_writer(PF_writer):
                 self.add_line( '#### NOTE: Beginning of auto-inserted concentration constraints ####')
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='primary':
-                        if isinstance(self.network.nodes[pool]['initval'],str):
-                            self.add_line( (pool).ljust(20) + self.network.nodes[pool]['initval'])
+                        constraint=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)
+                        if isinstance(constraint,str):
+                            self.add_line( (pool).ljust(20) + constraint)
                         else:
-                            self.add_line( (pool).ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval']))
+                            self.add_line( (pool).ljust(20) + '{const:1.1e}'.format(const=constraint))
                             
                 self.add_line( '#### NOTE: End of auto-inserted concentration constraints ####')
                 self.decrease_level()
@@ -224,10 +227,11 @@ class PF_network_writer(PF_writer):
                 self.add_line( '#### NOTE: Beginning of auto-inserted mineral constraints ####')
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='mineral':
-                        if isinstance(self.network.nodes[pool]['initval'],str):
-                            self.add_line( (pool).ljust(20) + self.network.nodes[pool]['initval'])
+                        constraint=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)
+                        if isinstance(constraint,str):
+                            self.add_line( (pool).ljust(20) + self.network.nodes[pool]['constraints'].get(constraintname,1e-20))
                         else:
-                            self.add_line( (pool).ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['initval']))
+                            self.add_line( (pool).ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)))
                             
                 self.add_line( '#### NOTE: End of auto-inserted mineral constraints ####')
                 self.decrease_level()
@@ -377,11 +381,11 @@ class decomp_network(nx.MultiDiGraph):
         CN=pool_data.pop('CN',None)
         name=pool_data.pop('name')
         kind=pool_data.pop('kind')
-        initval=pool_data.pop('initval',1e-15)
+        constraints=pool_data.pop('constraints',{'initial':1e-15})
         self.add_node(name,kind=kind,**pool_data)
         if CN is not None:
             self.nodes[name]['CN']=CN
-        self.nodes[name]['initval']=initval
+        self.nodes[name]['constraints']=constraints
     def add_reaction(self,reaction):
         reaction_data=reaction.copy()
         reactant_pools=reaction_data.pop('reactant_pools')
@@ -437,8 +441,12 @@ def make_nodecolors(nodes,POMcol='C0',microbecol='C1',DOMcol='C2',MAOMcol='C3',l
     
 def get_reaction_from_database(filename,pool):
     with open(filename,'r') as dbase:
+        database_sections=['primary','secondary','gas','mineral','surf_complex']
+        current_section=0
         for line in dbase:
-            if line.startswith("'%s'"%pool['name']):
+            if line.startswith("'null'"):
+                current_section += 1
+            if line.startswith("'%s'"%pool['name']) and current_section==database_sections.index(pool['kind']):
                 out=nx.MultiDiGraph()
                 lsplit=line.split()
                 if pool['kind']=='secondary':
