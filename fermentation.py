@@ -8,13 +8,14 @@ decomp_network.decomp_pool(name='cellulose',CN=50,constraints={'initial':1e3},ki
 decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immobile'),
 
 decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-3},kind='primary'),
-decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'5.0 P'}),
+decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'5.9 P'}),
 decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':1e-12}),
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
 decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'0.37e-3 M Fe(OH)3'}),
-decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':1e-10}),
+decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-10'}),
 decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
+decomp_network.decomp_pool(name='CH4(aq)',kind='primary',constraints={'initial':1e-15}),
 
 decomp_network.decomp_pool(name='CO2(g)',kind='gas'),
 decomp_network.decomp_pool(name='O2(g)',kind='gas'),
@@ -22,16 +23,22 @@ decomp_network.decomp_pool(name='O2(g)',kind='gas'),
 decomp_network.decomp_pool(name='CO2(aq)',kind='secondary'),
 decomp_network.decomp_pool(name='OH-',kind='secondary'),
 decomp_network.decomp_pool(name='FeCO3+',kind='secondary'),
-decomp_network.decomp_pool(name='FeCO3(aq)',kind='secondary'),
+# decomp_network.decomp_pool(name='FeCO3(aq)',kind='secondary'),
+# decomp_network.decomp_pool(name='Fe(OH)4-',kind='secondary'),
 
-decomp_network.decomp_pool(name='Fe(OH)3',rate='1.d-3 mol/m^2-sec',constraints={'initial':'1.75d4  1. m^2/m^3','bc':'1.75d4  1. m^2/m^3'},kind='mineral'),
+decomp_network.decomp_pool(name='Fe(OH)3',rate='1.d-7 mol/m^2-sec',constraints={'initial':'1.75d-2  1.d1 m^2/m^3','bc':'1.75d-2  1. m^2/m^3'},kind='mineral'),
+# decomp_network.decomp_pool(name='Fe',rate='1.d-7 mol/m^2-sec',constraints={'initial':'1.0e-6  1. m^2/m^3'},kind='mineral'),
+decomp_network.decomp_pool(name='FeO',rate='1.d-7 mol/m^2-sec',constraints={'initial':'0.0  1. m^2/m^3'},kind='mineral'),
 ]
 
 pools_lowFe=pools.copy()
-pools_lowFe[-1]=pools_lowFe[-1].copy()
-pools_lowFe[-1].update(constraints={'initial':'1.0d-5  1. m^2/m^3','bc':'1.75d4  1. m^2/m^3'})
+for n,p in enumerate(pools_lowFe):
+    if p['name']=='Fe(OH)3':
+        pools_lowFe[n]=pools_lowFe[n].copy()
+        pools_lowFe[n].update(constraints={'initial':'1.d-5  1.e2 m^2/m^3'})
 # Herndon et al 2015, BGC: Fe(III) average concentration 0.37 mmol/L (same as mM). SO4- was 0.07, NO3- was 0.03.
 # Fe(III) was 60% of dissolved Fe
+# ** What form was it in? Does it just dissolve or was it released/complexed by microbial activity?
 # DOC 5-15 mmol/L
 # Fe probably present as iron oxide precipitates or Fe-OM complexes, not primary minerals
 #
@@ -47,23 +54,32 @@ DOM_resp = decomp_network.reaction(name='DOM aerobic respiration',reactant_pools
                                         monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12),decomp_network.monod(species='DOM1',k=1e-8,threshold=1e-14)],
                                     rate_constant=1.0e-5,reactiontype='MICROBIAL')
                                     
-Fe_reduction = decomp_network.reaction(name='Fe reduction',reactant_pools={'DOM1':1.0,'Fe+++':3.0},product_pools={'HCO3-':6.0,'Fe++':3.0,'H+':15.0,'Tracer':1.0},
+Fe_reduction = decomp_network.reaction(name='Fe reduction',reactant_pools={'DOM1':1.0,'Fe+++':3.0},product_pools={'HCO3-':1.0,'Fe++':3.0,'H+':15.0,'Tracer':1.0},
                                         monod_terms=[decomp_network.monod(species='DOM1',k=2e-3,threshold=1e-15),decomp_network.monod(species='Fe+++',k=1.3e-3,threshold=1e-15)],
                                         inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='MONOD')],
                                         rate_constant=2e-6,reactiontype='MICROBIAL')
+                                        
+Methanogenesis = decomp_network.reaction(name='Methanogenesis',reactant_pools={'DOM1':1.0,'H+':0.01},product_pools={'CH4(aq)':0.01,'HCO3-':0.99,'Tracer':0.99},
+                                        monod_terms=[decomp_network.monod(species='DOM1',k=2e-3,threshold=1e-15),
+                                                     decomp_network.monod(species='H+',k=1e-7)],
+                                        inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='MONOD'),decomp_network.inhibition(species='Fe+++',k=6.25e-9,type='MONOD')],
+                                        rate_constant=1e-7,reactiontype='MICROBIAL')
 
 fermentation_network =  decomp_network.decomp_network(pools=pools_lowFe,reactions=[ferm_hydrolysis,DOM_resp,Fe_reduction])
 fermentation_network_Fe =  decomp_network.decomp_network(pools=pools,reactions=[ferm_hydrolysis,DOM_resp,Fe_reduction])
+fermentation_network_Fe_CH4 =  decomp_network.decomp_network(pools=pools_lowFe,reactions=[ferm_hydrolysis,DOM_resp,Fe_reduction,Methanogenesis])
 
 result,units=decomp_network.PF_network_writer(fermentation_network).run_simulation('SOMdecomp_template.txt','fermentation',pflotran_exe,print_output=False,length_days=365)
 result_Fe,units_Fe=decomp_network.PF_network_writer(fermentation_network_Fe).run_simulation('SOMdecomp_template.txt','fermentation',pflotran_exe,print_output=False,length_days=365)
+result_Fe_CH4,units_Fe_CH4=decomp_network.PF_network_writer(fermentation_network_Fe_CH4).run_simulation('SOMdecomp_template.txt','fermentation',pflotran_exe,print_output=False,length_days=365)
 
 from pylab import *
 result,units=plot_pf_output.convert_units(result,units,'M')
 result_Fe,units_Fe=plot_pf_output.convert_units(result_Fe,units_Fe,'M')
+result_Fe_CH4,units_Fe_CH4=plot_pf_output.convert_units(result_Fe_CH4,units_Fe_CH4,'M')
 figure('Network diagram',figsize=(11.8,4.8));clf()
 ax=subplot(223)
-to_draw=fermentation_network.copy()
+to_draw=fermentation_network_Fe_CH4.copy()
 for p in pools:
     if p['kind'] in ['secondary'] or p['name'] in ['HRimm','Tracer']:
         to_draw.remove_node(p['name'])
@@ -74,7 +90,7 @@ decomp_network.nx.draw_networkx(to_draw,pos=pos,with_labels=True,ax=ax,nodes=to_
 title('Decomposition network diagram (without complexes)')
 
 ax=subplot(224)
-to_draw=fermentation_network_Fe.copy()
+to_draw=fermentation_network_Fe_CH4.copy()
 for p in pools:
     if p['name'] in ['HRimm','Tracer']:
         to_draw.remove_node(p['name'])
@@ -86,40 +102,39 @@ title('Decomposition network diagram (with complexes)')
 
 ax=subplot(221)
 # ax.set_yscale('log')
-plot(result['cellulose'],c='C0',label='Cellulose')
-plot(result['Free DOM1'],c='C1',label='DOM')
-plot(result['Free HCO3-'],c='C2',label='HCO3-')
-plot(result['Total Tracer']+result['HRimm']*4,c='C4',label='CO2 produced')
-plot(result['Free Fe+++'],c='C3',label='Fe+++')
-plot(result['Free Fe++'],c='C6',label='Fe++')
-plot(-log10(result['Free H+']),c='C5',label='pH')
-plot(result_Fe['cellulose'],c='C0',ls='--',label='(higher Fe+++)')
-plot(result_Fe['Free DOM1'],c='C1',ls='--',label='_nolabel')
-# plot(result_Fe['Total HCO3-'],c='C2',ls='--',label='_nolabel')
-plot(result_Fe['Total Tracer']+result_Fe['HRimm'],c='C4',ls='--',label='_nolabel')
-plot(result_Fe['Free Fe+++'],c='C3',ls='--',label='_nolabel')
-plot(result_Fe['Free Fe++'],c='C6',ls='--',label='_nolabel')
-plot(-log10(result['Free H+']),c='C5',ls='--')
-legend(fontsize='small',ncol=2,loc='upper right')
+for pool in ['cellulose','Free DOM1','Total CH4(aq)','Free Fe+++','Free Fe++']:
+    l=plot(result[pool],label=pool)[0]
+    plot(result_Fe[pool],ls='--',c=l.get_color())
+    plot(result_Fe_CH4[pool],ls=':',c=l.get_color())
+l=plot(result['Total Tracer']+result['HRimm'],label='CO2 produced')[0]
+plot(result_Fe['Total Tracer']+result_Fe['HRimm'],c=l.get_color(),ls='--')
+plot(result_Fe_CH4['Total Tracer']+result_Fe_CH4['HRimm'],c=l.get_color(),ls=':')
+l=plot(-log10(result['Free H+']),label='pH')[0]
+plot(-log10(result_Fe['Free H+']),c=l.get_color(),ls='--')
+plot(-log10(result_Fe_CH4['Free H+']),c=l.get_color(),ls=':')
+
+
 title('Concentrations')
 ylabel('Concentration (M)')
 xlabel('Time (days)')
 
 ax=subplot(222)
 ax.set_yscale('log')
-plot(result['cellulose'],c='C0',label='Cellulose')
-plot(result['Free DOM1'],c='C1',label='DOM')
-plot(result['Free HCO3-'],c='C2',label='HCO3-')
-plot(result['Free Fe+++'],c='C3',label='Fe+++')
-plot(result['Free Fe++'],c='C6',label='Fe++')
-plot(result_Fe['cellulose'],c='C0',ls='--',label='_nolabel')
-plot(result_Fe['Free DOM1'],c='C1',ls='--',label='_nolabel')
-# plot(result_Fe['Total HCO3-'],c='C2',ls='--',label='_nolabel')
-plot(result_Fe['Free Fe+++'],c='C3',ls='--',label='_nolabel')
-plot(result_Fe['Free Fe++'],c='C6',ls='--',label='_nolabel')
+for pool in ['cellulose','Free DOM1','Total CH4(aq)','Free Fe+++','Free Fe++']:
+    l=plot(result[pool],label=pool)[0]
+    plot(result_Fe[pool],ls='--',c=l.get_color())
+    plot(result_Fe_CH4[pool],ls=':',c=l.get_color())
+l=plot(result['Total Tracer']+result['HRimm'],label='CO2 produced')[0]
+plot(result_Fe['Total Tracer']+result_Fe['HRimm'],c=l.get_color(),ls='--')
+plot(result_Fe_CH4['Total Tracer']+result_Fe_CH4['HRimm'],c=l.get_color(),ls=':')
+l=plot(result['Free H+'],label='H+')[0]
+plot(result_Fe['Free H+'],c=l.get_color(),ls='--')
+plot(result_Fe_CH4['Free H+'],c=l.get_color(),ls=':')
+
 title('Concentrations (log scale)')
 ylabel('Concentration (M)')
 xlabel('Time (days)')
+legend(fontsize='small',ncol=2,loc='upper right')
 
 tight_layout()
 
@@ -189,7 +204,7 @@ CTC_result_lowFe,CTC_units_lowFe=decomp_network.PF_network_writer(decomp_network
 
 # Run with abundant oxygen so aerobic CTC reactions will proceed
 decomp_network_CTC_highO2=decomp_network_CTC.copy()
-decomp_network_CTC_highO2.nodes['O2(aq)']['constraints']={'initial':1.0,'bc':'0.2 G O2(g)'}
+decomp_network_CTC_highO2.nodes['O2(aq)']['constraints']={'initial':1.0e1,'bc':'0.2 G O2(g)'}
 CTC_result_highO2,CTC_units_highO2=decomp_network.PF_network_writer(decomp_network_CTC_highO2).run_simulation('SOMdecomp_template.txt','CTC',pflotran_exe,length_days=3650)
 
 figure('CTC network');clf()
@@ -227,7 +242,7 @@ xlabel('Time (days)')
 ax=subplot(223)
 ax.set_yscale('log')
 handles=[]
-for pool in ['Free DOM1','Free Fe+++','Free H+']:
+for pool in ['Free DOM1','Free Fe+++','Free H+','Free O2(aq)']:
     l=plot(CTC_result_highO2[pool],label=pool)[0]
     plot(CTC_result[pool],ls='--',c=l.get_color())
     plot(CTC_result_lowFe[pool],ls=':',c=l.get_color())

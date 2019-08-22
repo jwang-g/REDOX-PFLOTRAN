@@ -100,6 +100,8 @@ class PF_network_writer(PF_writer):
                 print('WARNING: CO2 name not found in SOMDECOMP reactions')
             else:
                 self.add_line('CO2_SPECIES_NAME '+CO2name)
+            if 'O2(aq)' in self.network.nodes:
+                self.add_line('O2_SPECIES_NAME O2(aq)')
             
         for lev in range(len(self.level)):
             self.decrease_level()
@@ -231,7 +233,7 @@ class PF_network_writer(PF_writer):
                         if isinstance(constraint,str):
                             self.add_line( (pool).ljust(20) + self.network.nodes[pool]['constraints'].get(constraintname,1e-20))
                         else:
-                            self.add_line( (pool).ljust(20) + '{const:1.1e}'.format(const=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)))
+                            self.add_line( (pool).ljust(20) + '{const:1.1e} 1.0'.format(const=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)))
                             
                 self.add_line( '#### NOTE: End of auto-inserted mineral constraints ####')
                 self.decrease_level()
