@@ -188,6 +188,23 @@ class PF_network_writer(PF_writer):
                 self.add_line( '#### NOTE: End of auto-inserted gas species ####')
                 self.decrease_level()
                 
+                # Sorption reactions
+                self.increase_level('SORPTION')
+                self.add_line( '#### NOTE: Beginning of auto-inserted sorption sites ####')
+                for pool in self.network.nodes:
+                    if self.network.nodes[pool]['kind']=='surf_complex':
+                        self.increase_level('SURFACE_COMPLEXATION_RXN')
+                        self.add_line('EQUILIBRIUM')
+                        self.add_line('MINERAL {mineral:s}'.format(mineral=self.network.nodes[pool]['mineral']))
+                        self.add_line('SITE {sitename:s} {density:1.2e}'.format(sitename=pool,density=self.network.nodes[pool]['site_density']))
+                        self.increase_level('COMPLEXES')
+                        for complex in self.network.nodes[pool]['complexes']:
+                            self.add_line(complex)
+                        self.decrease_level()
+                        self.decrease_level()
+                self.decrease_level()
+                self.add_line( '#### NOTE: End of auto-inserted sorption sites ####')
+                
                 # Reactions
                 self.add_line( '#### NOTE: Beginning of auto-inserted reactions ####')
                 self.write_all_reactions(base_indent=base_indent+indent_spaces,indent_spaces=indent_spaces)
@@ -444,6 +461,11 @@ def make_nodecolors(nodes,POMcol='C0',microbecol='C1',DOMcol='C2',MAOMcol='C3',l
 def get_reaction_from_database(filename,pool):
     with open(filename,'r') as dbase:
         database_sections=['primary','secondary','gas','mineral','surf_complex']
+        if pool['kind']=='surf_complex' and 'complexes' in pool.keys():
+            out=get_reaction_from_database(filename,{'kind':'surf_complex','name':pool['complexes'][0]})
+            for num in range(1,len(pool['complexes'])):
+                out=nx.compose(out,get_reaction_from_database(filename,{'kind':'surf_complex','name':pool['complexes'][num]}))
+            return out
         current_section=0
         for line in dbase:
             if line.startswith("'null'"):
@@ -457,8 +479,10 @@ def get_reaction_from_database(filename,pool):
                     offset=2
                 elif pool['kind']=='gas':
                     offset=2
+                elif pool['kind']=='surf_complex':
+                    offset=1
                 else:
-                    raise TypeError('Pool must be secondary, mineral, or gas')
+                    raise TypeError('Pool must be secondary, mineral, gas, or surf_complex')
                 nspecies=int(lsplit[offset])
                 for specnum in range(nspecies):
                     out.add_edge(pool['name'],lsplit[offset+2+specnum*2].strip("'"),reactiontype='equilibrium')
