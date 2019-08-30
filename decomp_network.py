@@ -430,63 +430,86 @@ class decomp_network(nx.MultiDiGraph):
 
 
 def make_nodecolors(nodes,POMcol='C0',microbecol='C1',DOMcol='C2',MAOMcol='C3',littercol='g',CWDcol='brown',
-                            mineralcol='C4',primarycol='C5',secondarycol='C7',gascol='C7'):
+                            mineralcol='C4',primarycol='C5',secondarycol='C7',gascol='C9',Fecol='orange',seccmplxcol='C8'):
     colors=[]
     for node in nodes:
         if 'MICROBES' in node:
             colors.append(microbecol)
         elif 'MAOM' in node or 'SOIL' in node:
             colors.append(MAOMcol)
-        elif 'DOM' in node:
+        elif 'DOM' in node or 'Acetate' in node:
             colors.append(DOMcol)
         elif 'LITR' in node:
             colors.append(littercol)
         elif 'CWD' in node:
             colors.append(CWDcol)
+        elif 'kind' in nodes[node] and nodes[node]['kind']=='secondary':
+            colors.append(secondarycol)
+        elif node in ['HCO3-','CH4(aq)','O2(aq)']:
+            colors.append(gascol)
+        elif 'Fe' in node:
+            colors.append(Fecol)
         elif 'kind' in nodes[node]:
             if nodes[node]['kind']=='mineral':
                 colors.append(mineralcol)
             elif nodes[node]['kind']=='primary':
                 colors.append(primarycol)
-            elif nodes[node]['kind']=='secondary':
-                colors.append(secondarycol)
+
             elif nodes[node]['kind']=='gas':
                 colors.append(gascol)
+            elif nodes[node]['kind']=='surf_complex':
+                colors.append(seccmplxcol)
             else:
                  colors.append(primarycol)
         else:
             colors.append(POMcol)
     return colors
     
-def get_reaction_from_database(filename,pool):
+def get_reaction_from_database(name,kind,filename='hanford.dat'):
     with open(filename,'r') as dbase:
         database_sections=['primary','secondary','gas','mineral','surf_complex']
-        if pool['kind']=='surf_complex' and 'complexes' in pool.keys():
-            out=get_reaction_from_database(filename,{'kind':'surf_complex','name':pool['complexes'][0]})
-            for num in range(1,len(pool['complexes'])):
-                out=nx.compose(out,get_reaction_from_database(filename,{'kind':'surf_complex','name':pool['complexes'][num]}))
-            return out
         current_section=0
         for line in dbase:
             if line.startswith("'null'"):
                 current_section += 1
-            if line.startswith("'%s'"%pool['name']) and current_section==database_sections.index(pool['kind']):
+            if line.startswith("'%s'"%name) and current_section==database_sections.index(kind):
                 out=nx.MultiDiGraph()
+                out.add_node(name,kind=kind)
                 lsplit=line.split()
-                if pool['kind']=='secondary':
+                if kind=='secondary':
                     offset=1
-                elif pool['kind']=='mineral':
+                elif kind=='mineral':
                     offset=2
-                elif pool['kind']=='gas':
+                elif kind=='gas':
                     offset=2
-                elif pool['kind']=='surf_complex':
+                elif kind=='surf_complex':
                     offset=1
                 else:
-                    raise TypeError('Pool must be secondary, mineral, gas, or surf_complex')
+                    raise TypeError('Kind must be secondary, mineral, gas, or surf_complex')
                 nspecies=int(lsplit[offset])
                 for specnum in range(nspecies):
-                    out.add_edge(pool['name'],lsplit[offset+2+specnum*2].strip("'"),reactiontype='equilibrium')
-                    out.add_edge(lsplit[offset+2+specnum*2].strip("'"),pool['name'],reactiontype='equilibrium')
+                    out.add_edge(name.strip('>'),lsplit[offset+2+specnum*2].strip("'"),reactiontype='equilibrium')
+                    out.add_edge(lsplit[offset+2+specnum*2].strip("'"),name,reactiontype='equilibrium')
                 return out
-        raise ValueError('Species %s not found in database'%pool['name'])
+        if kind is 'surf_complex':
+            raise ValueError('Species {species:s} of kind {kind:s} not found in database. For surf_complex, try searching for the complex instead of the site'.format(species=name,kind=kind))
+        else:
+            raise ValueError('Species {species:s} of kind {kind:s} not found in database'.format(species=name,kind=kind))
 
+def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',**kwargs):
+    to_draw=network.copy()
+    for p in network.nodes:
+        if network.nodes[p]['kind'] in omit or p in omit or p in ['HRimm','Tracer']:
+            to_draw.remove_node(p)
+        elif network.nodes[p]['kind'] is 'surf_complex':
+            for cplx in network.nodes[p]['complexes']:
+                to_draw=nx.compose(get_reaction_from_database(cplx,'surf_complex',filename=database_file),to_draw)
+        elif network.nodes[p]['kind'] not in ['primary','immobile']:
+            to_draw=nx.compose(get_reaction_from_database(p,network.nodes[p]['kind'],filename=database_file),to_draw)
+    pos=nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
+    
+    nx.draw_networkx(to_draw,pos=pos,with_labels=True,nodes=to_draw.nodes,node_color=make_nodecolors(to_draw.nodes),
+                arrowsize=arrowsize,font_size=font_size,arrowstyle=arrowstyle,**kwargs)
+    
+    return to_draw
+    

@@ -23,7 +23,8 @@ def read_tecfile(filename,convert_units_to=None,saturation=None):
     # This converter stuff is necessary because pflotran doesn't produce the right text format when exponent is <= E-100
     def convertfunc(strval):
         if '-' in strval and 'E' not in strval:
-            return 0.0
+            val,exponent=strval.split('-')
+            return float(val)*10**-float(exponent)  
         else:
             return float(strval)
 

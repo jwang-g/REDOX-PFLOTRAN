@@ -9,7 +9,7 @@ pools = [
 decomp_network.decomp_pool(name='cellulose',CN=50,constraints={'initial':1e2},kind='immobile'),
 decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immobile'),
 
-decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-3},kind='primary'),
+decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-30},kind='primary'),
 decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'4.0 P'}),
 decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':1e-12}),
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
@@ -37,7 +37,7 @@ decomp_network.decomp_pool(name='Fe(OH)3',rate='1.d-5 mol/m^2-sec',constraints={
 decomp_network.decomp_pool(name='Fe(OH)2',rate='1.d-7 mol/m^2-sec',constraints={'initial':'0.0e-20  1.e-10 m^2/m^3'},kind='mineral'),
 decomp_network.decomp_pool(name='Rock(s)',rate='0.0 mol/m^2-sec',constraints={'initial':'0.5  5.0e3 m^2/m^3'},kind='mineral'),
 
-decomp_network.decomp_pool(name='>Carboxylate-',kind='surf_complex',mineral='Rock(s)',site_density=2000.0,complexes=['>Carboxylic_acid']),
+decomp_network.decomp_pool(name='>Carboxylate-',kind='surf_complex',mineral='Rock(s)',site_density=1000.0,complexes=['>Carboxylic_acid']),
 ]
 
 pools_lowFe=pools.copy()
@@ -115,7 +115,7 @@ Methanogenesis = decomp_network.reaction(name='Methanogenesis',reactant_pools={'
                                         rate_constant=1e-8,reactiontype='MICROBIAL')
 
 fermentation_network =  decomp_network.decomp_network(pools=pools_lowFe,reactions=[hydrolysis,fermentation,DOM_resp,acetate_resp,Fe_reduction])
-fermentation_network_Fe =  decomp_network.decomp_network(pools=pools,reactions=[hydrolysis,fermentation,DOM_resp,acetate_resp,Fe_reduction])
+fermentation_network_Fe =  decomp_network.decomp_network(pools=pools,reactions=[hydrolysis,fermentation,DOM_resp,acetate_resp,Fe_reduction,Methanogenesis])
 fermentation_network_Fe_CH4 =  decomp_network.decomp_network(pools=pools_lowFe,reactions=[hydrolysis,fermentation,DOM_resp,acetate_resp,Fe_reduction,Methanogenesis])
 fermentation_network_highO2 =  decomp_network.decomp_network(pools=pools_highO2,reactions=[hydrolysis,fermentation,DOM_resp,acetate_resp,Fe_reduction,Methanogenesis])
 
@@ -130,70 +130,85 @@ result_Fe,units_Fe=plot_pf_output.convert_units(result_Fe,units_Fe,'M')
 result_Fe_CH4,units_Fe_CH4=plot_pf_output.convert_units(result_Fe_CH4,units_Fe_CH4,'M')
 result_highO2,units_highO2=plot_pf_output.convert_units(result_highO2,units_highO2,'M')
 figure('Network diagram',figsize=(11.8,4.8));clf()
-ax=subplot(223)
-to_draw=fermentation_network_Fe_CH4.copy()
-for p in pools:
-    if p['kind'] in ['secondary','surf_complex'] or p['name'] in ['HRimm','Tracer']:
-        to_draw.remove_node(p['name'])
-    elif p['kind'] in ['mineral','gas']:
-        to_draw=decomp_network.nx.compose(decomp_network.get_reaction_from_database('hanford.dat',p),to_draw)
-pos=decomp_network.nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
-decomp_network.nx.draw_networkx(to_draw,pos=pos,with_labels=True,ax=ax,nodes=to_draw.nodes,node_color=decomp_network.make_nodecolors(to_draw.nodes),arrowsize=15,font_size='small',arrowstyle='->')
+ax=subplot(121)
+decomp_network.draw_network(fermentation_network_Fe_CH4,omit=['secondary','surf_complex','NH4+','Rock(s)'],arrowstyle='-|>')
 title('Decomposition network diagram (without complexes)')
 
-ax=subplot(224)
-to_draw=fermentation_network_Fe_CH4.copy()
-for p in pools:
-    if p['name'] in ['HRimm','Tracer']:
-        to_draw.remove_node(p['name'])
-    if p['kind'] in ['mineral','gas','secondary','surf_complex']:
-        to_draw=decomp_network.nx.compose(decomp_network.get_reaction_from_database('hanford.dat',p),to_draw)
-pos=decomp_network.nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
-decomp_network.nx.draw_networkx(to_draw,pos=pos,with_labels=True,ax=ax,nodes=to_draw.nodes,node_color=decomp_network.make_nodecolors(to_draw.nodes),arrowsize=15,font_size='small',arrowstyle='->')
-title('Decomposition network diagram (with complexes)')
+ax=subplot(122)
+decomp_network.draw_network(fermentation_network_Fe_CH4,omit=['NH4+','Rock(s)'],arrowstyle='-|>')
+title('Decomposition network diagram (with aqueous complexes)')
 
-ax=subplot(221)
+figure('Cellulose sim');clf()
+
+subplot(311)
 # ax.set_yscale('log')
-for pool in ['cellulose','Free DOM1','Free Acetate-','Total CH4(aq)','Total Fe+++','Total Fe++']:
+handles=[]
+for pool in ['cellulose','Total CH4(aq)']:
     l=plot(result[pool],label=pool)[0]
     plot(result_Fe[pool],ls='--',c=l.get_color())
     plot(result_Fe_CH4[pool],ls=':',c=l.get_color())
     plot(result_highO2[pool],ls='-.',c=l.get_color())
+    handles.append(l)
 l=plot(result['Total Tracer']+result['HRimm'],label='CO2 produced')[0]
+handles.append(l)
 plot(result_Fe['Total Tracer']+result_Fe['HRimm'],c=l.get_color(),ls='--')
 plot(result_Fe_CH4['Total Tracer']+result_Fe_CH4['HRimm'],c=l.get_color(),ls=':')
 plot(result_highO2['Total Tracer']+result_highO2['HRimm'],c=l.get_color(),ls='-.')
-l=plot(-log10(result['Free H+']),label='pH')[0]
-plot(-log10(result_Fe['Free H+']),c=l.get_color(),ls='--')
-plot(-log10(result_Fe_CH4['Free H+']),c=l.get_color(),ls=':')
-plot(-log10(result_highO2['Free H+']),c=l.get_color(),ls='-.')
-legend(handles=[Line2D([0],[0],ls='-',color='k',label='No Fe(III)'),Line2D([0],[0],color='k',ls='--',label='Fe(III)'),Line2D([0],[0],color='k',ls=':',label='Fe(III) and CH4')],
-        fontsize='small',loc='upper right')
-
+# handles.append(Line2D([0,0],[0,0],color='k',ls='-',label='Aerobic'))
+# handles.append(Line2D([0,0],[0,0],color='k',ls='--',label='With Fe(III)'))
+# handles.append(Line2D([0,0],[0,0],color='k',ls=':',label='With methanogenesis'))
+# handles.append(Line2D([0,0],[0,0],color='k',ls='-.',label='Anaerobic'))
+legend(handles=handles,fontsize='small',ncol=2)
 title('Concentrations')
 ylabel('Concentration (M)')
 xlabel('Time (days)')
 
-ax=subplot(222)
-ax.set_yscale('log')
-for pool in ['cellulose','Free DOM1','Free Acetate-','Total CH4(aq)','Total Fe+++','Total Fe++']:
-    l=plot(result[pool],label=pool)[0]
-    plot(result_Fe[pool],ls='--',c=l.get_color())
-    plot(result_Fe_CH4[pool],ls=':',c=l.get_color())
-    plot(result_highO2[pool],ls='-.',c=l.get_color())
-l=plot(result['Total Tracer']+result['HRimm'],label='CO2 produced')[0]
-plot(result_Fe['Total Tracer']+result_Fe['HRimm'],c=l.get_color(),ls='--')
-plot(result_Fe_CH4['Total Tracer']+result_Fe_CH4['HRimm'],c=l.get_color(),ls=':')
-plot(result_highO2['Total Tracer']+result_highO2['HRimm'],c=l.get_color(),ls='-.')
-l=plot(result['Free H+'],label='H+')[0]
-plot(result_Fe['Free H+'],c=l.get_color(),ls='--')
-plot(result_Fe_CH4['Free H+'],c=l.get_color(),ls=':')
-plot(result_highO2['Free H+'],c=l.get_color(),ls='-.')
+# figure('Cellulose sim pH and log',figsize=(6,8));clf()
 
-title('Concentrations (log scale)')
-ylabel('Concentration (M)')
+subplot(313)
+l=plot(-log10(result['Free H+']),label='Anaerobic')[0]
+plot(-log10(result_highO2['Free H+']),c=l.get_color(),ls='-.',label='Aerobic')
+plot(-log10(result_Fe['Free H+']),c=l.get_color(),ls='--',label='With Fe(III)')
+plot(-log10(result_Fe_CH4['Free H+']),c=l.get_color(),ls=':',label='With methanogenesis')
+legend(fontsize='small')
+
+title('pH')
+ylabel('pH')
 xlabel('Time (days)')
-legend(fontsize='small',ncol=2,loc='lower right')
+
+ax=subplot(312)
+ax.set_yscale('log')
+# for pool in ['Free DOM1','Free Acetate-']:
+#     l=plot(result[pool],label=pool)[0]
+#     # plot(result_Fe[pool],ls='--',c=l.get_color())
+#     # plot(result_Fe_CH4[pool],ls=':',c=l.get_color())
+#     plot(result_highO2[pool],ls='-.',c=l.get_color())
+# 
+# title('Concentrations (log scale)')
+# ylabel('Concentration (M)')
+# xlabel('Time (days)')
+# legend(fontsize='small',ncol=1)
+# ylim(1e-15,1e-1)
+
+l=plot(result.index.values[:-1],diff(result['Total CH4(aq)'])/diff(result.index.values),label='CH4')[0]
+plot(result_highO2.index.values[:-1],diff(result_highO2['Total CH4(aq)'])/diff(result_highO2.index.values),ls='-.',c=l.get_color())
+plot(result_Fe.index.values[:-1],diff(result_Fe['Total CH4(aq)'])/diff(result_Fe.index.values),ls='--',c=l.get_color())
+plot(result_Fe_CH4.index.values[:-1],diff(result_Fe_CH4['Total CH4(aq)'])/diff(result_Fe_CH4.index.values),ls=':',c=l.get_color())
+
+# l=plot(result.index.values[:-1],diff(result['Total Fe++'])/diff(result.index.values),label='Fe(II)')[0]
+l=plot(result_Fe.index.values[:-1],diff(result_Fe['Total Fe++'])/diff(result_Fe.index.values),ls='--',label='Fe++')[0]
+plot(result_highO2.index.values[:-1],diff(result_highO2['Total Fe++'])/diff(result_highO2.index.values),ls='-.',c=l.get_color())
+# plot(result_Fe_CH4.index.values[:-1],diff(result_Fe_CH4['Total Fe++'])/diff(result_Fe_CH4.index.values),ls=':',c=l.get_color())
+
+l=plot(result.index.values[:-1],diff(result['Total Tracer']+result['HRimm'])/diff(result.index.values),label='CO2')[0]
+# plot(result_highO2.index.values[:-1],diff(result_highO2['Total Tracer']+result_highO2['HRimm'])/diff(result_highO2.index.values),ls='-.',c=l.get_color())
+plot(result_Fe.index.values[:-1],diff(result_Fe['Total Tracer']+result_Fe['HRimm'])/diff(result_Fe.index.values),ls='--',c=l.get_color())
+plot(result_Fe_CH4.index.values[:-1],diff(result_Fe_CH4['Total Tracer']+result_Fe_CH4['HRimm'])/diff(result_Fe_CH4.index.values),ls=':',c=l.get_color())
+
+title('Production rates')
+ylabel('Rate (M/day)')
+xlabel('Time (days)')
+legend(fontsize='small')
 
 tight_layout()
 
@@ -252,6 +267,7 @@ decomp_network_CTC.add_reaction(DOM_resp)
 decomp_network_CTC.add_reaction(Fe_reduction)
 decomp_network_CTC.add_reaction(acetate_resp)
 decomp_network_CTC.add_reaction(fermentation)
+decomp_network_CTC.add_reaction(Methanogenesis)
 decomp_network_CTC.add_reaction( decomp_network.reaction(name='hydrolysis',reactant_pools={'LITR1':1.0},product_pools={'DOM1':1.0},
                                         rate_constant=1e-1,rate_units='y', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                     inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=1e-5),decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='MONOD')]))
@@ -270,52 +286,70 @@ decomp_network_CTC_highO2.nodes['O2(aq)']['constraints']={'initial':1.0e1,'bc':'
 CTC_result_highO2,CTC_units_highO2=decomp_network.PF_network_writer(decomp_network_CTC_highO2).run_simulation('SOMdecomp_template.txt','CTC',pflotran_exe,length_days=simlength)
 
 figure('CTC network');clf()
-subplot(122)
-to_draw=decomp_network_CTC.copy()
-for p in pools:
-    if p['kind'] in ['secondary'] or p['name'] in ['Tracer','HRimm']:
-        to_draw.remove_node(p['name'])
-    elif p['kind'] in ['mineral','gas','surf_complex']:
-        to_draw=decomp_network.nx.compose(decomp_network.get_reaction_from_database('hanford.dat',p),to_draw)
-pos=decomp_network.nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
-decomp_network.nx.draw_networkx(to_draw,pos=pos,with_labels=True,nodes=to_draw.nodes,node_color=decomp_network.make_nodecolors(to_draw.nodes),arrowsize=15,font_size='small',arrowstyle='->')
 
+decomp_network.draw_network(decomp_network_CTC,omit=['secondary','Rock(s)','NH4+'],arrowstyle='-|>')
+
+figure('CTC results');clf()
 CTC_result,CTC_units=plot_pf_output.convert_units(CTC_result,CTC_units,'M')
 CTC_result_highO2,CTC_units_highO2=plot_pf_output.convert_units(CTC_result_highO2,CTC_units_highO2,'M')
 CTC_result_lowFe,CTC_units_lowFe=plot_pf_output.convert_units(CTC_result_lowFe,CTC_units_lowFe,'M')
-subplot(221)
+subplot(311)
 handles=[]
 for pool in ['LITR1C','SOIL1','SOIL2','SOIL3','SOIL4']:
-    l=plot(CTC_result_highO2[pool],label=pool)[0]
+    l=plot(CTC_result_highO2[pool],label=pool,ls='-.')[0]
     plot(CTC_result[pool],ls='--',c=l.get_color())
     plot(CTC_result_lowFe[pool],ls=':',c=l.get_color())
     handles.append(l)
-l=plot(CTC_result_highO2['HRimm']+CTC_result_highO2['Total Tracer'],label='CO2 prod')[0]
+
+
+handles.append(Line2D([0],[0],c='k',ls='-.',label='Aerobic'))
+handles.append(Line2D([0],[0],c='k',ls='--',label='Anaerobic, high Fe(III)'))
+handles.append(Line2D([0],[0],c='k',ls=':',label='Anaerobic, low Fe(III)'))
+legend(handles=handles,fontsize='small',ncol=2)
+ylabel('Concentration (M)')
+xlabel('Time (days)')
+title('CTC SOM pools')
+
+
+subplot(313)
+l=plot(-log10(CTC_result['Free H+']),label='With Fe(III)')[0]
+plot(-log10(CTC_result_highO2['Free H+']),c=l.get_color(),ls='-.',label='Aerobic')
+plot(-log10(CTC_result_lowFe['Free H+']),c=l.get_color(),ls=':',label='Low Fe(III)')
+legend(fontsize='small')
+
+title('pH')
+ylabel('pH')
+xlabel('Time (days)')
+
+subplot(312)
+l=plot(CTC_result_highO2['HRimm']+CTC_result_highO2['Total Tracer'],label='CO2',ls='-.')[0]
 plot(CTC_result['HRimm']+CTC_result['Total Tracer'],c=l.get_color(),ls='--')
 plot(CTC_result_lowFe['HRimm']+CTC_result_lowFe['Total Tracer'],c=l.get_color(),ls=':')
-handles.append(l)
-handles.append(Line2D([0],[0],c='k',ls='-',label='High O2'))
-handles.append(Line2D([0],[0],c='k',ls='--',label='Low O2, high Fe'))
-handles.append(Line2D([0],[0],c='k',ls=':',label='Low O2, low Fe'))
-legend(handles=handles,fontsize='small',ncol=2,loc='center right')
-ylabel('Concentration (M)')
-xlabel('Time (days)')
 
-ax=subplot(223)
+l=plot(CTC_result_highO2['Total CH4(aq)'],label='CH4',ls='-.')[0]
+plot(CTC_result['Total CH4(aq)'],ls='--',c=l.get_color())
+plot(CTC_result_lowFe['Total CH4(aq)'],ls=':',c=l.get_color())
+
+title('Cumulative production')
+ylabel('Production (M)')
+xlabel('Time (days)')
+legend(fontsize='small')
+
+tight_layout()
+
+figure('Log concentrations');clf()
+ax=subplot(111)
 ax.set_yscale('log')
-handles=[]
-for pool in ['Free DOM1','Free Acetate-','Free Fe+++','Free H+','Free O2(aq)']:
-    l=plot(CTC_result_highO2[pool],label=pool)[0]
-    plot(CTC_result[pool],ls='--',c=l.get_color())
-    plot(CTC_result_lowFe[pool],ls=':',c=l.get_color())
-    handles.append(l)
-# handles.append(Line2D([0],[0],c='k',ls='-',label='High O2'))
-# handles.append(Line2D([0],[0],c='k',ls='--',label='Low O2, high Fe'))
-# handles.append(Line2D([0],[0],c='k',ls=':',label='Low O2, low Fe'))
-legend(handles=handles,fontsize='small',loc='lower right',ncol=1)
+for pool in ['Total DOM1','Free Acetate-','Total Fe+++','Total Fe++','Total CH4(aq)']:
+    l=plot(CTC_result[pool],label=pool)[0]
+    # plot(result_Fe[pool],'--',color=l.get_color())
+    
 ylabel('Concentration (M)')
 xlabel('Time (days)')
-
+title('Log aqueous concentrations')
+ax.set_xlim(left=-10,right=365)
+ax.set_ylim(bottom=1e-12)
+legend(fontsize='small')
 
 tight_layout()
 
