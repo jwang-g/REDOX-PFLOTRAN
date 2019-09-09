@@ -31,8 +31,8 @@ decomp_network.decomp_pool(name='Acetic_acid(aq)',kind='secondary'),
 decomp_network.decomp_pool(name='FeCH3COO+',kind='secondary'),
 # decomp_network.decomp_pool(name='FeCO3(aq)',kind='secondary'),
 
-decomp_network.decomp_pool(name='Fe(OH)3',rate='1.d-5 mol/m^2-sec',constraints={'initial':'1.75d-1  1.d2 m^2/m^3','bc':'1.75d-2  1. m^2/m^3'},kind='mineral'),
-# decomp_network.decomp_pool(name='Goethite',rate='1.d-5 mol/m^2-sec',constraints={'initial':'1.75d-2  1.d1 m^2/m^3','bc':'1.75d-2  1. m^2/m^3'},kind='mineral'),
+decomp_network.decomp_pool(name='Fe(OH)3',rate='1.d-5 mol/m^2-sec',constraints={'initial':'1.75d-1  1.d2 m^2/m^3'},kind='mineral'),
+# decomp_network.decomp_pool(name='Goethite',rate='1.d-5 mol/m^2-sec',constraints={'initial':'1.75d-2  1.d1 m^2/m^3'},kind='mineral'),
 # decomp_network.decomp_pool(name='Fe',rate='1.d-7 mol/m^2-sec',constraints={'initial':'1.0e-6  1. m^2/m^3'},kind='mineral'),
 decomp_network.decomp_pool(name='Fe(OH)2',rate='1.d-7 mol/m^2-sec',constraints={'initial':'0.0e-20  1.e-10 m^2/m^3'},kind='mineral'),
 decomp_network.decomp_pool(name='Rock(s)',rate='0.0 mol/m^2-sec',constraints={'initial':'0.5  5.0e3 m^2/m^3'},kind='mineral'),
@@ -83,36 +83,36 @@ hydrolysis = decomp_network.reaction(name='Hydrolysis',reactant_pools={'cellulos
 # Calculating these as per unit carbon, so dividing by the 6 carbons in a glucose
 # C6H12O6 + 4 H2O -> 2 CH3COO- + 2 HCO3- + 4 H+ + 4 H2
 fermentation = decomp_network.reaction(name='fermentation',reactant_pools={'DOM1':6/6},product_pools={'Acetate-':2/6,'HCO3-':2/6,'H+':4/6+4*2/6,'Tracer':2/6}, # balancing pH of FeIII release requires an extra 5.5 H+ to be released here
-                                        rate_constant=1e-6,reactiontype='MICROBIAL', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
+                                        rate_constant=1e-10,reactiontype='MICROBIAL', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                     inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='MONOD'),decomp_network.inhibition(species='Acetate-',k=6.25e-8,type='MONOD')],
-                                    monod_terms=[decomp_network.monod(species='DOM1',k=1e-5,threshold=1e-15)])
+                                    monod_terms=[decomp_network.monod(species='DOM1',k=1e-5,threshold=1.1e-15)])
 
 # CH2O + H2O -> CO2 + 4H+ + 4 e-
 # O2   + 4H+ + 4 e- -> 2H2O
 DOM_resp = decomp_network.reaction(name='DOM aerobic respiration',reactant_pools={'DOM1':1.0,'O2(aq)':1.0},product_pools={'HCO3-':1.0,'H+':1.0,'Tracer':1.0},
-                                        monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12),decomp_network.monod(species='DOM1',k=1e-8,threshold=1e-14)],
-                                    rate_constant=1.0e-5,reactiontype='MICROBIAL')
+                                        monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM1',k=1e-8,threshold=1.1e-14)],
+                                    rate_constant=1.0e-9,reactiontype='MICROBIAL')
 
 # C2H3O2- + 2 H2O -> 2 CO2 + 7 H+ + 8 e-
 # 2 O2    + 8 H+ + 8 e- -> 4 H2O
 acetate_resp = decomp_network.reaction(name='Acetate aerobic respiration',reactant_pools={'Acetate-':1.0,'O2(aq)':2.0},product_pools={'HCO3-':2.0,'H+':2.0,'Tracer':2.0},
-                                        monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12),decomp_network.monod(species='Acetate-',k=1e-8,threshold=1e-14)],
-                                    rate_constant=1.0e-5,reactiontype='MICROBIAL')
+                                        monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='Acetate-',k=1e-8,threshold=1.1e-14)],
+                                    rate_constant=1.0e-9,reactiontype='MICROBIAL')
 
 
 # C2H3O2- + 2 H2O -> 2 CO2 + 7 H+ + 8 e-
 # 8 Fe+++ + 8 e- -> 8 Fe++ 
 Fe_reduction = decomp_network.reaction(name='Fe reduction',reactant_pools={'Acetate-':1.0,'Fe+++':8.0},product_pools={'HCO3-':2.0,'Fe++':8.0,'H+':9.0,'Tracer':2.0},
-                                        monod_terms=[decomp_network.monod(species='Acetate-',k=2e-3,threshold=1e-15),decomp_network.monod(species='Fe+++',k=1.3e-12,threshold=1e-15)],
+                                        monod_terms=[decomp_network.monod(species='Acetate-',k=2e-3,threshold=1.1e-15),decomp_network.monod(species='Fe+++',k=1.3e-12,threshold=1.1e-15)],
                                         inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='MONOD')],
-                                        rate_constant=2e-7,reactiontype='MICROBIAL')
+                                        rate_constant=2e-10,reactiontype='MICROBIAL')
                                         
 # C2H3O2- + H+ -> CH4 + HCO3- + H+
 Methanogenesis = decomp_network.reaction(name='Methanogenesis',reactant_pools={'Acetate-':1.0},product_pools={'CH4(aq)':1.0,'HCO3-':1.0, 'Tracer':1.0},
-                                        monod_terms=[decomp_network.monod(species='Acetate-',k=2e-3,threshold=1e-15),
+                                        monod_terms=[decomp_network.monod(species='Acetate-',k=2e-3,threshold=1.1e-15),
                                                      ],
                                         inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='MONOD'),decomp_network.inhibition(species='Fe+++',k=6.25e-9,type='MONOD')],
-                                        rate_constant=1e-8,reactiontype='MICROBIAL')
+                                        rate_constant=1e-10,reactiontype='MICROBIAL')
 
 fermentation_network =  decomp_network.decomp_network(pools=pools_lowFe,reactions=[hydrolysis,fermentation,DOM_resp,acetate_resp,Fe_reduction])
 fermentation_network_Fe =  decomp_network.decomp_network(pools=pools,reactions=[hydrolysis,fermentation,DOM_resp,acetate_resp,Fe_reduction,Methanogenesis])
@@ -277,12 +277,12 @@ CTC_result,CTC_units=decomp_network.PF_network_writer(decomp_network_CTC).run_si
 
 # Run with low Fe mineral concentration to cut off Fe reduction pathway
 decomp_network_CTC_lowFe=decomp_network_CTC.copy()
-decomp_network_CTC_lowFe.nodes['Fe(OH)3']['constraints']={'initial':'0.0d-5  1. m^2/m^3','bc':'1.0d-5  1. m^2/m^3'}
+decomp_network_CTC_lowFe.nodes['Fe(OH)3']['constraints']={'initial':'0.0d-5  1. m^2/m^3'}
 CTC_result_lowFe,CTC_units_lowFe=decomp_network.PF_network_writer(decomp_network_CTC_lowFe).run_simulation('SOMdecomp_template.txt','CTC',pflotran_exe,length_days=simlength)
 
 # Run with abundant oxygen so aerobic CTC reactions will proceed
 decomp_network_CTC_highO2=decomp_network_CTC.copy()
-decomp_network_CTC_highO2.nodes['O2(aq)']['constraints']={'initial':1.0e1,'bc':'0.2 G O2(g)'}
+decomp_network_CTC_highO2.nodes['O2(aq)']['constraints']={'initial':1.0e1}
 CTC_result_highO2,CTC_units_highO2=decomp_network.PF_network_writer(decomp_network_CTC_highO2).run_simulation('SOMdecomp_template.txt','CTC',pflotran_exe,length_days=simlength)
 
 figure('CTC network');clf()

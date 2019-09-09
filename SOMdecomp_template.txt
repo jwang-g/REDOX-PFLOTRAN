@@ -29,7 +29,7 @@ REFERENCE_LIQUID_DENSITY 1.d3
 CHEMISTRY
 
 
-  # TRUNCATE_CONCENTRATION 1.d-20
+  TRUNCATE_CONCENTRATION 1.d-80
 
 
   LOG_FORMULATION
@@ -44,7 +44,7 @@ CHEMISTRY
     GASES
     MINERALS
     IMMOBILE
-
+    TOTAL_SORBED
   /
 END
 
@@ -111,7 +111,7 @@ ALPHA 1.9401d-4
 #=========================== output options ===================================
 OUTPUT
   PERIODIC_OBSERVATION TIMESTEP 1
-  SCREEN PERIODIC 10
+  #SCREEN PERIODIC 10
   #PERIODIC TIMESTEP 1
   #FORMAT HDF5
   VARIABLES
@@ -149,7 +149,7 @@ END
 
 #=========================== transport conditions =============================
 TRANSPORT_CONDITION initial
-  TYPE zero_gradient
+  TYPE DIRICHLET
   CONSTRAINT_LIST
     0.d0 initial
   /
