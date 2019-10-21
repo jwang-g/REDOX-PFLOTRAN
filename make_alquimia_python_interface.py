@@ -311,8 +311,11 @@ ffi_builder.cdef("""
   
   // PETSC for initializing MPI
   typedef int PetscErrorCode; // from petscsystypes.h
+  typedef enum { PETSC_FALSE,PETSC_TRUE } PetscBool; // from petscsystypes.h
   //PetscErrorCode PetscInitialize(int*,char***,const char[],const char[]);  // from petscsys.h
   PetscErrorCode PetscInitializeNoArguments(void);
+  PetscErrorCode PetscFinalize(void);
+  PetscErrorCode PetscInitialized(PetscBool*);
 
     """)
     

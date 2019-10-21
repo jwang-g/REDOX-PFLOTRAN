@@ -84,7 +84,7 @@ hydrolysis = decomp_network.reaction(name='Hydrolysis',reactant_pools={'cellulos
 # C6H12O6 + 4 H2O -> 2 CH3COO- + 2 HCO3- + 4 H+ + 4 H2
 fermentation = decomp_network.reaction(name='fermentation',reactant_pools={'DOM1':6/6},product_pools={'Acetate-':2/6,'HCO3-':2/6,'H+':4/6+4*2/6,'Tracer':2/6}, # balancing pH of FeIII release requires an extra 5.5 H+ to be released here
                                         rate_constant=1e-10,reactiontype='MICROBIAL', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
-                                    inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='MONOD'),decomp_network.inhibition(species='Acetate-',k=6.25e-8,type='MONOD')],
+                                    inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='MONOD'),decomp_network.inhibition(species='Acetate-',k=6.25e-5,type='MONOD')],
                                     monod_terms=[decomp_network.monod(species='DOM1',k=1e-5,threshold=1.1e-15)])
 
 # CH2O + H2O -> CO2 + 4H+ + 4 e-
