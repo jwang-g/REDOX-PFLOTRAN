@@ -76,7 +76,7 @@ def convert_output(output,meta_data):
     
     return output_DF.reset_index(drop=True).set_index(output_DF.index/(24*3600)),output_units
 
-def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,influx={}):
+def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flux_tol=0.15):
     converged=False
     porosity=data.state.porosity
     
@@ -84,15 +84,34 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,influx={}):
     actual_dt=dt/2**num_cuts
     if actual_dt<min_dt:
         raise RuntimeError('Pflotran failed to converge after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
+    
+    cut_for_flux=False
+    flux=zeros(data.meta_data.primary_names.size)
+    for spec in diffquo.keys():
+        pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+        bc_conc=bc.total_mobile.data[pos]
+        local_conc=data.state.total_mobile.data[pos]
         
-    for key in influx.keys():
-        pos=get_alquimiavector(data.meta_data.primary_names).index(key)
-        data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + influx[key]/actual_dt
+        flux[pos] = (bc_conc-local_conc)*diffquo[spec]*actual_dt
         
-    chem.ReactionStepOperatorSplit(ffi.new('void **',data.engine_state),actual_dt,ffi.addressof(data.properties),ffi.addressof(data.state),
-                                    ffi.addressof(data.aux_data),status)
-    data.state.porosity=porosity
-    converged=status.converged
+        data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + flux[pos]
+
+        # Here we test if the flux was fast enough to change concentration significantly relative to bc value
+        # If the change is more than flux_tol*bc, we cut the time step to resolve changes better
+        # if flux[pos] != 0:
+        #     print(data.state.total_mobile.data[pos],local_conc,data.state.total_mobile.data[pos] - local_conc,bc_conc)
+        if abs(data.state.total_mobile.data[pos] - local_conc) > bc_conc*flux_tol:
+            # print('Cutting time step to resolve flux better')
+            cut_for_flux=True
+            
+            
+    if cut_for_flux:
+        converged=False
+    else:
+        chem.ReactionStepOperatorSplit(ffi.new('void **',data.engine_state),actual_dt,ffi.addressof(data.properties),ffi.addressof(data.state),
+                                        ffi.addressof(data.aux_data),status)
+        data.state.porosity=porosity
+        converged=status.converged
     if converged:
         check_status(status,False)
         
@@ -102,18 +121,18 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,influx={}):
         return max_cuts
     else:
         # Undo influx because we will do it again in the shorter run
-        for key in influx.keys():
+        for key in diffquo.keys():
             pos=get_alquimiavector(data.meta_data.primary_names).index(key)
-            data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] - influx[key]/actual_dt
+            data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] - flux[pos]
             
         # Run it twice, because we cut the time step in half
-        ncuts=run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,influx=influx)
+        ncuts=run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc)
         if ncuts>max_cuts:
             max_cuts=ncuts
             
         # This starts from ncuts so it doesn't have to try all the ones that failed again
         for n in range(2**(ncuts-(num_cuts+1))):
-            ncuts2=run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,influx=influx)
+            ncuts2=run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc)
             if ncuts2>max_cuts:
                 max_cuts=ncuts2
 
@@ -121,6 +140,13 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,influx={}):
     
 
 def convert_condition_to_alquimia(cond,name):
+    if cond is None:
+        condition=ffi.new("AlquimiaGeochemicalCondition *")
+        lib.AllocateAlquimiaGeochemicalCondition(len(name), 0, 0, condition);
+        condition.name[0:len(init_cond_name)]=name.encode()
+        return condition
+
+
     primary=[]
     immobile=[]
     mineral=[]
@@ -183,7 +209,7 @@ def convert_condition_to_alquimia(cond,name):
     return condition
 
 def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,saturation=1.0,hands_off=True,
-                    water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,influx={},rateconstants={}):
+                    water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,bc=None,diffquo={},rateconstants={}):
     
     import time
     t0=time.time()
@@ -220,14 +246,6 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
             
 
     # Set up initial condition
-    init_cond_name='initial'
-    if initcond is None:
-        chem_cond=ffi.new("AlquimiaGeochemicalCondition *")
-        lib.AllocateAlquimiaGeochemicalCondition(len(init_cond_name), 0, 0, chem_cond);
-        chem_cond.name[0:len(init_cond_name)]=init_cond_name.encode()
-    else:
-        chem_cond=convert_condition_to_alquimia(initcond,init_cond_name)
-        # print_alquimia_object(chem_cond)
 
     # Initialize state data
     data.properties.volume=volume
@@ -253,14 +271,12 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
                 data.properties.mineral_rate_cnst.data[num]=float(constraint['rate'].split()[0].replace('d','e'))
                 
     # Aqueous kinetic rate constants also need to be specified in hands-off mode
-    # but it's wonky because alquimia doesn't store names for the reactions. So order might be undefined?
-    # Also, Alquimia interface always sets backward rate to zero
-    # Will be a problem with more than one reaction
-    # Also only allows these to be specified for GENERAL_REACTION, not microbial, sandbox, etc
+    # Alquimia interface always sets backward rate to zero
     for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
         data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
 
-    chem.ProcessCondition(ffi.new('void **',data.engine_state),chem_cond,ffi.addressof(data.properties),ffi.addressof(data.state),ffi.addressof(data.aux_data),status)
+    init_cond=convert_condition_to_alquimia(initcond,'initial')
+    chem.ProcessCondition(ffi.new('void **',data.engine_state),init_cond,ffi.addressof(data.properties),ffi.addressof(data.state),ffi.addressof(data.aux_data),status)
     check_status(status,False)
     
     # print_alquimia_object(data.state)
@@ -269,6 +285,21 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     # Pflotran sets porosity based on minerals or something? Needs to be reset
     data.state.porosity=porosity
 
+    # Set up boundary condition if applicable
+    if bc is not None:
+        bc_cond=convert_condition_to_alquimia(bc,'initial')
+        bc_state=ffi.new('AlquimiaState *')
+        bc_state.temperature=temperature
+        bc_state.water_density=water_density
+        bc_state.porosity=porosity
+        bc_state.aqueous_pressure=pressure
+        bc_auxdata=ffi.new('AlquimiaAuxiliaryData *')
+        lib.AllocateAlquimiaState(sizes,bc_state)
+        lib.AllocateAlquimiaAuxiliaryData(sizes,bc_auxdata)
+        chem.ProcessCondition(ffi.new('void **',data.engine_state),bc_cond,ffi.addressof(data.properties),bc_state,bc_auxdata,status)
+        check_status(status,False)
+    else:
+        bc_state=None
 
     ##### At this point, the model should be initialized ##########
     print('''
@@ -300,23 +331,47 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     output['immobile'][0,:]=get_alquimiavector(data.state.total_immobile)
     output['mineral_VF'][0,:]=get_alquimiavector(data.state.mineral_volume_fraction)
     output['time'][0]=0.0
+    output['mineral_rate'][0,:]=get_alquimiavector(data.aux_output.mineral_reaction_rate)
+    output['porosity'][0]=data.state.porosity
 
+    tprev=t0
     for step in range(1,nsteps):
         try:
-            influx_step=dict([(key,influx[key][step%len(influx[key])]) for key in influx.keys()])
-            # print('O2 before: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
-            num_cuts=run_onestep(chem,data,dt,status,min_dt=min_dt,influx=influx_step)
+            dq={}
+            if bc is not None:
+                primarynames=get_alquimiavector(data.meta_data.primary_names)
+                for spec in primarynames:
+                    if spec in diffquo.keys():
+                        if numpy.iterable(diffquo[spec]):
+                            dq[spec]=diffquo[spec][step%len(diffquo[spec])]
+                        else:
+                            dq[spec]=diffquo[spec]
+                    else:
+                        dq[spec]=0.0
+                        # print('O2 before: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
+            num_cuts=run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state)
             # print('O2 after: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
         except RuntimeError as err:
             print('ERROR on timestep %d: %s'%(step,err))
             print('Returning output so far')
+            output['total_mobile'][step,:]=get_alquimiavector(data.state.total_mobile)
+            output['immobile'][step,:]=get_alquimiavector(data.state.total_immobile)
+            output['mineral_VF'][step,:]=get_alquimiavector(data.state.mineral_volume_fraction)
+            output['time'][step]=step*dt
+            
+            
+            output['mineral_rate'][step,:]=get_alquimiavector(data.aux_output.mineral_reaction_rate)
+            output['free'][step,:]=get_alquimiavector(data.aux_output.primary_free_ion_concentration)
+            output['aq_complex'][step,:]=get_alquimiavector(data.aux_output.secondary_free_ion_concentration)
+            output['porosity'][step]=data.state.porosity
             break
                 
-
+        
         if step%25==0:
             t1=time.time()
             print('*** Step {step:d} of {nsteps:d}. Time elapsed: {t:d} s ({tperstep:1.1g} s per timestep). Mean cuts: {meancuts:1.1f} Mean dt: {meandt:1.1f} s ***'.format(
-                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-t0)/step,meancuts=output['ncuts'][step-10:step].mean(),meandt=output['actual_dt'][step-10:step].mean()))
+                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=output['ncuts'][step-10:step].mean(),meandt=output['actual_dt'][step-10:step].mean()))
+            tprev=t1
         output['total_mobile'][step,:]=get_alquimiavector(data.state.total_mobile)
         output['immobile'][step,:]=get_alquimiavector(data.state.total_immobile)
         output['mineral_VF'][step,:]=get_alquimiavector(data.state.mineral_volume_fraction)
@@ -345,9 +400,9 @@ if __name__ == '__main__':
     import decomp_network
     pools = [
     decomp_network.decomp_pool(name='cellulose',CN=50,constraints={'initial':1e2},kind='immobile'),
-    decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immobile'),
+    # decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immobile'),
 
-    decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-30},kind='primary'),
+    decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-15},kind='primary'),
     decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'4.0 P'}),
     decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':1e-12}),
     decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
@@ -367,9 +422,11 @@ if __name__ == '__main__':
     decomp_network.decomp_pool(name='Fe(OH)4-',kind='secondary'),
     decomp_network.decomp_pool(name='Acetic_acid(aq)',kind='secondary'),
     decomp_network.decomp_pool(name='FeCH3COO+',kind='secondary'),
+    decomp_network.decomp_pool(name='FeIIIDOM1(aq)',kind='secondary'),
+    decomp_network.decomp_pool(name='FeIIIAcetate(aq)',kind='secondary'),
     # decomp_network.decomp_pool(name='FeCO3(aq)',kind='secondary'),
 
-    decomp_network.decomp_pool(name='Fe(OH)3',rate='1.d-5 mol/m^2-sec',constraints={'initial':'1.75d-2  1.d2 m^2/m^3'},kind='mineral'),
+    decomp_network.decomp_pool(name='Fe(OH)3',rate='1.d-5 mol/m^2-sec',constraints={'initial':'1.75d-5  1.d2 m^2/m^3'},kind='mineral'),
     # decomp_network.decomp_pool(name='Goethite',rate='1.d-5 mol/m^2-sec',constraints={'initial':'1.75d-2  1.d1 m^2/m^3'},kind='mineral'),
     # decomp_network.decomp_pool(name='Fe',rate='1.d-7 mol/m^2-sec',constraints={'initial':'1.0e-6  1. m^2/m^3'},kind='mineral'),
     decomp_network.decomp_pool(name='Fe(OH)2',rate='1.d-7 mol/m^2-sec',constraints={'initial':'0.0e-20  1.e-10 m^2/m^3'},kind='mineral'),
@@ -392,47 +449,47 @@ if __name__ == '__main__':
             pools_atmoO2[n]=pools_atmoO2[n].copy()
             pools_atmoO2[n].update(constraints={'initial':'0.2 G O2(g)'})
             
-    pools_highO2=pools.copy()
-    for n,p in enumerate(pools_highO2):
-        if p['name']=='O2(aq)':
-            pools_highO2[n]=pools_highO2[n].copy()
-            pools_highO2[n].update(constraints={'initial':'0.8e2 G O2(g)'})
     
-    pools_lowFe=pools_atmoO2.copy()
+    pools_lowFe=pools.copy()
     for n,p in enumerate(pools_lowFe):
         if p['name']=='Fe(OH)3':
             pools_lowFe[n]=pools_lowFe[n].copy()
             pools_lowFe[n].update(constraints={'initial':'0.0  1.e2 m^2/m^3'})
+            
     
     # Using names assigned in alquimia. Not the best solution...
     rateconstants={
-           '1.0 Fe++ + 0.25 O2(aq) + 1.0 H+ <-> 1.0 Fe+++ + 0.5 H2O'                                             : 1.0e2*1.0,
+           '1.0 Fe++ + 0.25 O2(aq) + 1.0 H+ <-> 1.0 Fe+++ + 0.5 H2O'                                             : 2.0e0*1.0,
            "1.0e+00 DOM1  -> 3.3e-01 Acetate-  + 3.3e-01 HCO3-  + 2.0e+00 H+  + 3.3e-01 Tracer"                  : 1.0e-9*1.0,
            "1.0e+00 DOM1  + 1.0e+00 O2(aq)  -> 1.0e+00 HCO3-  + 1.0e+00 H+  + 1.0e+00 Tracer"                    : 1.0e-8*1.0,
            "1.0e+00 Acetate-  + 2.0e+00 O2(aq)  -> 2.0e+00 HCO3-  + 2.0e+00 H+  + 2.0e+00 Tracer"                : 1.0e-8*1.0,
            "1.0e+00 Acetate-  + 8.0e+00 Fe+++  -> 2.0e+00 HCO3-  + 8.0e+00 Fe++  + 9.0e+00 H+  + 2.0e+00 Tracer" : 5.0e-10*1.0,
            "1.0e+00 Acetate-  -> 1.0e+00 CH4(aq)  + 1.0e+00 HCO3-  + 1.0e+00 Tracer"                             : 1.0e-11*1.0,
-           "cellulose decay (SOMDEC sandbox)"                                                                    : 10.0/(365*24*3600)
+           "cellulose decay (SOMDEC sandbox)"                                                                    : 1.0/(365*24*3600)
     }
     
+    
     from numpy import zeros
-    O2_const=zeros(365*24)+0.01/3600
+    dq=0.01 # Diffusion coefficient when aerobic
+    O2_const=zeros(365*24)+dq
     O2_periodic=zeros(365*24)
-    O2_periodic[0::60*24]=1.0e2/3600
-    output_highO2,output_units=run_simulation('fermentation_generated.in',365,3600,initcond=pools_atmoO2,influx={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,saturation=1.0)
-    output,output_units=run_simulation('fermentation_generated.in',365,3600,initcond=pools_atmoO2,hands_off=False,rateconstants=rateconstants)    
-    output_lowFe,output_units=run_simulation('fermentation_generated.in',365,3600,initcond=pools_lowFe,hands_off=False,rateconstants=rateconstants)
-    output_periodicO2,output_units=run_simulation('fermentation_generated.in',365,3600,initcond=pools_atmoO2,influx={'O2(aq)':O2_periodic},hands_off=False,rateconstants=rateconstants)
+    for hr in range(24): # Number of hours the aerobic period lasts
+        O2_periodic[hr::90*24]=dq
+    result_periodicO2,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_atmoO2,bc=pools_atmoO2,diffquo={'O2(aq)':O2_periodic,'HCO3-':0.0},hands_off=False,rateconstants=rateconstants)
+    result_highO2,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_atmoO2,bc=pools_atmoO2,diffquo={'O2(aq)':O2_const,'HCO3-':0.0},hands_off=False,rateconstants=rateconstants)
+    result,output_units=run_simulation('fermentation.in',365,3600,initcond=pools,hands_off=False,rateconstants=rateconstants,bc=pools,diffquo={'HCO3-':0.0})    
+    result_lowFe,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_lowFe,hands_off=False,rateconstants=rateconstants,bc=pools,diffquo={'HCO3-':0.0})
+    
     
     # err = lib.PetscFinalize()
     
     import decomp_network
     import plot_pf_output
     from pylab import *
-    result,units=plot_pf_output.convert_units(output,output_units,'M')
-    result_lowFe,units=plot_pf_output.convert_units(output_lowFe,output_units,'M')
-    result_highO2,units=plot_pf_output.convert_units(output_highO2,output_units,'M')
-    result_periodicO2,units=plot_pf_output.convert_units(output_periodicO2,output_units,'M')
+    # result,units=plot_pf_output.convert_units(output,output_units,'M')
+    # result_lowFe,units=plot_pf_output.convert_units(output_lowFe,output_units,'M')
+    # result_highO2,units=plot_pf_output.convert_units(output_highO2,output_units,'M')
+    # result_periodicO2,units=plot_pf_output.convert_units(output_periodicO2,output_units,'M')
     # figure('Network diagram',figsize=(11.8,4.8));clf()
     # ax=subplot(121)
     # decomp_network.draw_network(fermentation_network_Fe_CH4,omit=['secondary','surf_complex','NH4+','Rock(s)'],arrowstyle='-|>')
@@ -441,104 +498,128 @@ if __name__ == '__main__':
     # ax=subplot(122)
     # decomp_network.draw_network(fermentation_network_Fe_CH4,omit=['NH4+','Rock(s)'],arrowstyle='-|>')
     # title('Decomposition network diagram (with aqueous complexes)')
+    
+        
+    def plot_result(result,SOM_ax,pH_ax,Fe_ax,gasflux_ax,porewater_ax,do_legend=False,**kwargs):
 
-    figure('Cellulose sim (alquimia)');clf()
+        l=SOM_ax.plot(result['Total Sorbed cellulose']*1e-3,label='SOM')[0]
 
-    subplot(221)
+        SOM_ax.set_title('SOM remaining')
+        SOM_ax.set_ylabel('Concentration\n(mmol C/cm$^{-3}$)')
+        SOM_ax.set_xlabel('Time (days)')
+
+        pH_ax.plot(-log10(result['Free H+']))
+
+        pH_ax.set_title('pH')
+        pH_ax.set_ylabel('pH')
+        pH_ax.set_xlabel('Time (days)')
+        
+        
+        molar_volume=34.3600 # From database. cm3/mol
+        molar_weight = 106.8690
+        l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6   ,label='Fe(OH)3')[0]
+        
+        l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3   ,label='Fe+++',ls='--')[0]
+        
+        l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3 ,ls=':'  ,label='Fe++')[0]
+        
+        Fe_ax.set_title('Fe species')
+        Fe_ax.set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
+        Fe_ax.set_xlabel('Time (days)')
+        if do_legend:
+            Fe_ax.legend(fontsize='small')
+        
+
+        gasflux_ax.set_yscale('log')
+        
+        l=gasflux_ax.plot(result.index.values[:-1],diff(result['Total CH4(aq)']*result['Porosity'])/diff(result.index.values),label='CH4')[0]
+        
+        l=gasflux_ax.plot(result.index.values[:-1],diff(result['Total Tracer']*result['Porosity'])/diff(result.index.values),label='CO2',ls='--')[0]
+
+        gasflux_ax.set_title('Gas fluxes')
+        gasflux_ax.set_ylabel('Flux rate\n(mmol cm$^{-3}$ day$^{-1}$)')
+        gasflux_ax.set_xlabel('Time (days)')
+        if do_legend:
+            gasflux_ax.legend(fontsize='small')
+            
+            
+        porewater_ax.set_yscale('log')
+        porewater_ax.plot(result['Total DOM1'],label='DOM')
+        porewater_ax.plot(result['Total Acetate-'],label='Acetate',c='C3')
+        porewater_ax.plot(result['Total O2(aq)'],'--',label='O2',c='C4')
+        porewater_ax.plot(result['Total Fe+++'],'--',label='Fe+++',c='C1')
+        porewater_ax.plot(result['Total Fe++'],':',label='Fe++',c='C2')
+        
+        porewater_ax.set_title('Porewater concentrations')
+        porewater_ax.set_ylabel('Concentration (M)')
+        porewater_ax.set_xlabel('Time (days)')
+        
+        if do_legend:
+            porewater_ax.legend(fontsize='small')
+        
+        tight_layout()
+    
+    
+    colors={'Anaerobic':'C1','Periodic':'C2','Low Fe':'C3','Aerobic':'C0'}
+
+    fig=figure('Results');clf()
+    fig,axes=subplots(5,4,num='Results')
+    plot_result(result_highO2,SOM_ax=axes[0,0],pH_ax=axes[1,0],Fe_ax=axes[2,0],porewater_ax=axes[3,0],gasflux_ax=axes[4,0],do_legend=True)
+    plot_result(result,SOM_ax=axes[0,1],pH_ax=axes[1,1],Fe_ax=axes[2,1],porewater_ax=axes[3,1],gasflux_ax=axes[4,1])
+    plot_result(result_lowFe,SOM_ax=axes[0,2],pH_ax=axes[1,2],Fe_ax=axes[2,2],porewater_ax=axes[3,2],gasflux_ax=axes[4,2])
+    plot_result(result_periodicO2,SOM_ax=axes[0,3],pH_ax=axes[1,3],Fe_ax=axes[2,3],porewater_ax=axes[3,3],gasflux_ax=axes[4,3])
+    
+    axes[0,0].set_title('Aerobic:\n'+axes[0,0].get_title())
+    axes[0,1].set_title('Anaerobic:\n'+axes[0,1].get_title())
+    axes[0,2].set_title('Low Fe:\n'+axes[0,2].get_title())
+    axes[0,3].set_title('Periodically aerobic:\n'+axes[0,3].get_title())
+    
+    for ax in axes[1,:]:
+        ax.set_ylim(3,4.8)
+    for ax in axes[0,:]:
+        ax.set_ylim(0,0.11)
+    for ax in axes[4,:]:
+        ax.set_ylim(bottom=1e-11,top=4e-3)
+    for ax in axes[3,:]:
+        ax.set_ylim(bottom=1e-11,top=0.4)
+    for ax in axes[2,:]:
+        ax.set_ylim(-0.01,0.53)
+    
+    tight_layout()
+    
+    # 
+    # 
+    # ax=subplot(234)
     # ax.set_yscale('log')
-    handles=[]
-    for pool in ['Total Sorbed cellulose','Total CH4(aq)']:
-        l=plot(result[pool],label=pool)[0]
-        plot(result_lowFe[pool],ls='--',c=l.get_color())
-        plot(result_highO2[pool],ls='-.',c=l.get_color())
-        plot(result_periodicO2[pool],ls=':',c=l.get_color())
-        handles.append(l)
-    l=plot(result['Total Tracer']+result['Total Sorbed HRimm'],label='CO2 produced')[0]
-    handles.append(l)
-    plot(result_lowFe['Total Tracer']+result_lowFe['Total Sorbed HRimm'],c=l.get_color(),ls='--')
-    plot(result_highO2['Total Tracer']+result_highO2['Total Sorbed HRimm'],c=l.get_color(),ls='-.')
-    plot(result_periodicO2['Total Tracer']+result_periodicO2['Total Sorbed HRimm'],c=l.get_color(),ls=':')
-    # handles.append(Line2D([0,0],[0,0],color='k',ls='-',label='Aerobic'))
-    # handles.append(Line2D([0,0],[0,0],color='k',ls='--',label='With Fe(III)'))
-    # handles.append(Line2D([0,0],[0,0],color='k',ls=':',label='With methanogenesis'))
-    # handles.append(Line2D([0,0],[0,0],color='k',ls='-.',label='Anaerobic'))
-    legend(handles=handles,fontsize='small',ncol=2)
-    title('Concentrations')
-    ylabel('Concentration (M)')
-    xlabel('Time (days)')
-
-    # figure('Cellulose sim pH and log',figsize=(6,8));clf()
-
-    subplot(223)
-    l=plot(-log10(result['Free H+']),label='Anaerobic')[0]
-    plot(-log10(result_highO2['Free H+']),c=l.get_color(),ls='-.',label='Aerobic')
-    plot(-log10(result_periodicO2['Free H+']),c=l.get_color(),ls=':',label='Periodically aerobic')
-    plot(-log10(result_lowFe['Free H+']),c=l.get_color(),ls='--',label='Low Fe(III)')
-    legend(fontsize='small')
-
-    title('pH')
-    ylabel('pH')
-    xlabel('Time (days)')
-
-    ax=subplot(222)
-    ax.set_yscale('log')
-    # for pool in ['Free DOM1','Free Acetate-']:
+    # for pool in ['Free DOM1','Free Acetate-','Free Fe+++','Free Fe++','Free O2(aq)']:
     #     l=plot(result[pool],label=pool)[0]
-    #     # plot(result_Fe[pool],ls='--',c=l.get_color())
-    #     # plot(result_Fe_CH4[pool],ls=':',c=l.get_color())
+    #     plot(result_lowFe[pool],ls='--',c=l.get_color())
+    #     plot(result_periodicO2[pool],ls=':',c=l.get_color())
     #     plot(result_highO2[pool],ls='-.',c=l.get_color())
     # 
-    # title('Concentrations (log scale)')
+    # ylim(1e-15,1e-1)
+    # 
+    # title('Log concentrations')
     # ylabel('Concentration (M)')
     # xlabel('Time (days)')
-    # legend(fontsize='small',ncol=1)
+    # legend(fontsize='small')
+    # 
+    # ax=subplot(235)
+    # ax.set_yscale('log')
+    # for pool in ['Total DOM1','Total Acetate-','Total Fe+++','Total Fe++','Total O2(aq)']:
+    #     l=plot(result[pool],label=pool)[0]
+    #     plot(result_lowFe[pool],ls='--',c=l.get_color())
+    #     plot(result_periodicO2[pool],ls=':',c=l.get_color())
+    #     plot(result_highO2[pool],ls='-.',c=l.get_color())
+    # 
     # ylim(1e-15,1e-1)
-
-    l=plot(result.index.values[:-1],diff(result['Total CH4(aq)'])/diff(result.index.values),label='CH4')[0]
-    plot(result_highO2.index.values[:-1],diff(result_highO2['Total CH4(aq)'])/diff(result_highO2.index.values),ls='-.',c=l.get_color())
-    plot(result_periodicO2.index.values[:-1],diff(result_periodicO2['Total CH4(aq)'])/diff(result_periodicO2.index.values),ls=':',c=l.get_color())
-    plot(result_lowFe.index.values[:-1],diff(result_lowFe['Total CH4(aq)'])/diff(result_lowFe.index.values),ls='--',c=l.get_color())
-
-    # l=plot(result.index.values[:-1],diff(result['Total Fe++'])/diff(result.index.values),label='Fe(II)')[0]
-    l=plot(result_lowFe.index.values[:-1],diff(result_lowFe['Total Fe++'])/diff(result_lowFe.index.values),ls='--',label='Fe++')[0]
-    plot(result_highO2.index.values[:-1],diff(result_highO2['Total Fe++'])/diff(result_highO2.index.values),ls='-.',c=l.get_color())
-    plot(result_periodicO2.index.values[:-1],diff(result_periodicO2['Total Fe++'])/diff(result_periodicO2.index.values),ls=':',c=l.get_color())
-    # plot(result_Fe_CH4.index.values[:-1],diff(result_Fe_CH4['Total Fe++'])/diff(result_Fe_CH4.index.values),ls=':',c=l.get_color())
-
-    l=plot(result.index.values[:-1],diff(result['Total Tracer']+result['Total Sorbed HRimm'])/diff(result.index.values),label='CO2')[0]
-    # plot(result_highO2.index.values[:-1],diff(result_highO2['Total Tracer']+result_highO2['HRimm'])/diff(result_highO2.index.values),ls='-.',c=l.get_color())
-    plot(result_lowFe.index.values[:-1],diff(result_lowFe['Total Tracer']+result_lowFe['Total Sorbed HRimm'])/diff(result_lowFe.index.values),ls='--',c=l.get_color())
-    
-
-    title('Production rates')
-    ylabel('Rate (M/day)')
-    xlabel('Time (days)')
-    legend(fontsize='small')
-
-
-
-    ax=subplot(224)
-    ax.set_yscale('log')
-    for pool in ['Free DOM1','Free Acetate-','Free Fe+++','Free Fe++','Free O2(aq)']:
-        l=plot(result[pool],label=pool)[0]
-        plot(result_lowFe[pool],ls='--',c=l.get_color())
-        plot(result_periodicO2[pool],ls=':',c=l.get_color())
-        plot(result_highO2[pool],ls='-.',c=l.get_color())
-    
-    title('Concentrations (log scale)')
-    ylabel('Concentration (M)')
-    xlabel('Time (days)')
-    legend(fontsize='small',ncol=1)
-    ylim(1e-15,1e-1)
-
-
-
-    title('Log concentrations')
-    ylabel('Concentration (M)')
-    xlabel('Time (days)')
-    legend(fontsize='small')
-
-
-    tight_layout()
+    # 
+    # title('Log concentrations')
+    # ylabel('Concentration (M)')
+    # xlabel('Time (days)')
+    # legend(fontsize='small')
+    # 
+    # 
+    # tight_layout()
     show()
 

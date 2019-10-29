@@ -55,7 +55,7 @@ def convert_units(data,units,convert_units_to):
             if units[col] == 'mol/m^3':
                 print(col)
                 # Convert from mol[x]/m^3[bulk] to equivalent mol[x]/L[H2O]:  /(1000L/m^3*saturation*porosity) (m^3[H2O]/m^3[bulk])
-                out[col]=data[col]/(1000*saturation*porosity)
+                out[col]=data[col]/(1000*saturation/porosity)
                 units_out[col]='M'
                 
     elif convert_units_to=='mol/m^3':

@@ -148,22 +148,22 @@ class PF_network_writer(PF_writer):
                 
                 # Minerals
                 self.increase_level('MINERALS')
-                self.add_line( '#### NOTE: Beginning of auto-inserted secondary species ####')
+                self.add_line( '#### NOTE: Beginning of auto-inserted mineral species ####')
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='mineral':
                         self.add_line( pool)
-                self.add_line( '#### NOTE: End of auto-inserted secondary species ####')
+                self.add_line( '#### NOTE: End of auto-inserted mineral species ####')
                 self.decrease_level()
                 
                 # Mineral kinetics
                 self.increase_level('MINERAL_KINETICS')
-                self.add_line( '#### NOTE: Beginning of auto-inserted secondary species ####')
+                self.add_line( '#### NOTE: Beginning of auto-inserted mineral kinetics ####')
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='mineral':
                         self.increase_level(pool)
                         self.add_line('RATE_CONSTANT  ' + self.network.nodes[pool]['rate'])
                         self.decrease_level()
-                self.add_line( '#### NOTE: End of auto-inserted secondary species ####')
+                self.add_line( '#### NOTE: End of auto-inserted mineral kinetics ####')
                 self.decrease_level()
                 
                 # Immobile species
