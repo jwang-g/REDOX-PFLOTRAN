@@ -392,6 +392,68 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     # Need to free all the Alquimia arrays?
     lib.FreeAlquimiaData(data)
     return output_DF,output_units
+    
+    
+def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewater_ax=None,do_legend=False):
+
+    if SOM_ax is not None:
+        l=SOM_ax.plot(result['Total Sorbed cellulose']*1e-3,label='SOM')[0]
+
+        SOM_ax.set_title('SOM remaining')
+        SOM_ax.set_ylabel('Concentration\n(mmol C/cm$^{-3}$)')
+        SOM_ax.set_xlabel('Time (days)')
+
+    if pH_ax is not None:
+        pH_ax.plot(-log10(result['Free H+']))
+
+        pH_ax.set_title('pH')
+        pH_ax.set_ylabel('pH')
+        pH_ax.set_xlabel('Time (days)')
+        
+    if Fe_ax is not None:
+        molar_volume=34.3600 # From database. cm3/mol
+        molar_weight = 106.8690
+        l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6   ,label='Fe(OH)3')[0]
+        
+        l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3   ,label='Fe+++',ls='--')[0]
+        
+        l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3 ,ls=':'  ,label='Fe++')[0]
+        
+        Fe_ax.set_title('Fe species')
+        Fe_ax.set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
+        Fe_ax.set_xlabel('Time (days)')
+        if do_legend:
+            Fe_ax.legend(fontsize='small')
+    
+    if gasflux_ax is not None:
+        gasflux_ax.set_yscale('log')
+        
+        l=gasflux_ax.plot(result.index.values[:-1],diff(result['Total CH4(aq)']*result['Porosity'])/diff(result.index.values)*1e3,label='CH4')[0]
+        
+        l=gasflux_ax.plot(result.index.values[:-1],diff(result['Total Tracer']*result['Porosity'])/diff(result.index.values)*1e3,label='CO2',ls='--',c='C5')[0]
+
+        gasflux_ax.set_title('Gas fluxes')
+        gasflux_ax.set_ylabel('Flux rate\n($\mu$mol cm$^{-3}$ day$^{-1}$)')
+        gasflux_ax.set_xlabel('Time (days)')
+        if do_legend:
+            gasflux_ax.legend(fontsize='small')
+        
+    if porewater_ax is not None:
+        porewater_ax.set_yscale('log')
+        porewater_ax.plot(result['Total DOM1'],label='DOM')
+        porewater_ax.plot(result['Total Acetate-'],label='Acetate',c='C3')
+        porewater_ax.plot(result['Total O2(aq)'],'--',label='O2',c='C4')
+        porewater_ax.plot(result['Total Fe+++'],'--',label='Fe+++',c='C1')
+        porewater_ax.plot(result['Total Fe++'],':',label='Fe++',c='C2')
+        
+        porewater_ax.set_title('Porewater concentrations')
+        porewater_ax.set_ylabel('Concentration (M)')
+        porewater_ax.set_xlabel('Time (days)')
+        
+        if do_legend:
+            porewater_ax.legend(fontsize='small')
+    
+    # tight_layout()
 
 if __name__ == '__main__':
     
@@ -472,15 +534,17 @@ if __name__ == '__main__':
     from numpy import zeros
     dq=0.01 # Diffusion coefficient when aerobic
     O2_const=zeros(365*24)+dq
+
+    O2_initial=zeros(365*24)
+    O2_initial[:100*24]=dq
+    result_highO2,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_atmoO2,bc=pools_atmoO2,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants)
+    result,output_units=run_simulation('fermentation.in',365,3600,initcond=pools,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2,diffquo={'O2(aq)':O2_initial})    
+    result_lowFe,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_lowFe,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2,diffquo={'O2(aq)':O2_initial})
+    
     O2_periodic=zeros(365*24)
-    for hr in range(24): # Number of hours the aerobic period lasts
-        O2_periodic[hr::90*24]=dq
-    result_periodicO2,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_atmoO2,bc=pools_atmoO2,diffquo={'O2(aq)':O2_periodic,'HCO3-':0.0},hands_off=False,rateconstants=rateconstants)
-    result_highO2,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_atmoO2,bc=pools_atmoO2,diffquo={'O2(aq)':O2_const,'HCO3-':0.0},hands_off=False,rateconstants=rateconstants)
-    result,output_units=run_simulation('fermentation.in',365,3600,initcond=pools,hands_off=False,rateconstants=rateconstants,bc=pools,diffquo={'HCO3-':0.0})    
-    result_lowFe,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_lowFe,hands_off=False,rateconstants=rateconstants,bc=pools,diffquo={'HCO3-':0.0})
-    
-    
+    O2_periodic[24*180:]=dq
+    result_periodicO2,output_units=run_simulation('fermentation.in',365*3,3600,initcond=pools_atmoO2,bc=pools_atmoO2,diffquo={'O2(aq)':O2_periodic},hands_off=False,rateconstants=rateconstants)
+
     # err = lib.PetscFinalize()
     
     import decomp_network
@@ -500,64 +564,7 @@ if __name__ == '__main__':
     # title('Decomposition network diagram (with aqueous complexes)')
     
         
-    def plot_result(result,SOM_ax,pH_ax,Fe_ax,gasflux_ax,porewater_ax,do_legend=False,**kwargs):
 
-        l=SOM_ax.plot(result['Total Sorbed cellulose']*1e-3,label='SOM')[0]
-
-        SOM_ax.set_title('SOM remaining')
-        SOM_ax.set_ylabel('Concentration\n(mmol C/cm$^{-3}$)')
-        SOM_ax.set_xlabel('Time (days)')
-
-        pH_ax.plot(-log10(result['Free H+']))
-
-        pH_ax.set_title('pH')
-        pH_ax.set_ylabel('pH')
-        pH_ax.set_xlabel('Time (days)')
-        
-        
-        molar_volume=34.3600 # From database. cm3/mol
-        molar_weight = 106.8690
-        l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6   ,label='Fe(OH)3')[0]
-        
-        l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3   ,label='Fe+++',ls='--')[0]
-        
-        l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3 ,ls=':'  ,label='Fe++')[0]
-        
-        Fe_ax.set_title('Fe species')
-        Fe_ax.set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
-        Fe_ax.set_xlabel('Time (days)')
-        if do_legend:
-            Fe_ax.legend(fontsize='small')
-        
-
-        gasflux_ax.set_yscale('log')
-        
-        l=gasflux_ax.plot(result.index.values[:-1],diff(result['Total CH4(aq)']*result['Porosity'])/diff(result.index.values),label='CH4')[0]
-        
-        l=gasflux_ax.plot(result.index.values[:-1],diff(result['Total Tracer']*result['Porosity'])/diff(result.index.values),label='CO2',ls='--')[0]
-
-        gasflux_ax.set_title('Gas fluxes')
-        gasflux_ax.set_ylabel('Flux rate\n(mmol cm$^{-3}$ day$^{-1}$)')
-        gasflux_ax.set_xlabel('Time (days)')
-        if do_legend:
-            gasflux_ax.legend(fontsize='small')
-            
-            
-        porewater_ax.set_yscale('log')
-        porewater_ax.plot(result['Total DOM1'],label='DOM')
-        porewater_ax.plot(result['Total Acetate-'],label='Acetate',c='C3')
-        porewater_ax.plot(result['Total O2(aq)'],'--',label='O2',c='C4')
-        porewater_ax.plot(result['Total Fe+++'],'--',label='Fe+++',c='C1')
-        porewater_ax.plot(result['Total Fe++'],':',label='Fe++',c='C2')
-        
-        porewater_ax.set_title('Porewater concentrations')
-        porewater_ax.set_ylabel('Concentration (M)')
-        porewater_ax.set_xlabel('Time (days)')
-        
-        if do_legend:
-            porewater_ax.legend(fontsize='small')
-        
-        tight_layout()
     
     
     colors={'Anaerobic':'C1','Periodic':'C2','Low Fe':'C3','Aerobic':'C0'}
@@ -575,7 +582,7 @@ if __name__ == '__main__':
     axes[0,3].set_title('Periodically aerobic:\n'+axes[0,3].get_title())
     
     for ax in axes[1,:]:
-        ax.set_ylim(3,4.8)
+        ax.set_ylim(3,5.8)
     for ax in axes[0,:]:
         ax.set_ylim(0,0.11)
     for ax in axes[4,:]:
@@ -587,7 +594,79 @@ if __name__ == '__main__':
     
     tight_layout()
     
-    # 
+    
+    # Figures for talk
+    fig=figure('Just oxygen',figsize=(6,7.4));clf()
+    fig,axes=subplots(3,1,num='Just oxygen')
+    plot_result(result_lowFe,SOM_ax=axes[0])
+    axes[0].set_ylim(bottom=-0.01)
+    
+    axes[1].plot(result_lowFe.index.values[:-1],diff(result_lowFe['Total Tracer']*result_lowFe['Porosity'])/diff(result_lowFe.index.values)*1e3,label='CO2',ls='--')
+    # axes[2].plot(result_lowFe.index.values[:-1],diff(result_lowFe['Total CH4(aq)']*result_lowFe['Porosity'])/diff(result_lowFe.index.values)*1e6,label='CH4')
+    methane_simple=zeros(len(result_lowFe.index.values[:-1]))
+    methane_simple[24*100:]=0.02
+    axes[2].plot(result_lowFe.index.values[:-1],methane_simple)
+
+    axes[1].set_title('CO$_2$ flux')
+    axes[2].set_title('CH$_4$ flux')
+    axes[1].set_ylabel('Flux rate\n($\mu$mol cm$^{-3}$ day$^{-1}$)')
+    axes[2].set_ylabel('Flux rate\n(nmol cm$^{-3}$ day$^{-1}$)')
+    axes[2].set_xlabel('Time (days)')
+    axes[2].set_ylim(top=0.031)
+    
+    xmax=axes[0].get_xlim()[1]
+    for ax in axes:
+        ax.axvspan(100,xmax,color='b',alpha=0.1)
+        ax.set_xlim(right=xmax)
+        ax.text(90,ax.get_ylim()[1]*0.9,'Aerobic',ha='right')
+        ax.text(110,ax.get_ylim()[1]*0.9,'Inundated',ha='left')
+    
+    fig.tight_layout()
+    
+    # With Fe reduction
+    fig=figure('With Fe reduction',figsize=(6,8.4));clf()
+    fig,axes=subplots(4,1,num='With Fe reduction')
+    plot_result(result,SOM_ax=axes[0],Fe_ax=axes[2],gasflux_ax=axes[1],pH_ax=axes[3])
+    axes[0].set_ylim(bottom=-0.01)
+    axes[2].legend(loc='right',labels=['Iron oxide (solid)','Fe$^{3+}$ (dissolved)','Fe$^{2+}$ (dissolved)'])
+
+    # Turn off acetate to make it cleaner
+    axes[1].set_ylim(bottom=0.9e-11)
+    axes[0].text(90,0.0,'Aerobic',ha='right')
+    axes[0].text(110,0.0,'Inundated',ha='left')
+    axes[1].legend(labels=['CH$_4$','CO$_2$'])
+
+    
+    xmax=axes[0].get_xlim()[1]
+    for ax in axes:
+        ax.axvspan(100,xmax,color='b',alpha=0.1)
+        ax.set_xlim(right=xmax)
+
+    
+    fig.tight_layout()
+    
+    # Periodic inundation
+    fig=figure('Periodic inundation',figsize=(6,8.4));clf()
+    fig,axes=subplots(4,1,num='Periodic inundation')
+    plot_result(result_periodicO2,SOM_ax=axes[0],Fe_ax=axes[2],gasflux_ax=axes[1],pH_ax=axes[3])
+    axes[0].set_ylim(bottom=-0.01)
+    axes[2].legend(labels=['Fe(OH)$_3$','Fe$^{3+}$','Fe$^{2+}$'],loc=(0.83,0.2),fontsize='small')
+
+    # Turn off acetate to make it cleaner
+    axes[1].set_ylim(bottom=0.9e-11)
+    axes[1].legend(labels=['CH$_4$','CO$_2$'])
+
+    
+    xmax=axes[0].get_xlim()[1]
+    for ax in axes:
+        for num in range(3):
+            ax.axvspan(num*365,num*365+nonzero(diff(O2_periodic))[0]/24,color='b',alpha=0.1)
+        ax.set_xlim(right=xmax)
+
+    
+    fig.tight_layout()
+    
+
     # 
     # ax=subplot(234)
     # ax.set_yscale('log')

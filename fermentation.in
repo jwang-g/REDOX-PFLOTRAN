@@ -129,7 +129,7 @@ SORPTION
     INHIBITION
       SPECIES_NAME        Acetate-
       TYPE MONOD
-      INHIBITION_CONSTANT 6.2e-05
+      INHIBITION_CONSTANT 6.2e-06
     /
   /
   # DOM aerobic respiration
