@@ -10,7 +10,12 @@ class monod(dict):
     pass
     
 class reaction(dict):
-    def __init__(self,name,reactant_pools,product_pools,rate_constant,rate_units='y',reactiontype='SOMDECOMP',**kwargs):
+    def __init__(self,name,rate_constant,reactant_pools=None,product_pools=None,stoich=None,rate_units='y',reactiontype='SOMDECOMP',**kwargs):
+        if stoich is not None:
+            if reactant_pools is not None or product_pools is not None:
+                raise ValueError('Specify reactant and product pools, or stoich, not both')
+            else:
+                reactant_pools,product_pools=self.read_reaction_stoich(stoich)
         if not isinstance(reactant_pools,dict):
             raise TypeError('stoich must be a dictionary of pool names and stoichiometries')
         if not isinstance(product_pools,dict):
@@ -24,7 +29,25 @@ class reaction(dict):
         self['reactiontype']=reactiontype
         self['rate_constant']=rate_constant
         self.update(kwargs)
-        
+    def read_reaction_stoich(self,stoich):
+        #REACTION 1.0e+00 DOM1  -> 3.3e-01 Acetate-  + 3.3e-01 HCO3-  + 2.0e+00 H+  + 3.3e-01 Tracer 
+        if '->' not in stoich:
+            raise ValueError('stoich must be a string in the format "reactants -> products"')
+        if 'REACTION' in stoich:
+            stoich=stoich[stoich.find('REACTION')+len('REACTION'):]
+        stoich=stoich.strip()
+        reactant_side,product_side=stoich.split('->')
+        r=reactant_side.split(' + ')
+        p=product_side.split(' + ')
+        reactants_dict={}
+        products_dict={}
+        for comp in r:
+            num,chemical=comp.split()
+            reactants_dict[chemical]=float(num)
+        for comp in p:
+            num,chemical=comp.split()
+            products_dict[chemical]=float(num)
+        return reactants_dict,products_dict
 
 
 # Class for writing network out into Pflotran reaction sandbox format
@@ -110,7 +133,7 @@ class PF_network_writer(PF_writer):
 
 
     def write_into_input_deck(self,templatefile_name,outputfile_name,
-            indent_spaces=2,length_days=None):
+            indent_spaces=2,length_days=None,log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat'):
         base_indent=0
         with open(templatefile_name,'r') as templatefile:
             template_lines=templatefile.readlines()
@@ -209,6 +232,14 @@ class PF_network_writer(PF_writer):
                 self.add_line( '#### NOTE: Beginning of auto-inserted reactions ####')
                 self.write_all_reactions(base_indent=base_indent+indent_spaces,indent_spaces=indent_spaces)
                 self.add_line( '#### NOTE: End of auto-inserted reactions ####')
+                
+                if log_formulation:
+                    self.add_line('LOG_FORMULATION')
+                    
+                if truncate_concentration is not None:
+                    self.add_line('TRUNCATE_CONCENTRATION {conc:1.1e}'.format(conc=truncate_concentration))
+                    
+                self.add_line('DATABASE %s'%database)
             
             elif len(line.split())>=2 and line.split()[0]=='CONSTRAINT':
                 constraintname=line.split()[1]
@@ -268,10 +299,12 @@ class PF_network_writer(PF_writer):
 
         
         
-    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.tec',print_output=False,length_days=None):
+    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.tec',print_output=False,length_days=None,
+                        log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat'):
         inputdeck=simulation_name+'_generated.in'
         print('Setting up input deck in %s'%inputdeck)
-        self.write_into_input_deck(template_file,inputdeck,length_days=length_days)
+        self.write_into_input_deck(template_file,inputdeck,length_days=length_days,
+                                    log_formulation=log_formulation,database=database,truncate_concentration=truncate_concentration)
         import subprocess
         cmd='{pflotran_exe:s} -pflotranin {simname:s}_generated.in'.format(pflotran_exe=pflotran_exe,simname=simulation_name)
         print('Running cmd: %s'%cmd)
@@ -336,18 +369,8 @@ class PF_sandbox_reaction_writer(PF_writer):
         
         
 class PF_microbial_reaction_writer(PF_writer):
-    def write_reaction(self,base_indent=None,indent_spaces=None):
-        reaction_data=self.network.copy()
-        
-        if base_indent is not None:
-            self.base_indent=base_indent
-        self.add_line('# {name:s}'.format(name=reaction_data.pop('name')))
-        if 'comment' in reaction_data.keys():
-            self.add_line('# {comment:s}'.format(comment=reaction_data.pop('comment')))
-        self.increase_level('MICROBIAL_REACTION')
-        line = 'REACTION '
-        reactants=reaction_data.pop('reactant_pools')
-        products =reaction_data.pop('product_pools')
+    def write_reaction_stoich(self,reactants,products):
+        line=''
         first = True
         for chem in reactants:
             if first:
@@ -363,6 +386,20 @@ class PF_microbial_reaction_writer(PF_writer):
             else:
                 line = line + ' + '
             line = line + '{stoich:1.1e} {chem:s} '.format(stoich=products[chem],chem=chem)
+        return line
+    def write_reaction(self,base_indent=None,indent_spaces=None):
+        reaction_data=self.network.copy()
+        
+        if base_indent is not None:
+            self.base_indent=base_indent
+        self.add_line('# {name:s}'.format(name=reaction_data.pop('name')))
+        if 'comment' in reaction_data.keys():
+            self.add_line('# {comment:s}'.format(comment=reaction_data.pop('comment')))
+        self.increase_level('MICROBIAL_REACTION')
+        line = 'REACTION '
+        reactants=reaction_data.pop('reactant_pools')
+        products =reaction_data.pop('product_pools')
+        line=line+self.write_reaction_stoich(reactants,products)
         self.add_line(line)
 
         self.add_line('RATE_CONSTANT'.ljust(20)+'{time:1.1e}'.format(time=reaction_data.pop('rate_constant')))
@@ -429,41 +466,47 @@ class decomp_network(nx.MultiDiGraph):
         
 
 
-def make_nodecolors(nodes,POMcol='C0',microbecol='C1',DOMcol='C2',MAOMcol='C3',littercol='g',CWDcol='brown',
-                            mineralcol='C4',primarycol='C5',secondarycol='C7',gascol='C9',Fecol='orange',seccmplxcol='C8'):
+def categorize_nodes(nodes):
     colors=[]
+    categories=[]
+    kinds=nodes.nodes('kind')
     for node in nodes:
-        if 'MICROBES' in node:
-            colors.append(microbecol)
+        if node in node_colors.keys():
+            categories.append(node)
+        elif kinds[node] in node_colors.keys():
+            categories.append(kinds[node])
+        elif 'MICROBES' in node:
+            categories.append('Microbe')
         elif 'MAOM' in node or 'SOIL' in node:
-            colors.append(MAOMcol)
+            categories.append('MAOM')
         elif 'DOM' in node or 'Acetate' in node:
-            colors.append(DOMcol)
+            categories.append('DOM')
         elif 'LITR' in node:
-            colors.append(littercol)
+            categories.append('Litter')
         elif 'CWD' in node:
-            colors.append(CWDcol)
+            categories.append('CWD')
         elif 'kind' in nodes[node] and nodes[node]['kind']=='secondary':
-            colors.append(secondarycol)
+            categories.append('Secondary aqueous')
         elif node in ['HCO3-','CH4(aq)','O2(aq)']:
-            colors.append(gascol)
-        elif 'Fe' in node:
-            colors.append(Fecol)
-        elif 'kind' in nodes[node]:
-            if nodes[node]['kind']=='mineral':
-                colors.append(mineralcol)
-            elif nodes[node]['kind']=='primary':
-                colors.append(primarycol)
+            categories.append('Gas')
 
-            elif nodes[node]['kind']=='gas':
-                colors.append(gascol)
-            elif nodes[node]['kind']=='surf_complex':
-                colors.append(seccmplxcol)
-            else:
-                 colors.append(primarycol)
+        elif kinds[node]=='mineral':
+            categories.append('Mineral')
+        elif 'Fe' in node or 'Mn' in node:
+            categories.append('Metal ion')
+        elif kinds[node]=='primary':
+            categories.append('Primary aqueous')
+
+        elif kinds[node]=='gas':
+            categories.append('Gas')
+        elif kinds[node]=='surf_complex':
+            categories.append('Surface complex')
+        elif kinds[node]=='immobile':
+            categories.append('POM')
         else:
-            colors.append(POMcol)
-    return colors
+             categories.append('Unknown')
+
+    return categories
     
 def get_reaction_from_database(name,kind,filename='hanford.dat'):
     with open(filename,'r') as dbase:
@@ -496,7 +539,23 @@ def get_reaction_from_database(name,kind,filename='hanford.dat'):
         else:
             raise ValueError('Species {species:s} of kind {kind:s} not found in database'.format(species=name,kind=kind))
 
-def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',**kwargs):
+node_colors={
+    'POM':'C0',
+    'Microbe':'C1',
+    'DOM':'C2',
+    'MAOM':'C3',
+    'Litter':'g',
+    'CWD':'brown',
+    'Mineral':'C4',
+    'Primary aqueous':'C5',
+    'Secondary aqueous':'C7',
+    'Gas':'C9',
+    'Metal ion':'orange',
+    'Surface complex':'C8',
+    'Unknown':'C5',
+    'Reaction':'w',
+}
+def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,node_colors=node_colors,label_edges=False,**kwargs):
     to_draw=network.copy()
     for p in network.nodes:
         if network.nodes[p]['kind'] in omit or p in omit or p in ['HRimm','Tracer']:
@@ -506,10 +565,92 @@ def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',
                 to_draw=nx.compose(get_reaction_from_database(cplx,'surf_complex',filename=database_file),to_draw)
         elif network.nodes[p]['kind'] not in ['primary','immobile']:
             to_draw=nx.compose(get_reaction_from_database(p,network.nodes[p]['kind'],filename=database_file),to_draw)
+        
+    # Get rid of nodes added from database reactions that we want removed
+    to_draw.remove_nodes_from([node for node in to_draw.nodes if to_draw.nodes('kind')[node] is None])
+            
     pos=nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
+    nodecats=categorize_nodes(to_draw)  
+    nodecolors=[node_colors[nodecat] for nodecat in nodecats]
     
-    nx.draw_networkx(to_draw,pos=pos,with_labels=True,nodes=to_draw.nodes,node_color=make_nodecolors(to_draw.nodes),
+    nx.draw_networkx(to_draw,pos=pos,with_labels=True,nodes=to_draw.nodes,node_color=nodecolors,
                 arrowsize=arrowsize,font_size=font_size,arrowstyle=arrowstyle,**kwargs)
+    
+    if label_edges:            
+        nx.draw_networkx_edge_labels(to_draw,pos=pos,edge_labels=dict([((e[0],e[1]),e[2]) for e in to_draw.edges(data='name')]),font_size=font_size,fontstyle='italic')
+                
+    if do_legend:
+        from matplotlib.pyplot import Circle,legend
+        legend_handles=[]
+        legend_labels=[]
+        
+        for num,node in enumerate(to_draw.nodes):
+            if nodecats[num] not in legend_labels:
+                legend_labels.append(nodecats[num])
+                legend_handles.append(Circle((0,0),radius=5,facecolor=nodecolors[num]))
+                
+        legend(handles=legend_handles,labels=legend_labels,fontsize='medium',title='Component types')
+    
+    return to_draw
+    
+def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,node_colors=node_colors,**kwargs):
+    to_draw=network.copy()
+    
+    for p in network.nodes:
+        if network.nodes[p]['kind'] in omit or p in omit or p in ['HRimm','Tracer']:
+            to_draw.remove_node(p)
+        elif network.nodes[p]['kind'] is 'surf_complex':
+            for cplx in network.nodes[p]['complexes']:
+                to_draw=nx.compose(get_reaction_from_database(cplx,'surf_complex',filename=database_file),to_draw)
+        elif network.nodes[p]['kind'] not in ['primary','immobile']:
+            to_draw=nx.compose(get_reaction_from_database(p,network.nodes[p]['kind'],filename=database_file),to_draw)
+    
+    for react in network.edges:
+        if network.edges[react]['name'] not in to_draw.nodes:
+            e=network.edges[react]['reaction']
+            for species in e['reactant_pools']:
+                to_draw.add_edge(species,e['name'])
+            for species in e['product_pools']:
+                to_draw.add_edge(e['name'],species)
+            to_draw.nodes[e['name']]['kind']='Reaction'
+            
+    # Get rid of nodes added from database reactions that we want removed
+    to_draw.remove_nodes_from([node for node in to_draw.nodes if to_draw.nodes('kind')[node] is None])
+    # Get rid of all the original reactions
+    to_draw.remove_edges_from(network.edges)
+            
+    pos=nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
+    from numpy import array
+    nodecats=array(categorize_nodes(to_draw)  )
+    nodecolors=array([node_colors[nodecat] for nodecat in nodecats])
+    
+    # Non-reactions:
+    nonreactions=array([to_draw.nodes[n]['kind']!='Reaction' for n in to_draw.nodes])
+    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[nonreactions].tolist(),node_color=nodecolors[nonreactions],node_shape='o',alpha=0.8,**kwargs)
+    
+    nx.draw_networkx_labels(to_draw,pos=pos,nodelist=to_draw.nodes,font_size=font_size,**kwargs)
+    
+    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=[n for n in to_draw.nodes if to_draw.nodes[n]['kind']=='Reaction'],node_shape='*',
+                node_color='y',alpha=0.8,**kwargs)
+    
+    nx.draw_networkx_edges(to_draw,pos=pos,arrowsize=arrowsize,arrowstyle=arrowstyle,**kwargs)
+        
+    
+    
+    if do_legend:
+        from matplotlib.pyplot import legend,Line2D
+        legend_handles=[]
+        legend_labels=[]
+        
+        for num,node in enumerate(to_draw.nodes):
+            if nodecats[num] not in legend_labels:
+                legend_labels.append(nodecats[num])
+                if to_draw.nodes[node]['kind']=='Reaction':
+                    legend_handles.append(Line2D([0],[0],ls='None',marker='*',ms=15.0,color='y'))
+                else:
+                    legend_handles.append(Line2D([0],[0],ls='None',marker='o',ms=15.0,color=nodecolors[num]))
+                
+        legend(handles=legend_handles,labels=legend_labels,fontsize='medium',title='Component types',title_fontsize='large',labelspacing=1.0)
     
     return to_draw
     
