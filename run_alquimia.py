@@ -1,4 +1,5 @@
 from _alquimia import ffi,lib
+import numpy
 
 import sys
 
@@ -76,25 +77,39 @@ def convert_output(output,meta_data):
     
     return output_DF.reset_index(drop=True).set_index(output_DF.index/(24*3600)),output_units
 
-def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flux_tol=0.15):
+def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flux_tol=0.15,truncate_concentration=0.0,rateconstants={},min_cuts=0):
     converged=False
     porosity=data.state.porosity
     
     max_cuts=num_cuts
     actual_dt=dt/2**num_cuts
-    if actual_dt<min_dt:
-        raise RuntimeError('Pflotran failed to converge after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
+    
+    for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+        data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
+    
+    for spec in diffquo.keys():
+        pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+        if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
+            # print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
+            for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+                if spec in reactname.split('->')[0].split():  # reactants
+                    
+                    # print('Setting rate of reaction %s to zero'%reactname)
+                    data.properties.aqueous_kinetic_rate_cnst.data[num]=0.0
     
     cut_for_flux=False
-    flux=zeros(data.meta_data.primary_names.size)
+    flux=numpy.zeros(data.meta_data.primary_names.size)
     for spec in diffquo.keys():
         pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
         bc_conc=bc.total_mobile.data[pos]
         local_conc=data.state.total_mobile.data[pos]
         
-        flux[pos] = (bc_conc-local_conc)*diffquo[spec]*actual_dt
+        
+        # flux[pos] = (bc_conc-local_conc)*diffquo[spec]*actual_dt
+        flux[pos] = (bc_conc-local_conc)*(1-numpy.exp(-diffquo[spec]*actual_dt))
         
         data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + flux[pos]
+        
 
         # Here we test if the flux was fast enough to change concentration significantly relative to bc value
         # If the change is more than flux_tol*bc, we cut the time step to resolve changes better
@@ -105,7 +120,7 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flu
             cut_for_flux=True
             
             
-    if cut_for_flux:
+    if cut_for_flux or num_cuts<min_cuts:
         converged=False
     else:
         chem.ReactionStepOperatorSplit(ffi.new('void **',data.engine_state),actual_dt,ffi.addressof(data.properties),ffi.addressof(data.state),
@@ -125,14 +140,20 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flu
             pos=get_alquimiavector(data.meta_data.primary_names).index(key)
             data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] - flux[pos]
             
+        if actual_dt/2<min_dt:
+            if cut_for_flux:
+                raise RuntimeError('Pflotran failed to converge (because of boundary fluxes) after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
+            else:
+                raise RuntimeError('Pflotran failed to converge after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
+            
         # Run it twice, because we cut the time step in half
-        ncuts=run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc)
+        ncuts=run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
         if ncuts>max_cuts:
             max_cuts=ncuts
             
         # This starts from ncuts so it doesn't have to try all the ones that failed again
         for n in range(2**(ncuts-(num_cuts+1))):
-            ncuts2=run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc)
+            ncuts2=run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
             if ncuts2>max_cuts:
                 max_cuts=ncuts2
 
@@ -209,7 +230,7 @@ def convert_condition_to_alquimia(cond,name):
     return condition
 
 def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,saturation=1.0,hands_off=True,
-                    water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,bc=None,diffquo={},rateconstants={}):
+                    water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,bc=None,diffquo={},rateconstants={},truncate_concentration=0.0):
     
     import time
     t0=time.time()
@@ -229,6 +250,13 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     sizes=ffi.addressof(data.sizes)
     functionality=ffi.addressof(data.functionality)
     engine_state=ffi.new('void **',data.engine_state)
+    
+    # Initialize Petsc first
+    initialized = ffi.new('PetscBool *')
+    lib.PetscInitialized(initialized)   
+    if not initialized[0]:
+        err = lib.PetscInitializeNoArguments()
+        assert err==0, 'Error in Petsc initialization'
 
     # input_file='../../alquimia-dev/benchmarks/batch_chem/ABCD_microbial.in'
     chem.Setup(input_file.encode(),ffi.cast('_Bool',hands_off),engine_state,sizes,functionality,status)
@@ -335,6 +363,8 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     output['porosity'][0]=data.state.porosity
 
     tprev=t0
+    num_cuts=0 # Keep track of cuts from previous step, so it doesn't start from zero each time
+    success=True
     for step in range(1,nsteps):
         try:
             dq={}
@@ -349,7 +379,7 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
                     else:
                         dq[spec]=0.0
                         # print('O2 before: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
-            num_cuts=run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state)
+            num_cuts=run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
             # print('O2 after: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
         except RuntimeError as err:
             print('ERROR on timestep %d: %s'%(step,err))
@@ -364,13 +394,29 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
             output['free'][step,:]=get_alquimiavector(data.aux_output.primary_free_ion_concentration)
             output['aq_complex'][step,:]=get_alquimiavector(data.aux_output.secondary_free_ion_concentration)
             output['porosity'][step]=data.state.porosity
+            success=False
+            break
+        except KeyboardInterrupt as err:
+            print('INTERRUPTED on timestep %d'%(step))
+            print('Returning output so far')
+            output['total_mobile'][step,:]=get_alquimiavector(data.state.total_mobile)
+            output['immobile'][step,:]=get_alquimiavector(data.state.total_immobile)
+            output['mineral_VF'][step,:]=get_alquimiavector(data.state.mineral_volume_fraction)
+            output['time'][step]=step*dt
+            
+            
+            output['mineral_rate'][step,:]=get_alquimiavector(data.aux_output.mineral_reaction_rate)
+            output['free'][step,:]=get_alquimiavector(data.aux_output.primary_free_ion_concentration)
+            output['aq_complex'][step,:]=get_alquimiavector(data.aux_output.secondary_free_ion_concentration)
+            output['porosity'][step]=data.state.porosity
+            success=False
             break
                 
         
         if step%25==0:
             t1=time.time()
-            print('*** Step {step:d} of {nsteps:d}. Time elapsed: {t:d} s ({tperstep:1.1g} s per timestep). Mean cuts: {meancuts:1.1f} Mean dt: {meandt:1.1f} s ***'.format(
-                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=output['ncuts'][step-10:step].mean(),meandt=output['actual_dt'][step-10:step].mean()))
+            print('*** Step {step:d} of {nsteps:d}. Time elapsed: {t:d} s ({tperstep:1.1g} s per {steplength:1.1g} hour timestep). Mean cuts: {meancuts:1.1f} Mean dt: {meandt:1.1f} s ***'.format(
+                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=output['ncuts'][step-10:step].mean(),meandt=output['actual_dt'][step-10:step].mean()),steplength=dt/3600)
             tprev=t1
         output['total_mobile'][step,:]=get_alquimiavector(data.state.total_mobile)
         output['immobile'][step,:]=get_alquimiavector(data.state.total_immobile)
@@ -391,6 +437,15 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     
     # Need to free all the Alquimia arrays?
     lib.FreeAlquimiaData(data)
+    
+    if success:
+        print('''
+
+        *****************************************************
+        *           Successfully finished run               *
+        *****************************************************
+
+        ''')
     return output_DF,output_units
     
     
@@ -404,7 +459,7 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewat
         SOM_ax.set_xlabel('Time (days)')
 
     if pH_ax is not None:
-        pH_ax.plot(-log10(result['Free H+']))
+        pH_ax.plot(-numpy.log10(result['Free H+']))
 
         pH_ax.set_title('pH')
         pH_ax.set_ylabel('pH')
@@ -415,6 +470,7 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewat
         molar_weight = 106.8690
         l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6   ,label='Fe(OH)3')[0]
         
+        # M/L to umol/cm3: 1e6/1e3=1e3
         l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3   ,label='Fe+++',ls='--')[0]
         
         l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3 ,ls=':'  ,label='Fe++')[0]
@@ -428,9 +484,9 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewat
     if gasflux_ax is not None:
         gasflux_ax.set_yscale('log')
         
-        l=gasflux_ax.plot(result.index.values[:-1],diff(result['Total CH4(aq)']*result['Porosity'])/diff(result.index.values)*1e3,label='CH4')[0]
+        l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total CH4(aq)']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CH4')[0]
         
-        l=gasflux_ax.plot(result.index.values[:-1],diff(result['Total Tracer']*result['Porosity'])/diff(result.index.values)*1e3,label='CO2',ls='--',c='C5')[0]
+        l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total Tracer']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CO2',ls='--',c='C5')[0]
 
         gasflux_ax.set_title('Gas fluxes')
         gasflux_ax.set_ylabel('Flux rate\n($\mu$mol cm$^{-3}$ day$^{-1}$)')
@@ -444,6 +500,7 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewat
         porewater_ax.plot(result['Total Acetate-'],label='Acetate',c='C3')
         porewater_ax.plot(result['Total O2(aq)'],'--',label='O2',c='C4')
         porewater_ax.plot(result['Total Fe+++'],'--',label='Fe+++',c='C1')
+        porewater_ax.plot(result['Free Fe+++'],':',label='Fe+++',c='C1')
         porewater_ax.plot(result['Total Fe++'],':',label='Fe++',c='C2')
         
         porewater_ax.set_title('Porewater concentrations')
@@ -497,12 +554,7 @@ if __name__ == '__main__':
     decomp_network.decomp_pool(name='>Carboxylate-',kind='surf_complex',mineral='Rock(s)',site_density=10.0,complexes=['>Carboxylic_acid']),
     ]
     
-    # Initialize Petsc first
-    initialized = ffi.new('PetscBool *')
-    lib.PetscInitialized(initialized)   
-    if not initialized[0]:
-        err = lib.PetscInitializeNoArguments()
-        assert err==0, 'Error in Petsc initialization'
+
             
             
     pools_atmoO2=pools.copy()
@@ -531,7 +583,7 @@ if __name__ == '__main__':
     }
     
     
-    from numpy import zeros
+    from numpy import zeros,diff
     dq=0.01 # Diffusion coefficient when aerobic
     O2_const=zeros(365*24)+dq
 
