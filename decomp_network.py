@@ -17,12 +17,38 @@ def change_constraint(pools,poolname,newval,constraint='initial',inplace=False):
             
     if not inplace:
         return out
+        
+def change_constraints(pools,changes,constraint='initial',inplace=False):
+    'Change a constraint value for a pool in a list of pools. Returns a copy unless inplace is True'
+    if not inplace:
+        import copy
+        out=copy.deepcopy(pools)
+    else:
+        out=pools
+        
+    for n,p in enumerate(out):
+        if p['name'] in changes:
+            out[n].update(constraints={constraint:changes[p['name']]})
+            
+    if not inplace:
+        return out
 
 class inhibition(dict):
     pass
     
 class monod(dict):
     pass
+    
+class sorption_isotherm(dict):
+    def __init__(self,name,sorbed_species,mineral,k,langmuir_b,sorbed_name):
+        self['name']=name
+        self['reactant_pools']={sorbed_species:1.0,mineral:1.0}
+        self['product_pools']={sorbed_name:1.0}
+        self['reactiontype']='sorption_isotherm'
+        self['mineral']=mineral
+        self['sorbed_species']=sorbed_species
+        self['k']=k
+        self['langmuir_b']=langmuir_b
     
 class reaction(dict):
     def __init__(self,name,rate_constant,reactiontype,reactant_pools=None,product_pools=None,stoich=None,rate_units='y',**kwargs):
@@ -240,6 +266,21 @@ class PF_network_writer(PF_writer):
                             self.add_line(complex)
                         self.decrease_level()
                         self.decrease_level()
+                
+                isotherm_reacts=self.network.edge_subgraph([(ins,outs,ks) for ins,outs,ks,r in self.network.edges(data='reaction',keys=True) if r['reactiontype']=='sorption_isotherm'])
+                if len(isotherm_reacts)>0:
+                    self.increase_level('ISOTHERM_REACTIONS')
+                    already_done = []
+                    for (ins,outs,reaction) in isotherm_reacts.edges(data='reaction'):
+                        if reaction['name'] in already_done:
+                            continue
+                        already_done.append(reaction['name'])
+                        self.increase_level(reaction['sorbed_species'])
+                        self.add_line('DISTRIBUTION_COEFFICIENT {k:1.2e}'.format(k=reaction['k']))
+                        self.add_line('KD_MINERAL_NAME {mineral:s}'.format(mineral=reaction['mineral']))
+                        self.add_line('LANGMUIR_B {b:1.2e}'.format(b=reaction['langmuir_b']))
+                        self.decrease_level()
+                    self.decrease_level()
                 self.decrease_level()
                 self.add_line( '#### NOTE: End of auto-inserted sorption sites ####')
                 
@@ -544,13 +585,13 @@ def categorize_nodes(nodes):
             categories.append('CWD')
         elif 'kind' in nodes[node] and nodes[node]['kind']=='secondary':
             categories.append('Secondary aqueous')
-        elif node in ['HCO3-','CH4(aq)','O2(aq)']:
+        elif node in ['HCO3-','HS-'] or '(aq)' in node:
             categories.append('Gas')
 
         elif kinds[node]=='mineral':
             categories.append('Mineral')
-        elif 'Fe' in node or 'Mn' in node:
-            categories.append('Metal ion')
+        # elif 'Fe' in node or 'Mn' in node:
+        #     categories.append('Metal ion')
         elif kinds[node]=='primary':
             categories.append('Primary aqueous')
 
@@ -624,7 +665,7 @@ def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',
         elif network.nodes[p]['kind'] is 'surf_complex':
             for cplx in network.nodes[p]['complexes']:
                 to_draw=nx.compose(get_reaction_from_database(cplx,'surf_complex',filename=database_file),to_draw)
-        elif network.nodes[p]['kind'] not in ['primary','immobile','implicit']:
+        elif network.nodes[p]['kind'] not in ['primary','immobile','implicit','sorbed']:
             to_draw=nx.compose(get_reaction_from_database(p,network.nodes[p]['kind'],filename=database_file),to_draw)
         
     # Get rid of nodes added from database reactions that we want removed
@@ -654,7 +695,8 @@ def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',
     
     return to_draw
     
-def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,node_colors=node_colors,namechanges={},**kwargs):
+def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,
+            node_colors=node_colors,namechanges={},node_alpha=0.8,markers={'Reaction':'*'},pos=None,**kwargs):
     to_draw=network.copy()
     
     for p in network.nodes:
@@ -662,12 +704,15 @@ def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',a
             to_draw.remove_node(p)
         elif network.nodes[p]['kind'] is 'surf_complex':
             for cplx in network.nodes[p]['complexes']:
-                to_draw=nx.compose(get_reaction_from_database(cplx,'surf_complex',filename=database_file),to_draw)
-        elif network.nodes[p]['kind'] not in ['primary','immobile','implicit']:
+                # to_draw=nx.compose(get_reaction_from_database(cplx,'surf_complex',filename=database_file),to_draw)
+                to_draw.add_edge(p.strip('>'),cplx.strip('>'))
+                to_draw.nodes[cplx.strip('>')]['kind']='Sorption Reaction'
+                to_draw.add_edge(network.nodes[p]['mineral'],cplx.strip('>'))
+        elif network.nodes[p]['kind'] not in ['primary','immobile','implicit','sorbed']:
             to_draw=nx.compose(get_reaction_from_database(p,network.nodes[p]['kind'],filename=database_file),to_draw)
     
     for react in network.edges:
-        if network.edges[react]['name'] not in to_draw.nodes:
+        if network.edges[react]['name'] not in to_draw.nodes and network.edges[react]['name'] not in omit:
             e=network.edges[react]['reaction']
             for species in e['reactant_pools']:
                 to_draw.add_edge(species,e['name'])
@@ -680,21 +725,25 @@ def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',a
     to_draw.remove_nodes_from([node for node in to_draw.nodes if to_draw.nodes('kind')[node] is None])
     # Get rid of all the original reactions
     to_draw.remove_edges_from(network.edges)
+
             
-    pos=nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
+    if pos is None:
+        pos=nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
     from numpy import array
     nodecats=array(categorize_nodes(to_draw)  )
     nodecolors=array([node_colors[nodecat] for nodecat in nodecats])
     
     # Non-reactions:
     nonreactions=array(['Reaction' not in to_draw.nodes[n]['kind'] for n in to_draw.nodes])
-    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[nonreactions].tolist(),node_color=nodecolors[nonreactions],node_shape='o',alpha=0.8,**kwargs)
-    
+    minerals=array(['mineral' in to_draw.nodes[n]['kind'] for n in to_draw.nodes])
+    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[nonreactions&~minerals].tolist(),node_color=nodecolors[nonreactions&~minerals],node_shape='o',alpha=node_alpha,**kwargs)
+    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[minerals].tolist(),node_color=nodecolors[minerals],node_shape=markers.get('mineral','o'),alpha=node_alpha,**kwargs)
+        
     nx.draw_networkx_labels(to_draw,pos=pos,labels={n:namechanges.get(n,n) for n in to_draw.nodes},font_size=font_size,**kwargs)
     
     reactionnodes=array(to_draw.nodes())[~nonreactions].tolist()
-    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=reactionnodes,node_shape='*',
-                node_color=nodecolors[~nonreactions],alpha=0.8,**kwargs)
+    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=reactionnodes,node_shape=markers.get('Reaction','*'),
+                node_color=nodecolors[~nonreactions],alpha=node_alpha,**kwargs)
     
     nx.draw_networkx_edges(to_draw,pos=pos,arrowsize=arrowsize,arrowstyle=arrowstyle,**kwargs)
         
@@ -706,14 +755,16 @@ def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',a
         legend_labels=[]
         
         for num,node in enumerate(to_draw.nodes):
-            if nodecats[num] not in legend_labels:
+            if namechanges.get(nodecats[num],nodecats[num]) not in legend_labels:
                 legend_labels.append(namechanges.get(nodecats[num],nodecats[num]))
                 if 'Reaction' in to_draw.nodes[node]['kind']:
-                    legend_handles.append(Line2D([0],[0],ls='None',marker='*',ms=15.0,color=nodecolors[num]))
+                    legend_handles.append(Line2D([0],[0],ls='None',marker=markers.get('Reaction','*'),ms=15.0,color=nodecolors[num]))
+                elif 'mineral' in to_draw.nodes[node]['kind']:
+                    legend_handles.append(Line2D([0],[0],ls='None',marker=markers.get('mineral','o'),ms=15.0,color=nodecolors[num]))
                 else:
                     legend_handles.append(Line2D([0],[0],ls='None',marker='o',ms=15.0,color=nodecolors[num]))
                 
-        legend(handles=legend_handles,labels=legend_labels,fontsize='medium',title='Component types',title_fontsize='large',labelspacing=1.0,ncol=2)
+        legend(handles=legend_handles,labels=legend_labels,fontsize='large',title='Component types',title_fontsize='large',labelspacing=1.0,ncol=2)
     
-    return to_draw
+    return to_draw,pos
     

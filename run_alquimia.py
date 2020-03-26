@@ -416,7 +416,7 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
         if step%25==0:
             t1=time.time()
             print('*** Step {step:d} of {nsteps:d}. Time elapsed: {t:d} s ({tperstep:1.1g} s per {steplength:1.1g} hour timestep). Mean cuts: {meancuts:1.1f} Mean dt: {meandt:1.1f} s ***'.format(
-                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=output['ncuts'][step-10:step].mean(),meandt=output['actual_dt'][step-10:step].mean()),steplength=dt/3600)
+                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=output['ncuts'][step-10:step].mean(),meandt=output['actual_dt'][step-10:step].mean(),steplength=dt/3600))
             tprev=t1
         output['total_mobile'][step,:]=get_alquimiavector(data.state.total_mobile)
         output['immobile'][step,:]=get_alquimiavector(data.state.total_immobile)
