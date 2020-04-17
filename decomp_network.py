@@ -3,6 +3,17 @@ import networkx as nx
 class decomp_pool(dict):
     pass
 
+def pools_list_to_dict(pools):
+    if isinstance(pools,dict):
+        return pools
+    else:
+        return {p['name']:p for p in pools}
+def pools_dict_to_list(pools):
+    if isinstance(pools,dict):
+        return list(pools.values())
+    else:
+        return pools
+
 def change_constraint(pools,poolname,newval,constraint='initial',inplace=False):
     'Change a constraint value for a pool in a list of pools. Returns a copy unless inplace is True'
     if not inplace:
@@ -29,6 +40,21 @@ def change_constraints(pools,changes,constraint='initial',inplace=False):
     for n,p in enumerate(out):
         if p['name'] in changes:
             out[n].update(constraints={constraint:changes[p['name']]})
+            
+    if not inplace:
+        return out
+
+def change_site_density(pools,sitename,newdensity,inplace=False):
+    'Change a complexation site density in a list of pools. Returns a copy unless inplace is True'
+    if not inplace:
+        import copy
+        out=copy.deepcopy(pools)
+    else:
+        out=pools
+        
+    for n,p in enumerate(out):
+        if p['name']==sitename:
+            out[n].update(site_density=newdensity)
             
     if not inplace:
         return out

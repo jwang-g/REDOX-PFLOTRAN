@@ -47,7 +47,7 @@ def print_alquimia_object(obj,indent=0):
         print(' '*indent+obj)
 
 
-def convert_output(output,meta_data):
+def convert_output(output,meta_data,secondary_names):
     import pandas
     output_DF=pandas.DataFrame(index=output['time'])
     output_DF['Porosity']=output['porosity']
@@ -74,6 +74,10 @@ def convert_output(output,meta_data):
     for col in mineral_rate.columns:
         output_DF[col]=mineral_rate[col]
     output_units.update([(s+' Rate','mol/m^3/sec') for s in get_alquimiavector(meta_data.mineral_names)])
+    secondary=pandas.DataFrame(output['aq_complex'],columns=secondary_names,index=output['time'])
+    for col in secondary.columns:
+        output_DF[col]=secondary[col]
+    output_units.update([(s,'M') for s in secondary_names])
     
     return output_DF.reset_index(drop=True).set_index(output_DF.index/(24*3600)),output_units
 
@@ -92,7 +96,7 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flu
         if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
             # print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
             for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
-                if spec in reactname.split('->')[0].split():  # reactants
+                if '->' in reactname and spec in reactname.split('->')[0].split():  # reactants
                     
                     # print('Setting rate of reaction %s to zero'%reactname)
                     data.properties.aqueous_kinetic_rate_cnst.data[num]=0.0
@@ -110,6 +114,10 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flu
         
         data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + flux[pos]
         
+        if bc_conc<0:
+            raise ValueError('Boundary condition concentration of %s < 0'%spec)
+        if local_conc<0:
+            raise RuntimeError('Initial concentration of %s < 0'%spec)
 
         # Here we test if the flux was fast enough to change concentration significantly relative to bc value
         # If the change is more than flux_tol*bc, we cut the time step to resolve changes better
@@ -133,6 +141,11 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flu
         chem.GetAuxiliaryOutput(ffi.new('void **',data.engine_state),ffi.addressof(data.properties),ffi.addressof(data.state),
                                         ffi.addressof(data.aux_data),ffi.addressof(data.aux_output),status)
         check_status(status,False)
+        # if (numpy.array(get_alquimiavector(data.state.total_mobile))<numpy.array(get_alquimiavector(data.aux_output.primary_free_ion_concentration))).any():
+        #     print('Total mobile:',get_alquimiavector(data.state.total_mobile))
+        #     print('Free mobile:',get_alquimiavector(data.aux_output.primary_free_ion_concentration))
+        #     print('Total - Free:',numpy.array(get_alquimiavector(data.state.total_mobile))-numpy.array(get_alquimiavector(data.aux_output.primary_free_ion_concentration)))
+        #     raise RuntimeError('Total ion concentration less than free ion concentration')
         return max_cuts
     else:
         # Undo influx because we will do it again in the shorter run
@@ -307,7 +320,7 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     chem.ProcessCondition(ffi.new('void **',data.engine_state),init_cond,ffi.addressof(data.properties),ffi.addressof(data.state),ffi.addressof(data.aux_data),status)
     check_status(status,False)
     
-    # print_alquimia_object(data.state)
+    # uimia_object(data.state)
     print_alquimia_object(data.properties)
 
     # Pflotran sets porosity based on minerals or something? Needs to be reset
@@ -323,6 +336,8 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
         bc_state.aqueous_pressure=pressure
         bc_auxdata=ffi.new('AlquimiaAuxiliaryData *')
         lib.AllocateAlquimiaState(sizes,bc_state)
+        for num in range(data.state.surface_site_density.size):
+            bc_state.surface_site_density.data[num]=data.state.surface_site_density.data[num]
         lib.AllocateAlquimiaAuxiliaryData(sizes,bc_auxdata)
         chem.ProcessCondition(ffi.new('void **',data.engine_state),bc_cond,ffi.addressof(data.properties),bc_state,bc_auxdata,status)
         check_status(status,False)
@@ -337,6 +352,19 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     *****************************************************
 
     ''')
+
+    # Read secondary complex names from input file since Alquimia does not provide them
+    with open(input_file,'r') as infile:
+        secondary_names=[]
+        for line in infile:
+            if 'SECONDARY_SPECIES' in line.split('#')[0]:
+                break
+        for line in infile:
+            l=line.strip().split('#')[0]
+            if l.startswith('END') or l.startswith('/'):
+                break
+            if len(l)>0:
+                secondary_names.append(l)
 
 
     import numpy
@@ -433,7 +461,7 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
         
     import pandas
     # Put into a dataframe in the same format as reading it out of a tecfile
-    output_DF,output_units=convert_output(output,data.meta_data)
+    output_DF,output_units=convert_output(output,data.meta_data,secondary_names)
     
     # Need to free all the Alquimia arrays?
     lib.FreeAlquimiaData(data)
@@ -449,13 +477,27 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     return output_DF,output_units
     
     
-def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewater_ax=None,do_legend=False):
-
+def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewater_ax=None,do_legend=False,gdrywt=False,BD=None,SOC_pct=None,cellulose_SOC_frac=1.0):
+    if gdrywt:
+        if SOC_pct is None and BD is None:
+            raise TypeError('SOC_pct or BD must be a number if gdrywt is True')
+        SOC_mol_m3=result['Total Sorbed cellulose'].iloc[0]/cellulose_SOC_frac # mol SOC/m3
+        SOC_gC_cm3=SOC_mol_m3*12/100**3
+        SOC_gC_gdwt=SOC_pct/100
+        cm3_to_dwt=SOC_gC_gdwt/SOC_gC_cm3 # Conversion from /cm3 to /gdwt. This is 1/ bulk density in g/cm3
+        if BD is not None:
+            cm3_to_dwt=1.0/BD
+        print('cm3_to_dwt = %1.3f'%cm3_to_dwt)
     if SOM_ax is not None:
-        l=SOM_ax.plot(result['Total Sorbed cellulose']*1e-3,label='SOM')[0]
+        if gdrywt:
+            # Plot in %, i.e. gC/gdrywt *100.
+            l=SOM_ax.plot(result['Total Sorbed cellulose']/SOC_mol_m3*SOC_pct+SOC_pct*(1-cellulose_SOC_frac),label='SOM')[0]
+            SOM_ax.set_ylabel('Concentration\n(SOC %)')
+        else:
+            l=SOM_ax.plot(result['Total Sorbed cellulose']*1e-3,label='SOM')[0]
+            SOM_ax.set_ylabel('Concentration\n(mmol C/cm$^{-3}$)')
 
         SOM_ax.set_title('SOM remaining')
-        SOM_ax.set_ylabel('Concentration\n(mmol C/cm$^{-3}$)')
         SOM_ax.set_xlabel('Time (days)')
 
     if pH_ax is not None:
@@ -468,28 +510,43 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewat
     if Fe_ax is not None:
         molar_volume=34.3600 # From database. cm3/mol
         molar_weight = 106.8690
-        l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6   ,label='Fe(OH)3')[0]
+        if gdrywt:
+            # Assume we can use SOC % to convert from volume to dry weight
+            l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6*cm3_to_dwt   ,label='Fe(OH)3')[0]
+            Fe_ax.set_ylabel('Concentration\n($\mu$mol/g dwt)')
+            l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3*cm3_to_dwt   ,label='Fe+++',ls='--')[0]
+            
+            l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3*cm3_to_dwt ,ls=':'  ,label='Fe++')[0]
+        else:
+            l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6   ,label='Fe(OH)3')[0]
+            Fe_ax.set_ylabel('Concentration\n($\mu$mol cm$^{-3}$)')
         
-        # M/L to umol/cm3: 1e6/1e3=1e3
-        l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3   ,label='Fe+++',ls='--')[0]
-        
-        l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3 ,ls=':'  ,label='Fe++')[0]
+            # M/L to umol/cm3: 1e6/1e3=1e3
+            l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3   ,label='Fe+++',ls='--')[0]
+            
+            l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3 ,ls=':'  ,label='Fe++')[0]
         
         Fe_ax.set_title('Fe species')
-        Fe_ax.set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
+        
         Fe_ax.set_xlabel('Time (days)')
         if do_legend:
             Fe_ax.legend(fontsize='small')
     
     if gasflux_ax is not None:
         gasflux_ax.set_yscale('log')
-        
-        l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total CH4(aq)']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CH4')[0]
-        
-        l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total Tracer']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CO2',ls='--',c='C5')[0]
+        if gdrywt:
+            l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total CH4(aq)']*result['Porosity'])/numpy.diff(result.index.values)*1e3*cm3_to_dwt,label='CH4')[0]
+            
+            l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total Tracer']*result['Porosity'])/numpy.diff(result.index.values)*1e3*cm3_to_dwt,label='CO2',ls='--',c='C5')[0]
+            gasflux_ax.set_ylabel('Flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
+        else:
+            l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total CH4(aq)']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CH4')[0]
+            
+            l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total Tracer']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CO2',ls='--',c='C5')[0]
+            gasflux_ax.set_ylabel('Flux rate\n($\mu$mol cm$^{-3}$ day$^{-1}$)')
 
         gasflux_ax.set_title('Gas fluxes')
-        gasflux_ax.set_ylabel('Flux rate\n($\mu$mol cm$^{-3}$ day$^{-1}$)')
+        
         gasflux_ax.set_xlabel('Time (days)')
         if do_legend:
             gasflux_ax.legend(fontsize='small')
