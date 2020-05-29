@@ -734,6 +734,7 @@ def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',a
                 to_draw.add_edge(p.strip('>'),cplx.strip('>'))
                 to_draw.nodes[cplx.strip('>')]['kind']='Sorption Reaction'
                 to_draw.add_edge(network.nodes[p]['mineral'],cplx.strip('>'))
+                to_draw.remove_node(p)
         elif network.nodes[p]['kind'] not in ['primary','immobile','implicit','sorbed']:
             to_draw=nx.compose(get_reaction_from_database(p,network.nodes[p]['kind'],filename=database_file),to_draw)
     

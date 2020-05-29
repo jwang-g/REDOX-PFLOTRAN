@@ -230,7 +230,119 @@ result_mineral,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlen
 import plot_pf_output
 from pylab import *
     
-from run_alquimia import plot_result
+def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewater_ax=None,do_legend=False,gdrywt=False,BD=None,SOC_pct=None,cellulose_SOC_frac=1.0,obs=None):
+    if gdrywt:
+        if SOC_pct is None and BD is None:
+            raise TypeError('SOC_pct or BD must be a number if gdrywt is True')
+        SOC_mol_m3=result['Total Sorbed cellulose'].iloc[0]/cellulose_SOC_frac # mol SOC/m3
+        SOC_gC_cm3=SOC_mol_m3*12/100**3
+        SOC_gC_gdwt=SOC_pct/100
+        cm3_to_dwt=SOC_gC_gdwt/SOC_gC_cm3 # Conversion from /cm3 to /gdwt. This is 1/ bulk density in g/cm3
+        if BD is not None:
+            cm3_to_dwt=1.0/BD
+        print('cm3_to_dwt = %1.3f'%cm3_to_dwt)
+    if SOM_ax is not None:
+        if gdrywt:
+            # Plot in %, i.e. gC/gdrywt *100.
+            l=SOM_ax.plot(result['Total Sorbed cellulose']/SOC_mol_m3*SOC_pct+SOC_pct*(1-cellulose_SOC_frac),label='SOM')[0]
+            SOM_ax.set_ylabel('Concentration\n(SOC %)')
+        else:
+            l=SOM_ax.plot(result['Total Sorbed cellulose']*1e-3,label='SOM')[0]
+            SOM_ax.set_ylabel('Concentration\n(mmol C/cm$^{-3}$)')
+
+        SOM_ax.set_title('SOM remaining')
+        SOM_ax.set_xlabel('Time (days)')
+
+    if pH_ax is not None:
+        pH_ax.plot(-numpy.log10(result['Free H+']))
+
+        pH_ax.set_title('pH')
+        pH_ax.set_ylabel('pH')
+        pH_ax.set_xlabel('Time (days)')
+        
+        if obs is not None:
+            pH_ax.plot(obs.Incubation_Time,obs['pH'],marker='o',linestyle='None',label='Measured',color='C0')
+        
+    if Fe_ax is not None:
+        molar_volume=34.3600 # From database. cm3/mol
+        molar_weight = 106.8690
+        if gdrywt:
+            # Assume we can use SOC % to convert from volume to dry weight
+            l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6*cm3_to_dwt   ,label='Iron oxide (solid)')[0]
+            Fe_ax.set_ylabel('Concentration\n($\mu$mol/g dwt)')
+            l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3*cm3_to_dwt   ,label='Fe$^{3\!\!+}$ (dissolved)',ls='--')[0]
+            
+            l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3*cm3_to_dwt ,ls=':'  ,label='Fe$^{2\!\!+}$ (dissolved)')[0]
+            if obs is not None:
+                Fe_ax.plot(obs.Incubation_Time,obs['Fe_II'],marker='o',linestyle='None',label='Measured Fe$^{2\!\!+}$',color='C2')
+        else:
+            l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6   ,label='Iron oxide (solid)')[0]
+            Fe_ax.set_ylabel('Concentration\n($\mu$mol cm$^{-3}$)')
+        
+            # M/L to umol/cm3: 1e6/1e3=1e3
+            l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3   ,label='Fe+++',ls='--')[0]
+            
+            l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3 ,ls=':'  ,label='Fe++')[0]
+        
+        Fe_ax.set_title('Fe species')
+        
+        Fe_ax.set_xlabel('Time (days)')
+        if do_legend:
+            Fe_ax.legend(fontsize='small')
+    
+    if gasflux_ax is not None:
+        # gasflux_ax.set_yscale('log')
+        if gdrywt:
+            l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total CH4(aq)']*result['Porosity'])/numpy.diff(result.index.values)*1e3*cm3_to_dwt,label='CH4')[0]
+            
+            l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total Tracer']*result['Porosity'])/numpy.diff(result.index.values)*1e3*cm3_to_dwt,label='CO2',ls='--',c='C5')[0]
+            gasflux_ax.set_ylabel('Flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
+            
+            if obs is not None:
+                xx=(obs.Headspace=='Anoxic')&(obs['Soil_layer'].str.capitalize()=='Organic')&(obs['Incubation_Temperature']>4)
+                CO2mean=obs[['CO2_1','CO2_2','CO2_3']].astype(float).diff().mean(axis=1)/obs['Incubation_Time'].diff()
+                CO2std=obs[['CO2_1','CO2_2','CO2_3']].astype(float).diff().std(axis=1) /obs['Incubation_Time'].diff()
+                CH4mean=obs[['CH4_1','CH4_2','CH4_3']].astype(float).diff().mean(axis=1)/obs['Incubation_Time'].diff() 
+                CH4std=obs[['CH4_1','CH4_2','CH4_3']].astype(float).diff().std(axis=1) /obs['Incubation_Time'].diff() 
+
+
+                gasflux_ax.errorbar(obs.Incubation_Time,CO2mean,yerr=CO2std,marker='o',linestyle='None',label='Measured CO$_2$',color='C5')
+                gasflux_ax.errorbar(obs.Incubation_Time,CH4mean,yerr=CH4std,marker='o',linestyle='None',label='Measured CH$_4$',color='C0')
+        else:
+            l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total CH4(aq)']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CH4')[0]
+            
+            l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total Tracer']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CO2',ls='--',c='C5')[0]
+            gasflux_ax.set_ylabel('Flux rate\n($\mu$mol cm$^{-3}$ day$^{-1}$)')
+
+        gasflux_ax.set_title('Gas fluxes')
+        
+        gasflux_ax.set_xlabel('Time (days)')
+        if do_legend:
+            gasflux_ax.legend(fontsize='small')
+        
+    if porewater_ax is not None:
+        porewater_ax.set_yscale('log')
+        porewater_ax.plot(result['Total DOM1'],label='DOM')
+        porewater_ax.plot(result['Total Acetate-'],label='Acetate',c='C3')
+        porewater_ax.plot(result['Total O2(aq)'],'--',label='O2',c='C4')
+        porewater_ax.plot(result['Total Fe+++'],'--',label='Fe+++',c='C1')
+        porewater_ax.plot(result['Free Fe+++'],':',label='Fe+++',c='C1')
+        porewater_ax.plot(result['Total Fe++'],':',label='Fe++',c='C2')
+        
+        porewater_ax.set_title('Porewater concentrations')
+        porewater_ax.set_ylabel('Concentration (M)')
+        porewater_ax.set_xlabel('Time (days)')
+        
+        
+        if obs is not None:
+            porewater_ax.plot(obs.Incubation_Time,obs['TOAC']*1e-6/BD*1000/porosity,marker='o',linestyle='None',label='Measured TOAC',color='C3')
+            porewater_ax.plot(obs.Incubation_Time,obs['WEOC']*1e-6/BD*1000/porosity,marker='o',linestyle='None',label='Measured WEOC',color='C0')
+
+
+        
+        if do_legend:
+            porewater_ax.legend(fontsize='small')
+    
 
 
 colors={'Anaerobic':'C1','Periodic':'C2','Low Fe':'C3','Aerobic':'C0'}
@@ -263,124 +375,68 @@ colors={'Anaerobic':'C1','Periodic':'C2','Low Fe':'C3','Aerobic':'C0'}
 
 
 # With Fe reduction
-fig,axes=subplots(4,1,num='Organic horizon Anoxic',figsize=(6,8.4),clear=True)
-plot_result(result_organic,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],porewater_ax=axes[3],gdrywt=True,SOC_pct=SOC_layermean['Organic'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Organic'])
+fig,axes=subplots(3,1,num='Organic horizon Anoxic',figsize=(6,8.4),clear=True)
+plot_result(result_organic,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],do_legend=True,
+            gdrywt=True,SOC_pct=SOC_layermean['Organic'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Organic'],
+            obs=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Organic')&(Barrow_synthesis_data['Incubation_Temperature']>4)])
 # axes[0].set_ylim(bottom=-0.01)
-axes[1].legend(loc='right',labels=['Iron oxide (solid)','Fe$^{3\!\!+}$ (dissolved)','Fe$^{2\!\!+}$ (dissolved)'])
 
 axes[0].set_ylim(bottom=0.9e-11,top=15)
 axes[0].set_yscale('linear')
-# axes[0].text(90,0.0,'Aerobic',ha='right')
-# axes[0].text(110,0.0,'Inundated',ha='left')
-axes[0].legend(labels=['CH$_4$','CO$_2$'])
-axes[3].legend(loc='lower left')
-
-xx=(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Organic')&(Barrow_synthesis_data['Incubation_Temperature']>4)
-CO2mean=Barrow_synthesis_data[['CO2_1','CO2_2','CO2_3']].astype(float).diff().mean(axis=1)/Barrow_synthesis_data['Incubation_Time'].diff()
-CO2std=Barrow_synthesis_data[['CO2_1','CO2_2','CO2_3']].astype(float).diff().std(axis=1) /Barrow_synthesis_data['Incubation_Time'].diff()
-CH4mean=Barrow_synthesis_data[['CH4_1','CH4_2','CH4_3']].astype(float).diff().mean(axis=1)/Barrow_synthesis_data['Incubation_Time'].diff() 
-CH4std=Barrow_synthesis_data[['CH4_1','CH4_2','CH4_3']].astype(float).diff().std(axis=1) /Barrow_synthesis_data['Incubation_Time'].diff() 
-
-
-axes[0].errorbar(Barrow_synthesis_data.Incubation_Time[xx],CO2mean[xx],yerr=CO2std[xx],marker='o',linestyle='None',label='Measured',color='C5')
-axes[0].errorbar(Barrow_synthesis_data.Incubation_Time[xx],CH4mean[xx],yerr=CH4std[xx],marker='o',linestyle='None',label='Measured',color='C0')
-axes[1].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['Fe_II'][xx],marker='o',linestyle='None',label='Measured',color='C2')
-
-axes[2].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['pH'][xx],marker='o',linestyle='None',label='Measured',color='C0')
-axes[3].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['TOAC'][xx]*1e-6/BD_layerest2['Organic']*1000/porosity,marker='o',linestyle='None',label='Measured TOAC',color='C3')
-axes[3].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['WEOC'][xx]*1e-6/BD_layerest2['Organic']*1000/porosity,marker='o',linestyle='None',label='Measured WEOC',color='C0')
-
 
 # xmax=axes[0].get_xlim()[1]
 xmax=90
 for ax in axes:
     ax.axvspan(initfrac*simlength,xmax,color='b',alpha=0.1)
-    ax.set_xlim(right=xmax)
+    ax.set_xlim(left=-5,right=xmax)
 
 
-fig,axes=subplots(4,1,num='Mineral horizon Anoxic',figsize=(6,8.4),clear=True)
-plot_result(result_mineral,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],porewater_ax=axes[3],gdrywt=True,SOC_pct=SOC_layermean['Mineral'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Mineral'])
+fig,axes=subplots(3,1,num='Mineral horizon Anoxic',figsize=(6,8.4),clear=True)
+plot_result(result_mineral,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],do_legend=True,
+    gdrywt=True,SOC_pct=SOC_layermean['Mineral'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Mineral'],
+    obs=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Mineral')&(Barrow_synthesis_data['Incubation_Temperature']>4)])
 # axes[0].set_ylim(bottom=-0.01)
-axes[1].legend(loc='right',labels=['Iron oxide (solid)','Fe$^{3\!\!+}$ (dissolved)','Fe$^{2\!\!+}$ (dissolved)'])
 
 axes[0].set_ylim(bottom=0.9e-11,top=3.0)
 axes[0].set_yscale('linear')
-# axes[0].text(90,0.0,'Aerobic',ha='right')
-# axes[0].text(110,0.0,'Inundated',ha='left')
-axes[0].legend(labels=['CH$_4$','CO$_2$'])
-axes[3].legend(loc='lower left')
-
-xx=(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Mineral')&(Barrow_synthesis_data['Incubation_Temperature']>4)
-CO2mean=Barrow_synthesis_data[['CO2_1','CO2_2','CO2_3']].astype(float).diff().mean(axis=1)/Barrow_synthesis_data['Incubation_Time'].diff()
-CO2std=Barrow_synthesis_data[['CO2_1','CO2_2','CO2_3']].astype(float).diff().std(axis=1) /Barrow_synthesis_data['Incubation_Time'].diff()
-CH4mean=Barrow_synthesis_data[['CH4_1','CH4_2','CH4_3']].astype(float).diff().mean(axis=1)/Barrow_synthesis_data['Incubation_Time'].diff() 
-CH4std=Barrow_synthesis_data[['CH4_1','CH4_2','CH4_3']].astype(float).diff().std(axis=1) /Barrow_synthesis_data['Incubation_Time'].diff() 
-
-
-axes[0].errorbar(Barrow_synthesis_data.Incubation_Time[xx],CO2mean[xx],yerr=CO2std[xx],marker='o',linestyle='None',label='Measured',color='C5')
-axes[0].errorbar(Barrow_synthesis_data.Incubation_Time[xx],CH4mean[xx],yerr=CH4std[xx],marker='o',linestyle='None',label='Measured',color='C0')
-axes[1].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['Fe_II'][xx],marker='o',linestyle='None',label='Measured',color='C2')
-
-axes[2].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['pH'][xx],marker='o',linestyle='None',label='Measured',color='C0')
-axes[3].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['TOAC'][xx]*1e-6/BD_layerest2['Mineral']*1000/porosity,marker='o',linestyle='None',label='Measured TOAC',color='C3')
-axes[3].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['WEOC'][xx]*1e-6/BD_layerest2['Mineral']*1000/porosity,marker='o',linestyle='None',label='Measured WEOC',color='C0')
-
 
 # xmax=axes[0].get_xlim()[1]
 xmax=90
 for ax in axes:
     ax.axvspan(initfrac*simlength,xmax,color='b',alpha=0.1)
-    ax.set_xlim(right=xmax)
+    ax.set_xlim(left=-5,right=xmax)
 
 
 # Aerobic
 fig,axes=subplots(3,1,num='Organic horizon Oxic',figsize=(6,8.4),clear=True)
-plot_result(result_highO2_organic,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],gdrywt=True,SOC_pct=SOC_layermean['Organic'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Organic'])
+plot_result(result_highO2_organic,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],do_legend=True,
+        gdrywt=True,SOC_pct=SOC_layermean['Organic'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Organic'],
+        obs=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Oxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Organic')&(Barrow_synthesis_data['Incubation_Temperature']>4)])
 # axes[0].set_ylim(bottom=-0.01,top=30)
-axes[1].legend(loc='right',labels=['Iron oxide (solid)','Fe$^{3\!\!+}$ (dissolved)','Fe$^{2\!\!+}$ (dissolved)'])
 
-xx=(Barrow_synthesis_data.Headspace=='Oxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Organic')&(Barrow_synthesis_data['Incubation_Temperature']>4)
-CO2mean=Barrow_synthesis_data[['CO2_1','CO2_2','CO2_3']].astype(float).diff().mean(axis=1)/Barrow_synthesis_data['Incubation_Time'].diff() 
-CO2std=Barrow_synthesis_data[['CO2_1','CO2_2','CO2_3']].astype(float).diff().std(axis=1) /Barrow_synthesis_data['Incubation_Time'].diff()
-
-axes[0].errorbar(Barrow_synthesis_data.Incubation_Time[xx],CO2mean[xx],yerr=CO2std[xx],marker='o',linestyle='None',label='Measured',color='C5')
 axes[0].set_yscale('linear')
 axes[0].set_ylim(-5e-2,155e-2) # This leaves out Core NGADG0003 which has 10x higher flux for some reason
 # axes[1].set_ylim(bottom=0.9e-11)
-axes[0].legend(labels=['CH$_4$','CO$_2$'])
-
-axes[1].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['Fe_II'][xx],marker='o',linestyle='None',label='Measured',color='C2')
-axes[2].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['pH'][xx],marker='o',linestyle='None',label='Measured',color='C0')
 
 # axes[0].set_xlim(right=71)
-axes[0].set_xlim(right=71)
-axes[1].set_xlim(right=71)
-axes[2].set_xlim(right=71)
-
+for ax in axes:
+    ax.set_xlim(left=-5,right=71)
 
 # Aerobic
 fig,axes=subplots(3,1,num='Mineral horizon Oxic',figsize=(6,8.4),clear=True)
-plot_result(result_highO2_mineral,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],gdrywt=True,SOC_pct=SOC_layermean['Mineral'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Mineral'])
+plot_result(result_highO2_mineral,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],do_legend=True,
+            gdrywt=True,SOC_pct=SOC_layermean['Mineral'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Mineral'],
+            obs=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Oxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Mineral')&(Barrow_synthesis_data['Incubation_Temperature']>4)])
 # axes[0].set_ylim(bottom=-0.01,top=30)
-axes[1].legend(loc='right',labels=['Iron oxide (solid)','Fe$^{3\!\!+}$ (dissolved)','Fe$^{2\!\!+}$ (dissolved)'])
 
-xx=(Barrow_synthesis_data.Headspace=='Oxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Mineral')&(Barrow_synthesis_data['Incubation_Temperature']>4)
-CO2mean=Barrow_synthesis_data[['CO2_1','CO2_2','CO2_3']].astype(float).diff().mean(axis=1)/Barrow_synthesis_data['Incubation_Time'].diff() 
-CO2std=Barrow_synthesis_data[['CO2_1','CO2_2','CO2_3']].astype(float).diff().std(axis=1) /Barrow_synthesis_data['Incubation_Time'].diff()
-
-axes[0].errorbar(Barrow_synthesis_data.Incubation_Time[xx],CO2mean[xx],yerr=CO2std[xx],marker='o',linestyle='None',label='Measured',color='C5')
 axes[0].set_yscale('linear')
 axes[0].set_ylim(-5e-2,155e-2) # This leaves out Core NGADG0003 which has 10x higher flux for some reason
 # axes[1].set_ylim(bottom=0.9e-11)
-axes[0].legend(labels=['CH$_4$','CO$_2$'])
 
-axes[1].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['Fe_II'][xx],marker='o',linestyle='None',label='Measured',color='C2')
-axes[2].plot(Barrow_synthesis_data.Incubation_Time[xx],Barrow_synthesis_data['pH'][xx],marker='o',linestyle='None',label='Measured',color='C0')
-
-# axes[0].set_xlim(right=71)
-axes[0].set_xlim(right=71)
-axes[1].set_xlim(right=71)
-axes[2].set_xlim(right=71)
+for ax in axes:
+    axes[0].set_xlim(left=-5,right=71)
+    axes[1].set_xlim(left=-5,right=71)
+    axes[2].set_xlim(left=-5,right=71)
 
 
 
@@ -392,7 +448,8 @@ result_periodicO2,output_units=run_alquimia.run_simulation('Arctic_redox.in',sim
 
 
 fig,axes=subplots(4,1,num='Periodic inundation',figsize=(6,8.4),clear=True)
-plot_result(result_periodicO2,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],porewater_ax=axes[3],gdrywt=True,SOC_pct=SOC_layermean['Organic'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Organic'])
+plot_result(result_periodicO2,Fe_ax=axes[1],gasflux_ax=axes[0],pH_ax=axes[2],porewater_ax=axes[3],
+        gdrywt=True,SOC_pct=SOC_layermean['Organic'],cellulose_SOC_frac=cellulosefrac,BD=BD_layerest2['Organic'])
 # axes[0].set_ylim(bottom=-0.01)
 axes[1].legend(labels=['Fe(OH)$_3$','Fe$^{3\!\!+}$','Fe$^{2\!\!+}$'],loc=(0.83,0.2),fontsize='small')
 
