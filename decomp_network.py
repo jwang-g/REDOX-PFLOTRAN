@@ -382,11 +382,11 @@ class PF_network_writer(PF_writer):
         
         
     def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.tec',print_output=False,length_days=None,
-                        log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat'):
+                        log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',CO2name='HCO3-'):
         inputdeck=simulation_name+'_generated.in'
         print('Setting up input deck in %s'%inputdeck)
         self.write_into_input_deck(template_file,inputdeck,length_days=length_days,
-                                    log_formulation=log_formulation,database=database,truncate_concentration=truncate_concentration)
+                                    log_formulation=log_formulation,database=database,truncate_concentration=truncate_concentration,CO2name=CO2name)
         import subprocess
         cmd='{pflotran_exe:s} -pflotranin {simname:s}_generated.in'.format(pflotran_exe=pflotran_exe,simname=simulation_name)
         print('Running cmd: %s'%cmd)
@@ -683,7 +683,7 @@ node_colors={
 }
 
 
-def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,node_colors=node_colors,label_edges=False,namechanges={},**kwargs):
+def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,pos=None,node_colors=node_colors,node_alpha=0.8,label_edges=False,namechanges={},**kwargs):
     to_draw=network.copy()
     for p in network.nodes:
         if network.nodes[p]['kind'] in omit or p in omit or p in ['HRimm','Tracer']:
@@ -697,12 +697,14 @@ def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',
     # Get rid of nodes added from database reactions that we want removed
     to_draw.remove_nodes_from([node for node in to_draw.nodes if to_draw.nodes('kind')[node] is None])
             
-    pos=nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
+    if pos is None:
+        pos=nx.drawing.nx_agraph.graphviz_layout(to_draw,prog='dot')
     nodecats=categorize_nodes(to_draw)  
     nodecolors=[node_colors[nodecat] for nodecat in nodecats]
     
-    nx.draw_networkx(to_draw,pos=pos,with_labels=True,nodes=to_draw.nodes,node_color=nodecolors,
-                arrowsize=arrowsize,font_size=font_size,arrowstyle=arrowstyle,**kwargs)
+    nx.draw_networkx_nodes(to_draw,pos=pos,with_labels=False,nodes=to_draw.nodes,node_color=nodecolors,alpha=node_alpha,**kwargs)
+    nx.draw_networkx_edges(to_draw,pos=pos,arrowsize=arrowsize,arrowstyle=arrowstyle,**kwargs)
+    nx.draw_networkx_labels(to_draw,pos=pos,labels={n:namechanges.get(n,n) for n in to_draw.nodes},font_size=font_size,**kwargs)
     
     if label_edges:            
         nx.draw_networkx_edge_labels(to_draw,pos=pos,edge_labels=dict([((e[0],e[1]),e[2]) for e in to_draw.edges(data='name')]),font_size=font_size,fontstyle='italic')

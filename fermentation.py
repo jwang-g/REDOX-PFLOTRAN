@@ -234,33 +234,33 @@ for pool in pools[1:]:
 
 # CWD decomposition to  litter
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'CWD':1.0},product_pools={'LITR2':0.76,'LITR3':0.24},
-                            rate_constant=0.00010,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',
+                            rate_constant=0.00010,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',reactiontype='SOMDECOMP',
                             monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12)],
                             name='CWD fragmentation'))
 
 # Litter decomposition
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'LITR1':1.0},product_pools={'SOIL1':0.61,'HCO3-':1-0.61},
-                rate_constant=1.204,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR1 decomposition',
+                rate_constant=1.204,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR1 decomposition',reactiontype='SOMDECOMP',
                 monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12)]))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'LITR2':1.0},product_pools={'SOIL2':0.45,'HCO3-':1-0.45},
-                rate_constant=0.0726,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR2 decomposition',
+                rate_constant=0.0726,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR2 decomposition',reactiontype='SOMDECOMP',
                 monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12)]))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'LITR3':1.0},product_pools={'SOIL3':0.71,'HCO3-':1-0.71},
-                rate_constant=0.0141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR3 decomposition',
+                rate_constant=0.0141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR3 decomposition',reactiontype='SOMDECOMP',
                 monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12)]))
 
 # SOM decomposition
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL1':1.0},product_pools={'SOIL2':0.72,'HCO3-':1-0.72},
-            rate_constant=0.0726,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL1 decomp',
+            rate_constant=0.0726,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL1 decomp',reactiontype='SOMDECOMP',
             monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12)]))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL2':1.0},product_pools={'SOIL3':0.54,'HCO3-':1-0.54},
-            rate_constant=0.0141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL2 decomp',
+            rate_constant=0.0141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL2 decomp',reactiontype='SOMDECOMP',
             monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12)]))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL3':1.0},product_pools={'SOIL4':0.45,'HCO3-':1-0.45},
-            rate_constant=0.00141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL3 decomp',
+            rate_constant=0.00141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL3 decomp',reactiontype='SOMDECOMP',
             monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12)]))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL4':1.0},product_pools={'HCO3-':1.0},
-            rate_constant=0.0001,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL4 decomp',
+            rate_constant=0.0001,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL4 decomp',reactiontype='SOMDECOMP',
             monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-8,threshold=1e-12)]))
 
 decomp_network_CTC.add_reaction(DOM_resp)

@@ -7,7 +7,7 @@ pflotran_exe='../pflotran-interface/src/pflotran/pflotran'
 POM=decomp_network.decomp_pool(name='POM',CN=15,initval=1e3)
 DOM=decomp_network.decomp_pool(name='DOM1',CN=15,initval=1e-3,immobile=False)
 CO2=decomp_network.decomp_pool(name='CO2(aq)',immobile=False,initval=1e-15)
-POM_dissolve=decomp_network.reaction(name='POM dissolution (no inhibition)',reactant_pools={'POM':1.0},product_pools={'DOM1':1.0},rate_constant=0.1)
+POM_dissolve=decomp_network.reaction(name='POM dissolution (no inhibition)',reactant_pools={'POM':1.0},product_pools={'DOM1':1.0},rate_constant=0.1,reactiontype='SOMDECOMP')
 simple_network_DOM1 = decomp_network.decomp_network(pools=[POM,DOM,CO2],reactions=[POM_dissolve])
 
 
@@ -37,51 +37,60 @@ priming_result,priming_units=decomp_network.PF_network_writer(priming_network).r
 # A more complex decomposition network approximating the structure of the CORPSE model
 
 decomp_network_CORPSE=decomp_network.decomp_network()
-decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='LABILE_POM',CN=    15.0,initval=0.3))
-decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='RESISTANT_POM',CN= 15.0,initval=0.7))
-decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='DOM1',CN=    15.0,immobile=False,initval=1e-5))
-decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='DOM2',CN= 15.0,immobile=False,initval=1e-5))
-decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='SOIL_MICROBES',CN= 10.0,initval=1e-4))
-decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='NECROMASS',CN=     10.0,initval=1e-5))
-decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='DOM3',CN= 10.0,immobile=False,initval=1e-5))
-decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='MAOM',CN=          10.0,initval=0.5))
-decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='CO2(aq)',immobile=False))
+decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='LABILE_POM',CN=    15.0,initval=0.3,kind='immobile'))
+decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='RESISTANT_POM',CN= 15.0,initval=0.7,kind='immobile'))
+decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='DOM1',CN=    15.0,initval=1e-5,kind='primary'))
+decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='DOM2',CN= 15.0,initval=1e-5,kind='primary'))
+decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='SOIL_MICROBES',CN= 10.0,initval=1e-4,kind='immobile'))
+decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='NECROMASS',CN=     10.0,initval=1e-5,kind='immobile'))
+decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='DOM3',CN= 10.0,initval=1e-5,kind='primary'))
+decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='MAOM',CN=          10.0,initval=0.5,kind='immobile'))
+decomp_network_CORPSE.add_pool(decomp_network.decomp_pool(name='HCO3-',kind='primary'))
 
 # Microbial decomposition of unprotected SOM
-decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'LABILE_POM':1.0},product_pools={'SOIL_MICROBES':0.6,'CO2(aq)':0.4},
-                rate_constant=0.1,rate_units='y',name='Labile POM microbial decomposition',
+decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'LABILE_POM':1.0},product_pools={'SOIL_MICROBES':0.6,'HCO3-':0.4},
+                rate_constant=0.1,rate_units='y',name='Labile POM microbial decomposition',reactiontype='SOMDECOMP',
                                 monod_terms=[{'species':'SOIL_MICROBES','k':0.1e-3}]))
-decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'RESISTANT_POM':1.0},product_pools={'SOIL_MICROBES':0.1,'CO2(aq)':1-0.1},
-                    rate_constant=0.5,rate_units='y',name='Resistant POM microbial decomposition',
+decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'RESISTANT_POM':1.0},product_pools={'SOIL_MICROBES':0.1,'HCO3-':1-0.1},
+                    rate_constant=0.5,rate_units='y',name='Resistant POM microbial decomposition',reactiontype='SOMDECOMP',
                                 monod_terms=[{'species':'SOIL_MICROBES','k':0.1e-3}]))
-decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'NECROMASS':1.0},product_pools={'SOIL_MICROBES':0.6,'CO2(aq)':1-0.6},
-                    rate_constant=0.1,rate_units='y',name='Necromass microbial decomposition',
+decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'NECROMASS':1.0},product_pools={'SOIL_MICROBES':0.6,'HCO3-':1-0.6},
+                    rate_constant=0.1,rate_units='y',name='Necromass microbial decomposition',reactiontype='SOMDECOMP',
                                 monod_terms=[{'species':'SOIL_MICROBES','k':0.1e-3}]))
                                 
 # Microbial biomass turnover. Here, CUE would determine maintenance respiration loss as a fraction of turnover
-decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'SOIL_MICROBES':1.0},product_pools={'NECROMASS':0.6,'CO2(aq)':1-0.6},
-                    rate_constant=0.1,rate_units='y',name='Microbial biomass turnover',
+decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'SOIL_MICROBES':1.0},product_pools={'NECROMASS':0.6,'HCO3-':1-0.6},
+                    rate_constant=0.1,rate_units='y',name='Microbial biomass turnover',reactiontype='SOMDECOMP',
                                 inhibition_terms=[{'species':'SOIL_MICROBES','k':0.1e-11,'type':'INVERSE_MONOD'}]))
                                 
 # Physical/mineral protection of necromass. CUE=1.0 because it is an abiotic conservative reaction
 decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'NECROMASS':1.0},product_pools={'MAOM':1.0},
-                                rate_constant=0.01,rate_units='y',name='Physical/mineral protection of necromass',
+                                rate_constant=0.01,rate_units='y',name='Physical/mineral protection of necromass',reactiontype='SOMDECOMP',
                                 inhibition_terms=[{'species':'MAOM','k':1e-7,'type':'MONOD'}]))
 # First order turnover of MAOM back to necromass
-decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'MAOM':1.0},product_pools={'NECROMASS':1.0},
+decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'MAOM':1.0},product_pools={'NECROMASS':1.0},reactiontype='SOMDECOMP',
                                 rate_constant=50.0,rate_units='y',name='First order turnover of MAOM back to necromass')) 
 
 # Dissolution into DOM
-decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'LABILE_POM':1.0},product_pools={'DOM1':1.0},
+decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'LABILE_POM':1.0},product_pools={'DOM1':1.0},reactiontype='SOMDECOMP',
                                 rate_constant=0.1,rate_units='y',name='Dissolution of labile POM into DOM',
                                 inhibition_terms=[{'species':'DOM1','k':1e-12,'type':'MONOD'}]))
                                 
 decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'RESISTANT_POM':1.0},product_pools={'DOM2':1.0},
-                                rate_constant=0.1,rate_units='y',name='Dissolution of resistant POM into DOM',
+                                rate_constant=0.1,rate_units='y',name='Dissolution of resistant POM into DOM',reactiontype='SOMDECOMP',
                                 inhibition_terms=[{'species':'DOM1','k':1e-12,'type':'MONOD'}]))
 decomp_network_CORPSE.add_reaction(decomp_network.reaction(reactant_pools={'NECROMASS':1.0},product_pools={'DOM3':1.0},
-                                rate_constant=0.1,rate_units='y',name='Dissolution of necromass into DOM',
+                                rate_constant=0.1,rate_units='y',name='Dissolution of necromass into DOM',reactiontype='SOMDECOMP',
                                 inhibition_terms=[{'species':'DOM1','k':1e-12,'type':'MONOD'}]) )     
+
+f,ax=subplots(num='CORPSE diagram',clear=True)
+layout=decomp_network.nx.drawing.nx_agraph.graphviz_layout
+pos=layout(decomp_network_CORPSE,prog='dot')
+# pos['CO2(aq)']=(80,18)
+decomp_network.draw_network(decomp_network_CORPSE,omit=[],arrowstyle='-|>',font_size='x-large',node_size=3000,pos=pos,node_alpha=0.95,
+    namechanges={'LABILE_POM':'Labile\nPOM','RESISTANT_POM':'Resistant\nPOM','SOIL_MICROBES':'Microbes', 
+                'NECROMASS':'Necro\nmass', 'HCO3-':'CO$_2$'},do_legend=False,font_color='w',connectionstyle='arc3, rad=0.1',font_weight='bold')
+
 
 CORPSE_result,CORPSE_units=decomp_network.PF_network_writer(decomp_network_CORPSE).run_simulation('SOMdecomp_template.txt','CORPSE',pflotran_exe)
 
@@ -89,43 +98,61 @@ CORPSE_result,CORPSE_units=decomp_network.PF_network_writer(decomp_network_CORPS
 # CTC decomposition network
 decomp_network_CTC=decomp_network.decomp_network()
 
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL1',CN=  12.,initval=1e-10) )
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL2',CN=  12.,initval=1e-10))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL3',CN=  10.,initval=1e-10))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL4',CN=  10.,initval=1e-10))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR1',initval=1e3,initCN=20))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR2',initval=1e-10,initCN=20)    )
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR3',initval=1e-10,initCN=20))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CWD',initval=1e-10,initCN=20))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CO2(aq)',immobile=False))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL1',CN=  12.,constraints={'initial':1e-10},kind='immobile') )
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL2',CN=  12.,constraints={'initial':1e-10},kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL3',CN=  10.,constraints={'initial':1e-10},kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL4',CN=  10.,constraints={'initial':1e-10},kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR1',constraints={'initial':1e3},initCN=20,kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR2',constraints={'initial':1e-10},initCN=20,kind='immobile')    )
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR3',constraints={'initial':1e-10},initCN=20,kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CWD',constraints={'initial':1e-10},initCN=20,kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CO2(aq)',kind='primary'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-10},kind='immobile'))
 
 # CWD decomposition to  litter
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'CWD':1.0},product_pools={'LITR2':0.76,'LITR3':0.24},
-                            rate_constant=0.00010,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',
+                            rate_constant=0.00010,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',reactiontype='SOMDECOMP',
                             name='CWD fragmentation'))
 
 # Litter decomposition
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'LITR1':1.0},product_pools={'SOIL1':0.61,'CO2(aq)':1-0.61},
-                rate_constant=1.204,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR1 decomposition'))
+                rate_constant=1.204,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR1 decomposition',reactiontype='SOMDECOMP'))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'LITR2':1.0},product_pools={'SOIL2':0.45,'CO2(aq)':1-0.45},
-                rate_constant=0.0726,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR2 decomposition'))
+                rate_constant=0.0726,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR2 decomposition',reactiontype='SOMDECOMP'))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'LITR3':1.0},product_pools={'SOIL3':0.71,'CO2(aq)':1-0.71},
-                rate_constant=0.0141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR3 decomposition'))
+                rate_constant=0.0141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR3 decomposition',reactiontype='SOMDECOMP'))
 
 # SOM decomposition
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL1':1.0},product_pools={'SOIL2':0.72,'CO2(aq)':1-0.72},
-            rate_constant=0.0726,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL1 decomp'))
+            rate_constant=0.0726,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL1 decomp',reactiontype='SOMDECOMP'))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL2':1.0},product_pools={'SOIL3':0.54,'CO2(aq)':1-0.54},
-            rate_constant=0.0141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL2 decomp'))
+            rate_constant=0.0141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL2 decomp',reactiontype='SOMDECOMP'))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL3':1.0},product_pools={'SOIL4':0.45,'CO2(aq)':1-0.45},
-            rate_constant=0.00141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL3 decomp'))
+            rate_constant=0.00141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL3 decomp',reactiontype='SOMDECOMP'))
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL4':1.0},product_pools={'CO2(aq)':1.0},
-            rate_constant=0.0001,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL4 decomp'))
+            rate_constant=0.0001,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL4 decomp',reactiontype='SOMDECOMP'))
 
-CTC_result,CTC_units=decomp_network.PF_network_writer(decomp_network_CTC).run_simulation('SOMdecomp_template.txt','CTC',pflotran_exe)
-
+CTC_result,CTC_units=decomp_network.PF_network_writer(decomp_network_CTC).run_simulation('SOMdecomp_template.txt','CTC',pflotran_exe,CO2name='CO2(aq)',length_days=2000)
 
 from pylab import *
+figure('CTC pools',clear=True)
+for pool in ['LITR1C','SOIL1','SOIL2','SOIL3','SOIL4']:
+    plot(CTC_result[pool]*12/100**2,label=pool.replace('SOIL','Soil').replace('LITR1C','Litter').replace('CWDC','CWD'),lw=2.0)
+title('CTC SOM pools')
+ylabel('Concentration (g C cm$^{-3})$',fontsize='large')
+legend(fontsize='large',ncol=1)
+xlabel('Time (days)',fontsize='large')
+xticks(fontsize='large')
+yticks(fontsize='large')
+
+f,ax=subplots(num='CTC diagram',clear=True)
+layout=decomp_network.nx.drawing.nx_agraph.graphviz_layout
+pos=layout(decomp_network_CTC,prog='dot')
+# pos['CO2(aq)']=(80,18)
+decomp_network.draw_network(decomp_network_CTC,omit=['secondary','Rock(s)','NH4+'],arrowstyle='-|>',font_size='x-large',node_size=1800,pos=pos,node_alpha=0.95,font_weight='bold',
+    namechanges={'CO2(aq)':'CO$_2$','LITR1':'Litter1','LITR2':'Litter2','LITR3':'Litter3'},do_legend=False,font_color='w',connectionstyle='arc3, rad=0.1')
+
+
 import pandas
 figure('Simulation results',figsize=(10,8));clf()
 ax=subplot(241)
@@ -151,14 +178,14 @@ legend()
 
 ax=subplot(243)
 for pool in ['SOIL1','SOIL2','SOIL3','SOIL4','LITR1C','LITR2C','LITR3C','CWDC']:
-    plot(CTC_result[pool])
+    plot(CTC_result[pool],label=pool)
 title('CTC simulations')
 ylabel('Concentration (mol C/m3)')
 legend()
 
 ax=subplot(244)
-for pool in ['LABILE_POM','RESISTANT_POM','Total DOM1','Total DOM2','SOIL_MICROBES','NECROMASS','Total DOM3','MAOM']:
-    plot(CORPSE_result[pool])
+for pool in ['LABILE_POM','RESISTANT_POM','SOIL_MICROBES','NECROMASS','MAOM']:
+    plot(CORPSE_result[pool],label=pool)
 title('CORPSE simulations')
 ylabel('Concentration (mol C/m3)')
 legend()
