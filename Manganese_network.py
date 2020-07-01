@@ -7,6 +7,7 @@ pools = [
 decomp_network.decomp_pool(name='Cellulose',CN=50,constraints={'initial':5e3*0.6},kind='immobile'),
 decomp_network.decomp_pool(name='Lignin',CN=50,constraints={'initial':5e3*0.4},kind='immobile'),
 decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immobile'),
+decomp_network.decomp_pool(name='Root_biomass',constraints={'initial':1e-20},kind='immobile'),
 
 decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-30},kind='primary'),
 decomp_network.decomp_pool(name='DOM2',CN=50,constraints={'initial':1e-30},kind='primary'),
@@ -17,6 +18,7 @@ decomp_network.decomp_pool(name='Mn+++',kind='primary',constraints={'initial':'1
 decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}),
 decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
+decomp_network.decomp_pool(name='Tracer2',kind='primary',constraints={'initial':1e-15}), # To accumulate root Mn++ uptake
 # decomp_network.decomp_pool(name='CH4(aq)',kind='primary',constraints={'initial':1e-15}),
 # decomp_network.decomp_pool(name='Acetate-',kind='primary',constraints={'initial':1e-15}),
 
@@ -26,13 +28,13 @@ decomp_network.decomp_pool(name='O2(g)',kind='gas'),
 decomp_network.decomp_pool(name='CO2(aq)',kind='secondary'),
 decomp_network.decomp_pool(name='OH-',kind='secondary'),
 decomp_network.decomp_pool(name='MnO4--',kind='secondary'),
-decomp_network.decomp_pool(name='Acetic_acid(aq)',kind='secondary'),
+# decomp_network.decomp_pool(name='Acetic_acid(aq)',kind='secondary'),
 # decomp_network.decomp_pool(name='MnIIIDOM2(aq)',kind='secondary'),
 
 # Hui/Beth say pyrolusite probably not precipitating in soils. Look for delta-MnO2? Maybe try 'Mn(OH)2(am)'?
 # See Roberts Earth Sci Rev article for some discussion of minerals? More Fe focused though
 # decomp_network.decomp_pool(name='Birnessite',rate='0.d-16 mol/m^2-sec',constraints={'initial':'0.0d-5  1.d2 m^2/m^3'},kind='mineral'),
-# decomp_network.decomp_pool(name='Mn(OH)2(am)',rate='0.d-16 mol/m^2-sec',constraints={'initial':'0.0d-5  1.d2 m^2/m^3'},kind='mineral'),
+decomp_network.decomp_pool(name='Mn(OH)2(am)',rate='1.d-16 mol/m^2-sec',constraints={'initial':'0.0d-5  1.d2 m^2/m^3'},kind='mineral'),
 decomp_network.decomp_pool(name='Manganite',rate='1.d-12 mol/m^2-sec',constraints={'initial':'0.0d-5  1.d2 m^2/m^3'},kind='mineral'),
 
 decomp_network.decomp_pool(name='Rock(s)',rate='0.0 mol/m^2-sec',constraints={'initial':'0.5  5.0e3 m^2/m^3'},kind='mineral'),
@@ -41,7 +43,8 @@ decomp_network.decomp_pool(name='>Carboxylate-',kind='surf_complex',mineral='Roc
 
 # This should hopefully work for sorption on Mn minerals. BUT, probably need to run with alquimia to allow site density to change over time
 # since site density depending on mineral surface area is not implemented in PFLOTRAN currently
-decomp_network.decomp_pool(name='>DOM1',kind='surf_complex',mineral='Manganite',site_density=0.0e3,complexes=['>sorbed_DOM1']),
+decomp_network.decomp_pool(name='>DOM1',kind='surf_complex',mineral='Rock(s)',site_density=1.0e4,complexes=['>sorbed_DOM1']),
+# decomp_network.decomp_pool(name='Sorbed DOM1',kind='isotherm',mineral='Manganite',site_density=0.0e3,complexes=['>sorbed_DOM1']),
 ]
 
 # Fraction of Mn+++ that is not recycled in Mn-Peroxidase enzyme loop
@@ -104,8 +107,14 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
             #                             rate_constant=1.0e-9,reactiontype='MICROBIAL'),
             # 
             
-            # This does not work due to PFLOTRAN: It will not let you do isotherm sorption if there are any secondary species :-(
-            # decomp_network.sorption_isotherm(name='Manganite sorption',mineral='Manganite',sorbed_species='DOM1',k=0.1,langmuir_b=1.0,sorbed_name='Sorbed DOM1'),
+            # PFLOTRAN will not let you do isotherm sorption if there are any secondary species :-( - reaction_database.F90 line 3424
+            # decomp_network.sorption_isotherm(name='DOM sorption',mineral='Rock(s)',sorbed_species='DOM1',k=0.1,langmuir_b=1.0,sorbed_name='Sorbed DOM1'),
+            
+    # Root uptake of Mn++
+            decomp_network.reaction(name='Root uptake of Mn++',stoich='1.0 Mn++ -> 1.0 Tracer2',monod_terms=[decomp_network.monod(species='Mn++',k=Mn2_scale,threshold=1.1e-20)],
+                                    biomass='Root_biomass',biomass_yield=0.0,
+                                    rate_constant=1.0e-5,reactiontype='MICROBIAL'),
+            
     ] # End of reactions list
 
     import copy
@@ -183,139 +192,139 @@ def plot_result(result,SOM_ax=None,pH_ax=None,mineral_ax=None,gasflux_ax=None,po
             porewater_ax.legend(fontsize='small',ncol=2)
     
 # result,units=plot_pf_output.convert_units(result,units,'mol/m^3')
-
-reaction_network=make_network()
-networkfig=pyplot.figure('Reaction network');networkfig.clf()
-drawn=decomp_network.draw_network_with_reactions(reaction_network,omit=['NH4+','Rock(s)','gas','secondary','H+','>Carboxylate-','Carboxylic_acid'],
-        font_size='medium',node_size=1500,font_color='k',arrowstyle='->',arrowsize=10.0,edge_color='gray',node_alpha=1.0,
-        namechanges={'cellulose':'Cellulose','DOM1':'DOM','O2(aq)':'O$_2$(aq)','CH4(aq)':'CH$_4$(aq)','HCO3-':'HCO$_3^-$','DOM2':'Exposed lignin','sorbed_DOM1':'Sorbed DOM',
-                     'Fe(OH)2':'Fe(OH)$_2$','Fe(OH)3':'Fe(OH)$_3$','Mn++':r'Mn$^\mathrm{+\!\!+}$','Mn+++':r'Mn$^\mathrm{+\!\!+\!\!\!+}$','Acetate-':'Acetate',})
-
-
-pflotran_exe='../pflotran-interface/src/pflotran/pflotran'
-simlength=60
-simlength=41*30 #Sun et al was 41 months
-
-# Example results
-results_all,units=decomp_network.PF_network_writer(make_network(leaf_Mn_mgkg=500.0,change_constraints={'Birnessite':'1.0d-5 1.d2 m^2/m^3','Manganite':'0.0973d-5 1.d2 m^2/m^3'})).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=simlength)
-resultsfig,axes=pyplot.subplots(4,1,num='Results',clear=True,figsize=(6.3,8),squeeze=False)
-plot_result(results_all,SOM_ax=axes[0,0],pH_ax=axes[1,0],mineral_ax=axes[2,0],porewater_ax=axes[3,0],do_legend=True)
+if __name__ == '__main__':
+    reaction_network=make_network()
+    networkfig=pyplot.figure('Reaction network');networkfig.clf()
+    drawn=decomp_network.draw_network_with_reactions(reaction_network,omit=['NH4+','Rock(s)','gas','secondary','H+','>Carboxylate-','Carboxylic_acid'],
+            font_size='medium',node_size=1500,font_color='k',arrowstyle='->',arrowsize=10.0,edge_color='gray',node_alpha=1.0,
+            namechanges={'cellulose':'Cellulose','DOM1':'DOM','O2(aq)':'O$_2$(aq)','CH4(aq)':'CH$_4$(aq)','HCO3-':'HCO$_3^-$','DOM2':'Exposed lignin','sorbed_DOM1':'Sorbed DOM',
+                         'Fe(OH)2':'Fe(OH)$_2$','Fe(OH)3':'Fe(OH)$_3$','Mn++':r'Mn$^\mathrm{+\!\!+}$','Mn+++':r'Mn$^\mathrm{+\!\!+\!\!\!+}$','Acetate-':'Acetate',})
 
 
-cm=pyplot.get_cmap('coolwarm')
+    pflotran_exe='../pflotran-interface/src/pflotran/pflotran'
+    simlength=60
+    simlength=41*30 #Sun et al was 41 months
 
-import pandas
-
-fig,axes=pyplot.subplots(3,1,num='Leaf Mn concentrations',clear=True)
-axes[0].set_title('Lignin remaining')
-axes[0].set_ylabel('Fraction of initial')
-axes[1].set_title('Mn++ concentration')
-axes[1].set_ylabel('Concentration (M)')
-axes[2].set_title('Manganite concentration')
-axes[2].set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
-axes[2].set_xlabel('Time (days)')
-# Range of leaf Mn concentrations
-norm=matplotlib.colors.Normalize(1,5)
-results_all_leafMn={}
-for leafMn in arange(1.0,5.1) :
-    result,units=decomp_network.PF_network_writer(make_network(leaf_Mn_mgkg=10.0**leafMn)).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=simlength)
-    axes[0].plot(result['Lignin']/result['Lignin'].iloc[0],label='Leaf Mn concentration = 10$^{%d}$ mg/kg'%int(leafMn),c=cm(norm(leafMn)))
-    axes[1].plot(result['Total Mn++'],c=cm(norm(leafMn)))
-    axes[2].plot(result['Manganite VF']/24.45*1e6,c=cm(norm(leafMn)))
-    # birnessite=axes[2].plot(result['Birnessite VF']/251.17*1e6,c=cm(norm(leafMn)),ls='--',label='Birnessite')[0]
-    results_all_leafMn[leafMn]=result
-
-axes[0].legend()
+    # Example results
+    results_all,units=decomp_network.PF_network_writer(make_network(leaf_Mn_mgkg=500.0,change_constraints={'Birnessite':'1.0d-5 1.d2 m^2/m^3','Manganite':'0.0973d-5 1.d2 m^2/m^3'})).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=simlength)
+    resultsfig,axes=pyplot.subplots(4,1,num='Results',clear=True,figsize=(6.3,8),squeeze=False)
+    plot_result(results_all,SOM_ax=axes[0,0],pH_ax=axes[1,0],mineral_ax=axes[2,0],porewater_ax=axes[3,0],do_legend=True)
 
 
-nyears=40
-results_long_leafMn=[]
-nums=linspace(1,35,10)
-nums=logspace(-1,1.5,10)
+    cm=pyplot.get_cmap('coolwarm')
 
-cellulose_eq=zeros(len(nums))
-lignin_eq=zeros(len(nums))
-for num in range(len(nums)):
-    result,units=decomp_network.PF_network_writer(make_network(leaf_Mn_mgkg=num,Mn2_scale=0.25e-2)).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=nyears*365)
-    results_long_leafMn.append(result)
+    import pandas
 
-norm=matplotlib.colors.LogNorm(nums.min(),nums.max())
-fig,axes=pyplot.subplots(ncols=3,num='Multiple years',clear=True)
-volume_factor=2/100*12e-3 # Converting from mol/m3 to kgC/m2 assuming 1 cm depth
-for num in range(len(nums)):
-    cellulose=zeros(nyears*365)
-    lignin=zeros(nyears*365)
-    for yr in range(nyears):
-        cellulose[365*yr:]+=interp(arange(nyears*365)/365,results_long_leafMn[num].index/365,results_long_leafMn[num]['Cellulose'])[:365*(nyears-yr)]
-        lignin[365*yr:]+=interp(arange(nyears*365)/365,results_long_leafMn[num].index/365,results_long_leafMn[num]['Lignin'])[:365*(nyears-yr)]
-    
-    axes[1].plot(arange(nyears*365)/365,lignin*volume_factor,ls='--',c=cm(norm(nums[num]))) # Assumes 1 cm thick organic horizon
-    cellulose_eq[num]=cellulose[-365:].mean()*volume_factor
-    lignin_eq[num]=lignin[-365:].mean()*volume_factor
-    
-    axes[0].plot(results_long_leafMn[num].index/365,results_long_leafMn[num]['Lignin']*volume_factor,ls='--',c=cm(norm(nums[num])),label='Lignin: %1.1f mg/g Mn'%nums[num])
-    axes[2].plot(nums[num],cellulose_eq[num]+lignin_eq[num],'o',c=cm(norm(nums[num])),ms=8.0)
-    
-axes[2].plot(nums,cellulose_eq+lignin_eq,'k-')
-axes[0].plot(results_long_leafMn[num].index/365,results_long_leafMn[-1]['Cellulose']*volume_factor,'k-',label='Cellulose')
-axes[1].plot(arange(nyears*365)/365,cellulose*volume_factor,'k-')
-axes[0].legend(loc='upper right')
+    fig,axes=pyplot.subplots(3,1,num='Leaf Mn concentrations',clear=True)
+    axes[0].set_title('Lignin remaining')
+    axes[0].set_ylabel('Fraction of initial')
+    axes[1].set_title('Mn++ concentration')
+    axes[1].set_ylabel('Concentration (M)')
+    axes[2].set_title('Manganite concentration')
+    axes[2].set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
+    axes[2].set_xlabel('Time (days)')
+    # Range of leaf Mn concentrations
+    norm=matplotlib.colors.Normalize(1,5)
+    results_all_leafMn={}
+    for leafMn in arange(1.0,5.1) :
+        result,units=decomp_network.PF_network_writer(make_network(leaf_Mn_mgkg=10.0**leafMn)).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=simlength)
+        axes[0].plot(result['Lignin']/result['Lignin'].iloc[0],label='Leaf Mn concentration = 10$^{%d}$ mg/kg'%int(leafMn),c=cm(norm(leafMn)))
+        axes[1].plot(result['Total Mn++'],c=cm(norm(leafMn)))
+        axes[2].plot(result['Manganite VF']/24.45*1e6,c=cm(norm(leafMn)))
+        # birnessite=axes[2].plot(result['Birnessite VF']/251.17*1e6,c=cm(norm(leafMn)),ls='--',label='Birnessite')[0]
+        results_all_leafMn[leafMn]=result
 
-axes[0].set(title='One leaf litter cohort',xlabel='Time (years)',ylabel='C stock (kg m$^{-2}$)')
-axes[1].set(title='Cumulative litter layer',xlabel='Time (years)',ylabel='C stock (kg m$^{-2}$)')
-axes[2].set(title='Litter layer vs Mn concentration',xlabel='Leaf Mn concentration (mg g$^{-1}$)',ylabel='C stock (kg m$^{-2}$)')
+    axes[0].legend()
 
 
+    nyears=40
+    results_long_leafMn=[]
+    nums=linspace(1,35,10)
+    nums=logspace(-1,1.5,10)
 
-fig,axes=pyplot.subplots(3,1,num='Mn leakage amounts',clear=True)
-axes[0].set_title('Lignin remaining')
-axes[0].set_ylabel('Fraction of initial')
-axes[1].set_title('Mn++ concentration')
-axes[1].set_ylabel('Concentration (M)')
-axes[2].set_title('Manganite concentration')
-axes[2].set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
-axes[2].set_xlabel('Time (days)')
-# Range of leaf Mn concentrations
-norm=matplotlib.colors.Normalize(-8,-3)
-for Mnleakage in arange(-8.0,-3.0) :
-    result,units=decomp_network.PF_network_writer(make_network(Mn_peroxidase_Mn3_leakage=10.0**Mnleakage,leaf_Mn_mgkg=10.0)).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=simlength)
-    axes[0].plot(result['Lignin']/result['Lignin'].iloc[0],label='Mn+++ leakage = 10$^{%d}$'%int(Mnleakage),c=cm(norm(Mnleakage)))
-    axes[1].plot(result['Total Mn++'],c=cm(norm(Mnleakage)))
-    axes[2].plot(result['Manganite VF']/24.45*1e6,c=cm(norm(Mnleakage)))
-    results_all=pandas.concat((results_all,result))
+    cellulose_eq=zeros(len(nums))
+    lignin_eq=zeros(len(nums))
+    for num in range(len(nums)):
+        result,units=decomp_network.PF_network_writer(make_network(leaf_Mn_mgkg=num,Mn2_scale=0.25e-2)).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=nyears*365)
+        results_long_leafMn.append(result)
 
-axes[0].legend()
+    norm=matplotlib.colors.LogNorm(nums.min(),nums.max())
+    fig,axes=pyplot.subplots(ncols=3,num='Multiple years',clear=True)
+    volume_factor=2/100*12e-3 # Converting from mol/m3 to kgC/m2 assuming 1 cm depth
+    for num in range(len(nums)):
+        cellulose=zeros(nyears*365)
+        lignin=zeros(nyears*365)
+        for yr in range(nyears):
+            cellulose[365*yr:]+=interp(arange(nyears*365)/365,results_long_leafMn[num].index/365,results_long_leafMn[num]['Cellulose'])[:365*(nyears-yr)]
+            lignin[365*yr:]+=interp(arange(nyears*365)/365,results_long_leafMn[num].index/365,results_long_leafMn[num]['Lignin'])[:365*(nyears-yr)]
+        
+        axes[1].plot(arange(nyears*365)/365,lignin*volume_factor,ls='--',c=cm(norm(nums[num]))) # Assumes 1 cm thick organic horizon
+        cellulose_eq[num]=cellulose[-365:].mean()*volume_factor
+        lignin_eq[num]=lignin[-365:].mean()*volume_factor
+        
+        axes[0].plot(results_long_leafMn[num].index/365,results_long_leafMn[num]['Lignin']*volume_factor,ls='--',c=cm(norm(nums[num])),label='Lignin: %1.1f mg/g Mn'%nums[num])
+        axes[2].plot(nums[num],cellulose_eq[num]+lignin_eq[num],'o',c=cm(norm(nums[num])),ms=8.0)
+        
+    axes[2].plot(nums,cellulose_eq+lignin_eq,'k-')
+    axes[0].plot(results_long_leafMn[num].index/365,results_long_leafMn[-1]['Cellulose']*volume_factor,'k-',label='Cellulose')
+    axes[1].plot(arange(nyears*365)/365,cellulose*volume_factor,'k-')
+    axes[0].legend(loc='upper right')
+
+    axes[0].set(title='One leaf litter cohort',xlabel='Time (years)',ylabel='C stock (kg m$^{-2}$)')
+    axes[1].set(title='Cumulative litter layer',xlabel='Time (years)',ylabel='C stock (kg m$^{-2}$)')
+    axes[2].set(title='Litter layer vs Mn concentration',xlabel='Leaf Mn concentration (mg g$^{-1}$)',ylabel='C stock (kg m$^{-2}$)')
 
 
-fig,axes=pyplot.subplots(3,1,num='Birnessite rates',clear=True)
-axes[0].set_title('Lignin remaining')
-axes[0].set_ylabel('Fraction of initial')
-axes[1].set_title('Mn++ concentration')
-axes[1].set_ylabel('Concentration (M)')
-axes[2].set_title('Manganite concentration')
-axes[2].set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
-axes[2].set_xlabel('Time (days)')
-# Range of leaf Mn concentrations
-norm=matplotlib.colors.Normalize(-16,-10)
-for rate in arange(-16.0,-9+0.1,2) :
-    network=make_network(leaf_Mn_mgkg=1.0,Mn_peroxidase_Mn3_leakage=1e-3,change_rate={'Birnessite':'1.d%d mol/m^2-sec'%rate},change_constraints={'Birnessite':'1.0d-5 1.d2 m^2/m^3','Manganite':'0.0973d-5 1.d2 m^2/m^3'})
-    result,units=decomp_network.PF_network_writer(network).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=simlength)
-    axes[0].plot(result['Lignin']/result['Lignin'].iloc[0],label='Dissolution rate = 10$^{%d}$ mol m$^{-2}$ s$^{-1}$'%int(rate),c=cm(norm(rate)))
-    axes[1].plot(result['Total Mn++'],c=cm(norm(rate)))
-    manganite=axes[2].plot(result['Manganite VF']/24.45*1e6,c=cm(norm(rate)),label='Manganite')[0]
-    # birnessite=axes[2].plot(result['Birnessite VF']/251.17*1e6,c=cm(norm(rate)),ls='--',label='Birnessite')[0]
-    results_all=pandas.concat((results_all,result))
 
-axes[0].legend()
-axes[2].legend(handles=[manganite])
+    fig,axes=pyplot.subplots(3,1,num='Mn leakage amounts',clear=True)
+    axes[0].set_title('Lignin remaining')
+    axes[0].set_ylabel('Fraction of initial')
+    axes[1].set_title('Mn++ concentration')
+    axes[1].set_ylabel('Concentration (M)')
+    axes[2].set_title('Manganite concentration')
+    axes[2].set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
+    axes[2].set_xlabel('Time (days)')
+    # Range of leaf Mn concentrations
+    norm=matplotlib.colors.Normalize(-8,-3)
+    for Mnleakage in arange(-8.0,-3.0) :
+        result,units=decomp_network.PF_network_writer(make_network(Mn_peroxidase_Mn3_leakage=10.0**Mnleakage,leaf_Mn_mgkg=10.0)).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=simlength)
+        axes[0].plot(result['Lignin']/result['Lignin'].iloc[0],label='Mn+++ leakage = 10$^{%d}$'%int(Mnleakage),c=cm(norm(Mnleakage)))
+        axes[1].plot(result['Total Mn++'],c=cm(norm(Mnleakage)))
+        axes[2].plot(result['Manganite VF']/24.45*1e6,c=cm(norm(Mnleakage)))
+        results_all=pandas.concat((results_all,result))
 
-# fig,axes=pyplot.subplots(1,1,num='Mn2 effect',clear=True)
-# dlignin=results_all['Lignin'].diff()/(results_all.index[1]-results_all.index[0])
-# dlignin=dlignin.mask(dlignin>0)
-# axes.plot(results_all['Free Mn++'],-dlignin,'o')
-# axes.set_title('Lignin degradation rate vs Mn++')
-# axes.set_ylabel('Lignin degradataion rate (day$^{-1}$)')
-# axes.set_xlabel('Mn++ concentration (M)')
-# axes.set_xscale('linear')
+    axes[0].legend()
 
-pyplot.show()
+
+    fig,axes=pyplot.subplots(3,1,num='Birnessite rates',clear=True)
+    axes[0].set_title('Lignin remaining')
+    axes[0].set_ylabel('Fraction of initial')
+    axes[1].set_title('Mn++ concentration')
+    axes[1].set_ylabel('Concentration (M)')
+    axes[2].set_title('Manganite concentration')
+    axes[2].set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
+    axes[2].set_xlabel('Time (days)')
+    # Range of leaf Mn concentrations
+    norm=matplotlib.colors.Normalize(-16,-10)
+    for rate in arange(-16.0,-9+0.1,2) :
+        network=make_network(leaf_Mn_mgkg=1.0,Mn_peroxidase_Mn3_leakage=1e-3,change_rate={'Birnessite':'1.d%d mol/m^2-sec'%rate},change_constraints={'Birnessite':'1.0d-5 1.d2 m^2/m^3','Manganite':'0.0973d-5 1.d2 m^2/m^3'})
+        result,units=decomp_network.PF_network_writer(network).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=simlength)
+        axes[0].plot(result['Lignin']/result['Lignin'].iloc[0],label='Dissolution rate = 10$^{%d}$ mol m$^{-2}$ s$^{-1}$'%int(rate),c=cm(norm(rate)))
+        axes[1].plot(result['Total Mn++'],c=cm(norm(rate)))
+        manganite=axes[2].plot(result['Manganite VF']/24.45*1e6,c=cm(norm(rate)),label='Manganite')[0]
+        # birnessite=axes[2].plot(result['Birnessite VF']/251.17*1e6,c=cm(norm(rate)),ls='--',label='Birnessite')[0]
+        results_all=pandas.concat((results_all,result))
+
+    axes[0].legend()
+    axes[2].legend(handles=[manganite])
+
+    # fig,axes=pyplot.subplots(1,1,num='Mn2 effect',clear=True)
+    # dlignin=results_all['Lignin'].diff()/(results_all.index[1]-results_all.index[0])
+    # dlignin=dlignin.mask(dlignin>0)
+    # axes.plot(results_all['Free Mn++'],-dlignin,'o')
+    # axes.set_title('Lignin degradation rate vs Mn++')
+    # axes.set_ylabel('Lignin degradataion rate (day$^{-1}$)')
+    # axes.set_xlabel('Mn++ concentration (M)')
+    # axes.set_xscale('linear')
+
+    pyplot.show()

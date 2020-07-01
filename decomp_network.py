@@ -75,6 +75,20 @@ class sorption_isotherm(dict):
         self['sorbed_species']=sorbed_species
         self['k']=k
         self['langmuir_b']=langmuir_b
+        
+class ion_exchange(dict):
+    def __init__(self,name,cations,mineral,CEC):
+        self['name']=name
+        self['cations']=cations
+        self['mineral']=mineral
+        self['reactant_pools']=cations.copy()
+        if mineral is not None:
+            self['reactant_pools'][mineral]=1.0
+            self['product_pools']={mineral:1.0}
+        else:
+            self['product_pools']=cations.copy()
+        self['CEC']=CEC
+        self['reactiontype']='ion_exchange'
     
 class reaction(dict):
     def __init__(self,name,rate_constant,reactiontype,reactant_pools=None,product_pools=None,stoich=None,rate_units='y',**kwargs):
@@ -261,7 +275,7 @@ class PF_network_writer(PF_writer):
                 self.add_line( '#### NOTE: Beginning of auto-inserted immobile species ####')
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='immobile':
-                        if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin']:
+                        if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass']: # This should be improved
                             self.add_line( pool)
                         else:
                             self.add_line( pool + 'C')
@@ -284,12 +298,39 @@ class PF_network_writer(PF_writer):
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='surf_complex':
                         self.increase_level('SURFACE_COMPLEXATION_RXN')
-                        self.add_line('EQUILIBRIUM')
+                        if 'rates' in self.network.nodes[pool]:
+                            self.add_line('MULTIRATE_KINETIC')
+                            if 'site_fractions' in self.network.nodes[pool]:
+                                self.add_line('SITE_FRACTION '+' '.join(['%1.2e'%frac for frac in self.network.nodes[pool]['site_fractions']]))
+                            else:
+                                self.add_line('SITE_FRACTION '+' '.join(['%1.2e'%(1/len(self.network.nodes[pool]['rates'])) for rate in self.network.nodes[pool]['rates']]))
+                            self.add_line('RATES '+' '.join(['%1.2e '%frac for frac in self.network.nodes[pool]['rates']]))
+                        elif 'rate' in self.network.nodes[pool]:
+                            self.add_line('KINETIC')
+                        else:
+                            self.add_line('EQUILIBRIUM')
                         self.add_line('MINERAL {mineral:s}'.format(mineral=self.network.nodes[pool]['mineral']))
                         self.add_line('SITE {sitename:s} {density:1.2e}'.format(sitename=pool,density=self.network.nodes[pool]['site_density']))
                         self.increase_level('COMPLEXES')
                         for complex in self.network.nodes[pool]['complexes']:
                             self.add_line(complex)
+                        self.decrease_level()
+                        self.decrease_level()
+                        
+                already_done=[]
+                for ins,outs,reaction in self.network.edges(data='reaction'):
+                    if reaction['reactiontype']=='ion_exchange' and reaction['name'] not in already_done:
+                        already_done.append(reaction['name'])
+                        self.increase_level('ION_EXCHANGE_RXN')
+                        if reaction['mineral'] is not None:
+                            self.add_line('MINERAL '+reaction['mineral'])
+                        self.add_line('CEC %1.2e'%reaction['CEC'])
+                        self.increase_level('CATIONS')
+                        for cation in reaction['cations']:
+                            if reaction['cations'][cation]==1.0:
+                                self.add_line('%s %1.2e REFERENCE'%(cation,reaction['cations'][cation]))
+                            else:
+                                self.add_line('%s %1.2e'%(cation,reaction['cations'][cation]))
                         self.decrease_level()
                         self.decrease_level()
                 
@@ -332,7 +373,7 @@ class PF_network_writer(PF_writer):
                     if not self.network.nodes[pool]['kind']=='immobile':
                         continue
                     constraint=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)
-                    if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin']:
+                    if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass']:
                         self.add_line( pool.ljust(20) + ' {const:1.1e}'.format(const=constraint))
                     else:
                         if 'initCN' not in self.network.nodes[pool]:
@@ -542,6 +583,11 @@ class PF_microbial_reaction_writer(PF_writer):
                 self.decrease_level()
         # Write out the rest of the reaction attributes
         # What to do with biomass? Maybe better not to use it
+        if 'biomass' in reaction_data:
+            self.increase_level('BIOMASS')
+            self.add_line('SPECIES_NAME '+reaction_data['biomass'])
+            self.add_line('YIELD %1.2f'%reaction_data.pop('biomass_yield',0))
+            self.decrease_level()
         self.decrease_level()
     
         return self.output

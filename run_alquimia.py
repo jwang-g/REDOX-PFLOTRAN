@@ -242,8 +242,48 @@ def convert_condition_to_alquimia(cond,name):
         
     return condition
 
+
+def init_alquimia(input_file,hands_off=True):
+    engine_name='pflotran'
+    status=ffi.new('AlquimiaEngineStatus *') 
+    lib.AllocateAlquimiaEngineStatus(status)
+
+    chem=ffi.new('AlquimiaInterface *')
+
+    lib.CreateAlquimiaInterface(engine_name.encode(),chem,status)
+    check_status(status)
+
+
+    data=ffi.new('AlquimiaData *')
+    sizes=ffi.addressof(data.sizes)
+    functionality=ffi.addressof(data.functionality)
+    engine_state=ffi.new('void **',data.engine_state)
+
+    # Initialize Petsc first
+    initialized = ffi.new('PetscBool *')
+    lib.PetscInitialized(initialized)   
+    if not initialized[0]:
+        err = lib.PetscInitializeNoArguments()
+        assert err==0, 'Error in Petsc initialization'
+
+    # input_file='../../alquimia-dev/benchmarks/batch_chem/ABCD_microbial.in'
+    chem.Setup(input_file.encode(),ffi.cast('_Bool',hands_off),engine_state,sizes,functionality,status)
+    check_status(status)
+    data.engine_state=engine_state[0]
+
+    # Allocates memory for all components of data structure
+    lib.AllocateAlquimiaData(data)
+
+    # Get metadata
+    chem.GetProblemMetaData(engine_state,ffi.addressof(data.meta_data),status)
+    check_status(status,False)
+
+    print_metadata(data)
+    
+    return (chem,data,sizes,status)
+
 def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,saturation=1.0,hands_off=True,
-                    water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,bc=None,diffquo={},rateconstants={},truncate_concentration=0.0):
+                    water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,bc=None,diffquo={},rateconstants={},truncate_concentration=0.0,CEC=None):
     
     import time
     t0=time.time()
@@ -310,6 +350,9 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
                 name=constraint['name']
                 num=get_alquimiavector(data.meta_data.mineral_names).index(name)
                 data.properties.mineral_rate_cnst.data[num]=float(constraint['rate'].split()[0].replace('d','e'))
+    if CEC is not None:
+        print('Applying CEC: %1.2e'%CEC)
+        data.state.cation_exchange_capacity.data[0]=CEC
                 
     # Aqueous kinetic rate constants also need to be specified in hands-off mode
     # Alquimia interface always sets backward rate to zero
