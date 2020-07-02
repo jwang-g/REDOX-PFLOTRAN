@@ -14,7 +14,7 @@ decomp_network.decomp_pool(name='DOM2',CN=50,constraints={'initial':1e-30},kind=
 decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'5.0 P'}),
 decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':1e4}),
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
-decomp_network.decomp_pool(name='Mn+++',kind='primary',constraints={'initial':'1.0e-30 M Manganite'}),
+decomp_network.decomp_pool(name='Mn+++',kind='primary',constraints={'initial':'1.0e-30 M Birnessite2'}),
 decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}),
 decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
@@ -30,12 +30,29 @@ decomp_network.decomp_pool(name='OH-',kind='secondary'),
 decomp_network.decomp_pool(name='MnO4--',kind='secondary'),
 # decomp_network.decomp_pool(name='Acetic_acid(aq)',kind='secondary'),
 # decomp_network.decomp_pool(name='MnIIIDOM2(aq)',kind='secondary'),
+# Should add MnIII complex with DOM1
 
 # Hui/Beth say pyrolusite probably not precipitating in soils. Look for delta-MnO2? Maybe try 'Mn(OH)2(am)'?
 # See Roberts Earth Sci Rev article for some discussion of minerals? More Fe focused though
-# decomp_network.decomp_pool(name='Birnessite',rate='0.d-16 mol/m^2-sec',constraints={'initial':'0.0d-5  1.d2 m^2/m^3'},kind='mineral'),
-decomp_network.decomp_pool(name='Mn(OH)2(am)',rate='1.d-16 mol/m^2-sec',constraints={'initial':'0.0d-5  1.d2 m^2/m^3'},kind='mineral'),
-decomp_network.decomp_pool(name='Manganite',rate='1.d-12 mol/m^2-sec',constraints={'initial':'0.0d-5  1.d2 m^2/m^3'},kind='mineral'),
+# July 2020: Beth suggests using Birnessite or other Mn(IV) oxide for precipitation/dissolution source/sink. 
+#            Soil and water chemistry (Essington) textbook: Birnessite common in young soils subject to redox fluctuations
+#              Precipitate during oxidation of Mn++. Poorly crystalline. Permanent structural charge satisfied by exchangeable interlayer cations
+#   Birnessite: (Na, Ca, MnII)(MnIII,MnIV)7O14*2.8H2O
+#   Parc et al 1989: Birnessite solubility products: 5 MnIV + 2 Mn3 + 13 O + 5 H2O -> 7 log[Mn++]/[H+]^2 + 3 log(fO2) = 0.48-9.24 (uncertain value)
+# Original Hanford database: 'Birnessite' 251.1700 4 -4.0000 'H+' 3.0000 'MnO4--' 5.0000 'Mn++' 7.0000 'H2O' 500.0000 -85.5463 500.0000 500.0000 500.0000 500.0000 500.0000 500.0000 753.5724
+# How about we start with 7 MnIII and implicitly oxidize 5 of them?
+# 7 Mn+++ + 5 H+ + 1.25 O2  <-> 2 Mn+++ + 5 Mn4+ + 2.5 H2O
+# 2 Mn+++ + 5 Mn4+ + 18 H2O <->  Mn7O13*5H2O + 26 H+
+# Combined: 7 Mn+++ + 5 H+ + 1.25 O2 + 15.5 H2O <-> Mn7O13*5H2O + 26 H+
+#           7 Mn+++ + 1.25 O2 + 15.5 H2O -> Mn7O13*5H2O + 21 H+
+# Molar weight should be 215.71 g/mol (http://www.webmineral.com/data/Birnessite.shtml) But database has 753.57
+# Density = 3 g/cm3 = 71.9 cm3/mol (https://www.mindat.org/min-680.html) (compared to 251 for database)
+# Looks like database molar numbers are multiplied by 3.5 relative to these. I think this is actually correct since official formula is (Mn++++,Mn+++)2O4•1.5(H2O) which must be multiplied by 3.5 to get our 7 total Mn
+# Suggests that actual logK is also scaled by 3.5, so original logK would be -24 instead of -85. Still pretty low...
+# Database format: 'Birnessite' 251.1700 4 -21.0 'H+' 7.0 'Mn+++' 1.25 O2(aq) 15.5 H2O ... 753.5724
+decomp_network.decomp_pool(name='Birnessite2',rate='1.d-16 mol/m^2-sec',constraints={'initial':'0.00122  1.d2 m^2/m^3'},kind='mineral'),
+# decomp_network.decomp_pool(name='Mn(OH)2(am)',rate='1.d-16 mol/m^2-sec',constraints={'initial':'0.0d-5  1.d2 m^2/m^3'},kind='mineral'),
+# decomp_network.decomp_pool(name='Manganite',rate='0.d-12 mol/m^2-sec',constraints={'initial':'0.0d-5  1.d2 m^2/m^3'},kind='mineral'),
 
 decomp_network.decomp_pool(name='Rock(s)',rate='0.0 mol/m^2-sec',constraints={'initial':'0.5  5.0e3 m^2/m^3'},kind='mineral'),
 
@@ -43,12 +60,13 @@ decomp_network.decomp_pool(name='>Carboxylate-',kind='surf_complex',mineral='Roc
 
 # This should hopefully work for sorption on Mn minerals. BUT, probably need to run with alquimia to allow site density to change over time
 # since site density depending on mineral surface area is not implemented in PFLOTRAN currently
+#    Update: This is wrong, documentation out of date. Site density should update as mineral volume fraction changes
 decomp_network.decomp_pool(name='>DOM1',kind='surf_complex',mineral='Rock(s)',site_density=1.0e4,complexes=['>sorbed_DOM1']),
 # decomp_network.decomp_pool(name='Sorbed DOM1',kind='isotherm',mineral='Manganite',site_density=0.0e3,complexes=['>sorbed_DOM1']),
 ]
 
 # Fraction of Mn+++ that is not recycled in Mn-Peroxidase enzyme loop
-def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,change_rate={}):
+def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,Mn3_scale=1e-5,change_rate={}):
     Mn_molarmass=54.94 #g/mol
     C_molarmass=12.01
     leaf_Cfrac_mass=0.4
@@ -100,6 +118,15 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
                                             monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM1',k=1e-1,threshold=1.1e-14)],
                                         rate_constant=1.0e-5,reactiontype='MICROBIAL'),
 
+    # Manganese reduction reaction
+    # CH2O + 2 H2O -> HCO3- + 5 H+ + 4 e-
+    # 4 Mn+++ + 4 e- -> 4 Mn++
+            decomp_network.reaction(name='DOM1 Mn+++ reduction',stoich='1.0 DOM1 + 4.0 Mn+++ -> 1.0 HCO3- + 4.0 Mn++ + 5.0 H+',
+                                        monod_terms=[decomp_network.monod(species='DOM1',k=1e-1),decomp_network.monod(species='Mn+++',k=Mn3_scale)],
+                                        inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=1e-8,type='MONOD')],
+                                        rate_constant=2e-10,reactiontype='MICROBIAL'),
+
+
     # C2H3O2- + 2 H2O -> 2 CO2 + 7 H+ + 8 e-
     # 2 O2    + 8 H+ + 8 e- -> 4 H2O
             # decomp_network.reaction(name='Acetate aerobic respiration',reactant_pools={'Acetate-':1.0,'O2(aq)':2.0},product_pools={'HCO3-':2.0,'H+':2.0,'Tracer':2.0},
@@ -149,8 +176,8 @@ def plot_result(result,SOM_ax=None,pH_ax=None,mineral_ax=None,gasflux_ax=None,po
         molar_weight_birnessite = 753.5724 # (last number)
         molar_volume_manganite = 24.45
         molar_volume_pyrolusite = 500.0 # From database. Seems fishy
-        # l=mineral_ax.plot(result['Birnessite VF']/molar_volume_birnessite*1e6   ,label='Birnessite (Mn++)')[0]
-        l=mineral_ax.plot(result['Manganite VF']/molar_volume_manganite*1e6   ,label='Manganite (Mn+++)')[0]
+        l=mineral_ax.plot(result['Birnessite2 VF']/molar_volume_birnessite*1e6   ,label='Birnessite')[0]
+        # l=mineral_ax.plot(result['Manganite VF']/molar_volume_manganite*1e6   ,label='Manganite (Mn+++)')[0]
         
         # l=mineral_ax.plot(result['Total Mn+++']*result['Porosity']*1e3   ,label='Mn+++',ls='--')[0]
         
@@ -230,8 +257,8 @@ if __name__ == '__main__':
         result,units=decomp_network.PF_network_writer(make_network(leaf_Mn_mgkg=10.0**leafMn)).run_simulation('SOMdecomp_template.txt','manganese',pflotran_exe,print_output=False,length_days=simlength)
         axes[0].plot(result['Lignin']/result['Lignin'].iloc[0],label='Leaf Mn concentration = 10$^{%d}$ mg/kg'%int(leafMn),c=cm(norm(leafMn)))
         axes[1].plot(result['Total Mn++'],c=cm(norm(leafMn)))
-        axes[2].plot(result['Manganite VF']/24.45*1e6,c=cm(norm(leafMn)))
-        # birnessite=axes[2].plot(result['Birnessite VF']/251.17*1e6,c=cm(norm(leafMn)),ls='--',label='Birnessite')[0]
+        # axes[2].plot(result['Manganite VF']/24.45*1e6,c=cm(norm(leafMn)))
+        birnessite=axes[2].plot(result['Birnessite2 VF']/251.17*1e6,c=cm(norm(leafMn)),ls='--',label='Birnessite')[0]
         results_all_leafMn[leafMn]=result
 
     axes[0].legend()

@@ -6,7 +6,7 @@ import numpy
 
 
 class layer:
-    def __init__(self,volume,saturation=1.0,temperature=20.0,water_density=1000.0,porosity=0.25,pressure=101325.0,rateconstants={}):
+    def __init__(self,volume,saturation=1.0,temperature=20.0,water_density=1000.0,porosity=0.25,pressure=101325.0,rateconstants={},diffquo={}):
         self.volume=volume # m3
         self.saturation=saturation
         self.temperature=temperature
@@ -25,6 +25,7 @@ class layer:
         self.aux_doubles=[]
         self.mineral_reaction_rate={}
         self.secondary_free_ion_concentration={}
+        self.diffquo=diffquo
         
         # Some things that I'm not using are skipped
         
@@ -148,14 +149,15 @@ class layer:
         self.output_units=output_units
         
 
-reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=0.25e-2,Mn_peroxidase_Mn3_leakage=2e-4) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
+reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=0.25e-2,Mn_peroxidase_Mn3_leakage=2e-4,Mn3_scale=1e-12) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
 
 rateconstants={
 '1.0e+00 DOM1  + 1.0e+00 O2(aq)  -> 1.0e+00 HCO3-  + 1.0e+00 H+  + 1.0e+00 Tracer  + 0.0e+00 Mn++':1e-6,
  '1.0e+00 DOM2  + 2.0e-04 Mn++  + 2.0e-04 H+  -> 1.0e+00 DOM1  + 2.0e-04 Mn+++':0.5e-6,
  'Cellulose decay to DOM1 (SOMDEC sandbox)':2.0/(365*24*3600),
  'Lignin decay to DOM2 (SOMDEC sandbox)':1.0/(365*24*3600),
- '1.0e+00 Mn++  -> 1.0e+00 Tracer2':1.0e-8/100**3,
+ '1.0e+00 Mn++  -> 1.0e+00 Tracer2':1.0e-8/100**3, # This is root uptake
+ '1.0e+00 DOM1  + 4.0e+00 Mn+++  -> 1.0e+00 HCO3-  + 4.0e+00 Mn++  + 5.0e+00 H+':1e-7 # Manganese reduction
 }
 
 input_file='manganese.in'
@@ -189,8 +191,9 @@ for l in layers:
 
 # Herndon et al 2014 (BGC): Deep bulk soil Mn concentration ~1500 ug/g = 54 umol/cm3 assuming bulk density=2 g/cm3
 Mn_VF=1500e-6/54.94*2 *22.36
-initcond=decomp_network.change_constraints(Mn.pools,{'Cellulose':1.0e-8,'Lignin':1.0e-8,'H+':'6.0 P',
-                                                    'Manganite':'1.0d-7  1.d2 m^2/m^3','Mn(OH)2(am)':'%1.2g 1.d2 m^2/m^3'%Mn_VF,
+initcond=decomp_network.change_constraints(Mn.pools,{'Cellulose':1.0e2,'Lignin':1.0e-8,'H+':'6.0 P',
+                                                    # 'Manganite':'1.0d-7  1.d2 m^2/m^3','Mn(OH)2(am)':'%1.2g 1.d2 m^2/m^3'%Mn_VF,
+                                                    'Birnessite2':'%1.2g 1.d2 m^2/m^3'%Mn_VF,
                                                     'O2(aq)':'1.0 G O2(g)'})
 initcond=decomp_network.change_site_density(initcond, '>DOM1', 1e4)
 bc=initcond
@@ -268,7 +271,6 @@ for l in layers:
 
 flow_rate=numpy.zeros(len(layers)-1)+1e-7 # cm/s = 10 L/m2/s, positive is downward
 flow_rate=numpy.linspace(1e-7,0,len(layers)) # Rate declinine linearly with depth, assumes removal or accumulation in lower layers
-diffquo={'O2(aq)':0.01}
 min_dt=0.1
 truncate_concentration=1e-20
 
@@ -291,11 +293,14 @@ z_mid=(z[:-1]+z[1:])/2
 for l in range(len(layers)):
     layers[l].total_immobile['Root_biomass']=root_biomass_top*numpy.exp(-z_mid[l]/root_efolding)/(root_Cfrac*12)*100**3
     layers[l].mineral_rate_cnst['Mn(OH)2(am)']=2e-11
+    layers[l].mineral_rate_cnst['Birnessite2']=2e-10
     layers[l].surface_site_density['>DOM1']=1e3
+    layers[l].diffquo={'O2(aq)':0.01**(l+1)}
 
 # Treat top layer as O horizon with less root biomass and mineral Mn
 layers[0].total_immobile['Root_biomass']=root_biomass_top/(root_Cfrac*12)*100**3*1e-3
-layers[0].mineral_volume_fraction['Mn(OH)2(am)']=1e-7
+# layers[0].mineral_volume_fraction['Mn(OH)2(am)']=1e-7
+layers[0].mineral_volume_fraction['Birnessite2']=1e-7
 layers[0].surface_site_density['>DOM1']=1e2
 
 for l in layers:
@@ -345,17 +350,17 @@ for step in range(nsteps):
             
     # Next do chemistry.
     try:
-        for l in layers:
+        for n,l in enumerate(layers):
             l.copy_to_alquimia(data)
             dq={}
             if bc is not None:
                 primarynames=get_alquimiavector(data.meta_data.primary_names)
                 for spec in primarynames:
-                    if spec in diffquo.keys():
-                        if numpy.iterable(diffquo[spec]):
-                            dq[spec]=diffquo[spec][step%len(diffquo[spec])]
+                    if spec in l.diffquo.keys():
+                        if numpy.iterable(l.diffquo[spec]):
+                            dq[spec]=l.diffquo[spec][step%len(l.diffquo[spec])]
                         else:
-                            dq[spec]=diffquo[spec]
+                            dq[spec]=l.diffquo[spec]
                     else:
                         dq[spec]=0.0
                         # print('O2 before: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
@@ -365,7 +370,7 @@ for step in range(nsteps):
             l.write_output(data,step+1,dt,num_cuts)
             # print('O2 after: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
     except RuntimeError as err:
-        print('ERROR on timestep %d: %s'%(step,err))
+        print('ERROR on timestep %d, layer %d: %s'%(step,n,err))
         print('Returning output so far')
         l.write_output(data,step,dt,num_cuts)
         success=False
@@ -401,6 +406,7 @@ for l in layers:
 
 molar_volume_manganite = 24.45 # cm3/mol
 molar_volume_MnOH2am = 22.3600
+molar_volume_birnessite = 251.1700
 BD=2.0 # Approximate soil bulk density
 
 f,axs=pyplot.subplots(ncols=3,nrows=len(layers),sharex=True,clear=True,num='Simulation results',figsize=(7,6.5))
@@ -415,18 +421,19 @@ for num in range(len(layers)):
     
     axs[num,1].plot(t,layers[num].output_DF['Total Mn++']*1e6/1000*layers[num].porosity*layers[num].saturation*Mn_molarmass/BD,label='Mn$^{+\!\!+}$')
     axs[num,1].plot(t,layers[num].output_DF['Total Mn+++']*1e6/1000*layers[num].porosity*layers[num].saturation*Mn_molarmass/BD,label='Mn$^{+\!\!+\!\!+}$')
-    axs[num,1].plot(t,layers[num].output_DF['Manganite VF']/molar_volume_manganite*1e6*Mn_molarmass/BD,label='Manganite')
+    # axs[num,1].plot(t,layers[num].output_DF['Manganite VF']/molar_volume_manganite*1e6*Mn_molarmass/BD,label='Manganite')
+    axs[num,2].plot(t,layers[num].output_DF['Birnessite2 VF']*7/molar_volume_birnessite*1e6*Mn_molarmass/BD,label='Birnessite')
     
     axs[num,1].plot(t,layers[num].output_DF['Total Tracer2']*1e6/1000*layers[num].porosity*layers[num].saturation*Mn_molarmass/BD,label='Mn$^{+\!\!+}$ root uptake')
     
     # ax=axs[num,1].twinx()
-    axs[num,2].plot(t,layers[num].output_DF['Mn(OH)2(am) VF']/molar_volume_MnOH2am*1e6*Mn_molarmass/BD,label='Mn(OH)$_2$(am)',ls='-')
+    # axs[num,2].plot(t,layers[num].output_DF['Mn(OH)2(am) VF']/molar_volume_MnOH2am*1e6*Mn_molarmass/BD,label='Mn(OH)$_2$(am)',ls='-')
     axs[num,2].plot(t,(layers[num].output_DF['Total Mn++']+layers[num].output_DF['Total Mn+++'])*1e6/1000*layers[num].porosity*layers[num].saturation*Mn_molarmass/BD + 
-                        (layers[num].output_DF['Manganite VF']/molar_volume_manganite+layers[num].output_DF['Mn(OH)2(am) VF']/molar_volume_MnOH2am)*1e6*Mn_molarmass/BD,'k-',label='Total Mn')
+                        (layers[num].output_DF['Birnessite2 VF']*7/molar_volume_birnessite)*1e6*Mn_molarmass/BD,'k-',label='Total Mn')
     
     axs[num,1].set_ylabel('Mn concentration\n($\mu$g g$^{-1}$)')
     axs[num,2].set_ylabel('Mn concentration\n($\mu$g g$^{-1}$)')
-    axs[num,1].set_ylim(*axs[0,1].get_ylim())
+    # axs[num,1].set_ylim(*axs[0,1].get_ylim())
 
     
 axs[0,0].legend()
