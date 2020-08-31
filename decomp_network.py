@@ -128,10 +128,16 @@ class reaction(dict):
         reactants_dict={}
         products_dict={}
         for comp in r:
-            num,chemical=comp.split()
+            if len(comp.split())==1:
+                num,chemical=1,comp.strip()
+            else:
+                num,chemical=comp.split()
             reactants_dict[chemical]=float(num)
         for comp in p:
-            num,chemical=comp.split()
+            if len(comp.split())==1:
+                num,chemical=1,comp.strip()
+            else:
+                num,chemical=comp.split()
             products_dict[chemical]=float(num)
         return reactants_dict,products_dict
 
@@ -275,7 +281,7 @@ class PF_network_writer(PF_writer):
                 self.add_line( '#### NOTE: Beginning of auto-inserted immobile species ####')
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='immobile':
-                        if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass']: # This should be improved
+                        if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass','Sorption_capacity']: # This should be improved
                             self.add_line( pool)
                         else:
                             self.add_line( pool + 'C')
@@ -373,7 +379,7 @@ class PF_network_writer(PF_writer):
                     if not self.network.nodes[pool]['kind']=='immobile':
                         continue
                     constraint=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)
-                    if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass']:
+                    if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass','Sorption_capacity']:
                         self.add_line( pool.ljust(20) + ' {const:1.1e}'.format(const=constraint))
                     else:
                         if 'initCN' not in self.network.nodes[pool]:

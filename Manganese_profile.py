@@ -1,18 +1,19 @@
-from run_alquimia import get_alquimiavector,ffi,lib,check_status,init_alquimia,convert_condition_to_alquimia,print_alquimia_object,convert_output,run_onestep
+from run_alquimia import get_alquimiavector,ffi,lib,check_status,init_alquimia,convert_condition_to_alquimia
 import decomp_network
 import Manganese_network as Mn
 from matplotlib import pyplot
 import numpy
+import xarray
 
 
 class layer:
-    def __init__(self,volume,saturation=1.0,temperature=20.0,water_density=1000.0,porosity=0.25,pressure=101325.0,rateconstants={},diffquo={}):
+    def __init__(self,volume,saturation=1.0,temperature=20.0,water_density=1000.0,porosity=0.25,pressure=101325.0,BD=1.5,CEC=50.0,rateconstants={},diffquo={}):
         self.volume=volume # m3
-        self.saturation=saturation
-        self.temperature=temperature
-        self.water_density=water_density
-        self.porosity=porosity
-        self.pressure=pressure
+        self.saturation=saturation   # out of 1.0
+        self.temperature=temperature # degrees C
+        self.water_density=water_density # kg/m3
+        self.porosity=porosity # out of 1.0
+        self.pressure=pressure # Pa
         self.mineral_specific_surface_area={}
         self.mineral_volume_fraction={}
         self.surface_site_density={}
@@ -25,7 +26,11 @@ class layer:
         self.aux_doubles=[]
         self.mineral_reaction_rate={}
         self.secondary_free_ion_concentration={}
+        self.flow_in={}
+        self.flow_out={}
         self.diffquo=diffquo
+        self.BD=BD   # g/cm3
+        self.CEC=CEC # meq/kg
         
         # Some things that I'm not using are skipped
         
@@ -98,10 +103,13 @@ class layer:
             'mineral_rate':numpy.ma.masked_all((nsteps,len(self.mineral_rate_cnst)),dtype=float),
             'time':numpy.arange(nsteps,dtype=float)*dt,
             'actual_dt':numpy.ma.masked_all(nsteps,dtype=float),'ncuts':numpy.ma.masked_all(nsteps,dtype=int),
-            'porosity':numpy.ma.masked_all(nsteps,dtype=float)
+            'porosity':numpy.ma.masked_all(nsteps,dtype=float),
+            'CEC H+':numpy.ma.masked_all(nsteps,dtype=float),
+            'flow_in':numpy.ma.masked_all((nsteps,len(self.total_mobile)),dtype=float),
+            'flow_out':numpy.ma.masked_all((nsteps,len(self.total_mobile)),dtype=float),
         }
         
-    def write_output(self,data,step,dt,num_cuts=0):
+    def write_output(self,step,dt,num_cuts=0):
         self.output['total_mobile'][step,:]=numpy.array([self.total_mobile[name] for name in self.primary_names])
         self.output['free'][step,:]=numpy.array([self.free_mobile[name] for name in self.primary_names])
         self.output['aq_complex'][step,:]=numpy.array([self.secondary_free_ion_concentration[name] for name in self.secondary_names])
@@ -112,6 +120,12 @@ class layer:
         self.output['porosity'][step]=self.porosity
         self.output['actual_dt'][step]=dt/2**num_cuts
         self.output['ncuts'][step]=num_cuts
+        # Keep track of how much H+ is in the carboxylate buffer rather than the CEC site, so we can plot CEC-exchangeable H+ later. 
+        # Assumes there is one ion exchange site, and that the buffering sorption site is on Rock(s)
+        # Aux doubles in this spot stores free surface site density (probably best not to rely on aux_doubles in general though)
+        self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[len(self.total_mobile)*2+len(self.secondary_free_ion_concentration)+1+self.surface_site_names.index('>Carboxylate-')])
+        self.output['flow_in'][step,:]=numpy.array([self.flow_in.get(name,0.0) for name in self.primary_names])
+        self.output['flow_out'][step,:]=numpy.array([self.flow_out.get(name,0.0) for name in self.primary_names])
         
     def convert_output(self):
         import pandas
@@ -140,24 +154,209 @@ class layer:
         for col in mineral_rate.columns:
             output_DF[col]=mineral_rate[col]
         output_units.update([(s+' Rate','mol/m^3/sec') for s in self.mineral_names])
-        secondary=pandas.DataFrame(self.output['aq_complex'],columns=secondary_names,index=self.output['time'])
+        secondary=pandas.DataFrame(self.output['aq_complex'],columns=self.secondary_names,index=self.output['time'])
         for col in secondary.columns:
             output_DF[col]=secondary[col]
         output_units.update([(s,'M') for s in self.secondary_names])
         
+        flow_in=pandas.DataFrame(self.output['flow_in'],columns=self.primary_names,index=self.output['time']).add_suffix(' inflow')
+        for col in flow_in.columns:
+            output_DF[col]=flow_in[col]
+        output_units.update([(s+' inflow','mol/sec') for s in self.primary_names])
+        flow_out=pandas.DataFrame(self.output['flow_out'],columns=self.primary_names,index=self.output['time']).add_suffix(' outflow')
+        for col in flow_out.columns:
+            output_DF[col]=flow_out[col]
+        output_units.update([(s+' outflow','mol/sec') for s in self.primary_names])
+        
+        output_DF['CEC H+']=pandas.DataFrame(self.output['CEC H+'],index=self.output['time'])
+        output_units['CEC H+']='mol/m^3'
+        
         self.output_DF=output_DF.reset_index(drop=True).set_index(output_DF.index/(24*3600))
         self.output_units=output_units
         
+        
+    def run_onestep(self,chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flux_tol=0.15,truncate_concentration=0.0,rateconstants={},min_cuts=0):
+        self.copy_to_alquimia(data)
+        converged=False
+        porosity=data.state.porosity
+        
+        max_cuts=num_cuts
+        actual_dt=dt/2**num_cuts
+        
+        for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+            data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
+        
+        for spec in diffquo.keys():
+            pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+            if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
+                # print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
+                for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+                    if '->' in reactname and spec in reactname.split('->')[0].split():  # reactants
+                        
+                        # print('Setting rate of reaction %s to zero'%reactname)
+                        data.properties.aqueous_kinetic_rate_cnst.data[num]=0.0
+        
+        cut_for_flux=False
+        flux=numpy.zeros(data.meta_data.primary_names.size)
+        for spec in diffquo.keys():
+            pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+            bc_conc=bc.total_mobile.data[pos]
+            local_conc=data.state.total_mobile.data[pos]
+            
+            
+            # flux[pos] = (bc_conc-local_conc)*diffquo[spec]*actual_dt
+            # Run half step of flux first, then other half after chemistry
+            flux[pos] = (bc_conc-local_conc)*(1-numpy.exp(-diffquo[spec]*actual_dt/2))
+            
+            data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + flux[pos]
+            
+            if bc_conc<0:
+                raise ValueError('Boundary condition concentration of %s < 0'%spec)
+            if local_conc<0:
+                raise RuntimeError('Initial concentration of %s < 0'%spec)
 
-reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=0.25e-2,Mn_peroxidase_Mn3_leakage=2e-4,Mn3_scale=1e-12) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
+            # Here we test if the flux was fast enough to change concentration significantly relative to bc value
+            # If the change is more than flux_tol*bc, we cut the time step to resolve changes better
+            # if flux[pos] != 0:
+            #     print(data.state.total_mobile.data[pos],local_conc,data.state.total_mobile.data[pos] - local_conc,bc_conc)
+            if abs(data.state.total_mobile.data[pos] - local_conc) > bc_conc*flux_tol:
+                # print('Cutting time step to resolve flux better')
+                cut_for_flux=True
+                
+                
+        if cut_for_flux or num_cuts<min_cuts:
+            converged=False
+        else:
+            chem.ReactionStepOperatorSplit(ffi.new('void **',data.engine_state),actual_dt,ffi.addressof(data.properties),ffi.addressof(data.state),
+                                            ffi.addressof(data.aux_data),status)
+            data.state.porosity=porosity
+            converged=status.converged
+                    
+            
+        if converged:
+            check_status(status,False)
+            
+            chem.GetAuxiliaryOutput(ffi.new('void **',data.engine_state),ffi.addressof(data.properties),ffi.addressof(data.state),
+                                            ffi.addressof(data.aux_data),ffi.addressof(data.aux_output),status)
+            check_status(status,False)
+            
+            # Second half of flux
+            flux=numpy.zeros(data.meta_data.primary_names.size)
+            for spec in diffquo.keys():
+                pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+                bc_conc=bc.total_mobile.data[pos]
+                local_conc=data.state.total_mobile.data[pos]
+                
+                
+                # flux[pos] = (bc_conc-local_conc)*diffquo[spec]*actual_dt
+                # Run half step of flux first, then other half after chemistry
+                flux[pos] = (bc_conc-local_conc)*(1-numpy.exp(-diffquo[spec]*actual_dt/2))
+                
+                data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + flux[pos]
+                
+                if bc_conc<0:
+                    raise ValueError('Boundary condition concentration of %s < 0'%spec)
+                if local_conc<0:
+                    raise RuntimeError('Initial concentration of %s < 0'%spec)
+
+                # Here we test if the flux was fast enough to change concentration significantly relative to bc value
+                # If the change is more than flux_tol*bc, we cut the time step to resolve changes better
+                if abs(data.state.total_mobile.data[pos] - local_conc) > bc_conc*flux_tol:
+                    # print('Cutting time step to resolve flux better')
+                    cut_for_flux=True
+                    converged=False
+
+        if converged:
+            self.copy_from_alquimia(data)
+            return max_cuts
+        else:
+
+            if actual_dt/2<min_dt:
+                if cut_for_flux:
+                    raise RuntimeError('Pflotran failed to converge (because of boundary fluxes) after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
+                else:
+                    raise RuntimeError('Pflotran failed to converge after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
+            
+            # data will be reset to layer contents at beginning of next call
+            # Run it twice, because we cut the time step in half
+            ncuts=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+            # If this completes, it means that run_onestep was successful
+            self.copy_from_alquimia(data)
+            if ncuts>max_cuts:
+                max_cuts=ncuts
+                
+            # This starts from ncuts so it doesn't have to try all the ones that failed again
+            for n in range(2**(ncuts-(num_cuts+1))):
+                ncuts2=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+                self.copy_from_alquimia(data)
+                if ncuts2>max_cuts:
+                    max_cuts=ncuts2
+
+            return max_cuts
+        
+        
+
+def convert_to_xarray(layers,t0=0.0,leaf_Mn=None,drop_nas=True):
+    if not hasattr(layers[0],'output_DF'):
+        for l in layers:
+            l.convert_output()
+    data_array = xarray.concat([xarray.Dataset.from_dataframe(layer.output_DF) for layer in layers],dim='layer').rename({'index':'time','layer':'depth'})
+    data_array['dz']=xarray.DataArray([layer.volume for layer in layers],dims='depth',attrs={'units':'cm'})
+    data_array['z_bottom']=data_array['dz'].cumsum()
+    data_array['z_top']=data_array['z_bottom']-data_array['dz']
+    data_array['z_middle']=data_array['z_bottom']-data_array['dz']/2
+    data_array['z_bottom'].attrs['units']='cm'
+    data_array['z_middle'].attrs['units']='cm'
+    data_array['z_top'].attrs['units']='cm'
+    
+    data_array['depth']=data_array['z_middle']
+    
+    for var in layers[0].output_units:
+        data_array[var].attrs['units']=layers[0].output_units[var]
+        
+    # To do: Add other layer properties/attributes and also leaf Mn concentration
+    data_array['saturation']=xarray.DataArray([layer.saturation for layer in layers],dims='depth',attrs={'units':'cm'})
+    data_array['BD']=xarray.DataArray([layer.BD for layer in layers],dims='depth',attrs={'units':'g cm-3'})
+    data_array['CEC']=xarray.DataArray([layer.CEC for layer in layers],dims='depth',attrs={'units':'meq kg-1'})
+    
+    data_array['time']=data_array['time']+t0
+    
+    if leaf_Mn is not None:
+        data_array['litter_Mn']=xarray.DataArray(leaf_Mn,dims='litter_year',attrs={'units':'mmol/kg'})
+    
+    if drop_nas:
+        data_array=data_array.dropna(dim='time')
+    
+    return data_array
+    
+def copy_to_layers(data_xarray,layers):
+    for var in data_xarray.variables:
+        for depth in range(len(data_xarray.depth)):
+            if var.startswith('Total Sorbed'):
+                layers[depth].total_immobile[var[len('Total Sorbed '):]]=data_xarray[var].dropna(dim='time').isel(time=-1,depth=depth).item()
+            elif var.startswith('Total '):
+                layers[depth].total_mobile[var[len('Total '):]]=data_xarray[var].dropna(dim='time').isel(time=-1,depth=depth).item()
+            elif var.startswith('Free '):
+                layers[depth].free_mobile[var[len('Free '):]]=data_xarray[var].dropna(dim='time').isel(time=-1,depth=depth).item()
+            elif var.endswith('VF'):
+                layers[depth].mineral_volume_fraction[var[:-3]]=data_xarray[var].dropna(dim='time').isel(time=-1,depth=depth).item()
+
+reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=0.25e-3,Mn_peroxidase_Mn3_leakage=2e-5,Mn3_scale=1e-12) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
 
 rateconstants={
-'1.0e+00 DOM1  + 1.0e+00 O2(aq)  -> 1.0e+00 HCO3-  + 1.0e+00 H+  + 1.0e+00 Tracer  + 0.0e+00 Mn++':1e-6,
- '1.0e+00 DOM2  + 2.0e-04 Mn++  + 2.0e-04 H+  -> 1.0e+00 DOM1  + 2.0e-04 Mn+++':0.5e-6,
+'1.0e+00 DOM1  + 1.0e+00 O2(aq)  -> 1.0e+00 HCO3-  + 1.0e+00 H+  + 1.0e+00 Tracer  + 0.0e+00 Mn++':1e-7,
+ '1.0e+00 DOM2  + 2.0e-05 Mn++  + 2.0e-05 H+  -> 1.0e+00 DOM1  + 2.0e-05 Mn+++':0.5e-6,
  'Cellulose decay to DOM1 (SOMDEC sandbox)':2.0/(365*24*3600),
  'Lignin decay to DOM2 (SOMDEC sandbox)':1.0/(365*24*3600),
- '1.0e+00 Mn++  -> 1.0e+00 Tracer2':1.0e-8/100**3, # This is root uptake
- '1.0e+00 DOM1  + 4.0e+00 Mn+++  -> 1.0e+00 HCO3-  + 4.0e+00 Mn++  + 5.0e+00 H+':1e-7 # Manganese reduction
+ '1.0e+00 Mn++  -> 1.0e+00 Tracer2  + 2.0e+00 H+':1.0e-8/100**3, # This is root uptake
+ # Bandstra et al microbial Mn reduction median rate of 0.0123 mM/hour -> 3.4e-9 M/s
+ '1.0e+00 DOM1  + 4.0e+00 Mn+++  -> 1.0e+00 HCO3-  + 4.0e+00 Mn++  + 5.0e+00 H+  + 1.0e+00 Tracer':4e-9, #1e-7, # microbial Manganese reduction. 
+ # Beth says there should be plenty of papers out there about this but maybe not a good synthesis
+ '1.0e+00 DOM1  + 4.0e+00 Mn+++  <-> 1.0e+00 HCO3-  + 4.0e+00 Mn++  + 5.0e+00 H+  + 1.0e+00 Tracer':1e39, # abiotic Mn reduction. Rate constant is multiplied by [Mn+++]^4*[DOM1] so it needs to be very high
+ '1.0e+00 Mn++  + 1.0e+00 H+  + 2.5e-01 O2(aq)  -> 1.0e+00 Mn+++  + 5.0e-01 H2O':5e-11, # Bacterial Mn++ oxidation. Rate constant 1e-9 estimated from Fig 8 in Tebo et al 2004 (~35 uM over 10 hours)
+ # DOM sorption/desorption
+ '1.0e+00 DOM3  <-> 1.0e+00 DOM1':1/(365*24*3600*50), # 1st order rate constant (1/M-s)
+ '1.0e+00 DOM1  -> 1.0e+00 DOM3':1e-10,  # M/(biomass*s)
 }
 
 input_file='manganese.in'
@@ -190,15 +389,18 @@ for l in layers:
     l.secondary_names=secondary_names
 
 # Herndon et al 2014 (BGC): Deep bulk soil Mn concentration ~1500 ug/g = 54 umol/cm3 assuming bulk density=2 g/cm3
-Mn_VF=1500e-6/54.94*2 *22.36
-initcond=decomp_network.change_constraints(Mn.pools,{'Cellulose':1.0e2,'Lignin':1.0e-8,'H+':'6.0 P',
+Mn_molarmass=54.94        #g/mol
+molar_volume_birnessite = 251.1700 # Divide by 7 below because birnessite is defined in database as 7 mols of Mn
+Mn_VF=1500e-6/Mn_molarmass*l.BD *molar_volume_birnessite/7
+initcond=decomp_network.change_constraints(Mn.pools,{'Cellulose':1.0e2,'Lignin':1.0e-8,'H+':'5.0 P',
                                                     # 'Manganite':'1.0d-7  1.d2 m^2/m^3','Mn(OH)2(am)':'%1.2g 1.d2 m^2/m^3'%Mn_VF,
                                                     'Birnessite2':'%1.2g 1.d2 m^2/m^3'%Mn_VF,
                                                     'O2(aq)':'1.0 G O2(g)'})
-initcond=decomp_network.change_site_density(initcond, '>DOM1', 1e4)
+# initcond=decomp_network.change_site_density(initcond, '>DOM1', 1e4)
 bc=initcond
 dt=3600*12
-nsteps=365*24//(dt//3600)*10
+nyears=40
+nsteps=365*24//(dt//3600)*nyears
 
 # Set up initial condition
 for l in layers:
@@ -248,6 +450,12 @@ for l in layers:
     # Alquimia interface always sets backward rate to zero
     for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
         data.properties.aqueous_kinetic_rate_cnst.data[num]=l.rateconstants[reactname]
+        
+    # CEC also needs to be specified in hands-off mode
+    # CEC in PFLOTRAN is in eq/m3, so it must be converted from normal units of meq/kg
+    CEC_pf=l.CEC*1e-3*(l.BD*1e-3*100**3)
+    print('Applying CEC: %1.2g'%l.CEC)
+    data.state.cation_exchange_capacity.data[0]=CEC_pf
 
     init_cond=convert_condition_to_alquimia(initcond,'initial')
     chem.ProcessCondition(ffi.new('void **',data.engine_state),init_cond,ffi.addressof(data.properties),ffi.addressof(data.state),ffi.addressof(data.aux_data),status)
@@ -268,9 +476,12 @@ for l in layers:
 
     ''')
 
+initial_HCO3 = l.total_mobile['HCO3-']
+initial_O2 = l.total_mobile['O2(aq)']
 
-flow_rate=numpy.zeros(len(layers)-1)+1e-7 # cm/s = 10 L/m2/s, positive is downward
-flow_rate=numpy.linspace(1e-7,0,len(layers)) # Rate declinine linearly with depth, assumes removal or accumulation in lower layers
+# Flow rate cm/s = 10 L/m2/s, positive is downward
+# flow_rate=numpy.linspace(1e-7,1e-8,len(layers)) # Rate declines linearly with depth, assumes removal or accumulation in lower layers
+flow_rate=numpy.zeros(len(layers))+1e-7
 min_dt=0.1
 truncate_concentration=1e-20
 
@@ -293,31 +504,52 @@ z_mid=(z[:-1]+z[1:])/2
 for l in range(len(layers)):
     layers[l].total_immobile['Root_biomass']=root_biomass_top*numpy.exp(-z_mid[l]/root_efolding)/(root_Cfrac*12)*100**3
     layers[l].mineral_rate_cnst['Mn(OH)2(am)']=2e-11
-    layers[l].mineral_rate_cnst['Birnessite2']=2e-10
-    layers[l].surface_site_density['>DOM1']=1e3
-    layers[l].diffquo={'O2(aq)':0.01**(l+1)}
+    layers[l].mineral_rate_cnst['Birnessite2']=2e-11
+    # layers[l].surface_site_density['>DOM1']=1e3
+    layers[l].total_immobile['Sorption_capacity']=1/12*100**3*0.01 # 1 g/cm3
+    layers[l].diffquo={'O2(aq)':0.001**((l+1)*0.75)}
+    layers[l].total_mobile['DOM3']=13
 
 # Treat top layer as O horizon with less root biomass and mineral Mn
 layers[0].total_immobile['Root_biomass']=root_biomass_top/(root_Cfrac*12)*100**3*1e-3
 # layers[0].mineral_volume_fraction['Mn(OH)2(am)']=1e-7
 layers[0].mineral_volume_fraction['Birnessite2']=1e-7
 layers[0].surface_site_density['>DOM1']=1e2
+layers[0].total_mobile['DOM3']=1e-10
+layers[0].total_immobile['Sorption_capacity']=1e-10
 
 for l in layers:
-    l.write_output(data, 0,dt)
+    l.write_output(0,dt)
 
 flow_in=numpy.zeros(len(layers),dtype=float)
 flow_out=numpy.zeros(len(layers),dtype=float)
-immobile_specs=['DOM2','Tracer2']
+immobile_specs=['DOM2','Tracer2','Tracer','DOM3']
 
 import time
 t0=time.time()
 tprev=t0
 
+leaf_Mn_concs=numpy.ma.masked_all(nyears)
+
+tstart=0
+
+# Restart from existing state?
+restart_state='Mn_saved.nc'
+restart_state=None
+if isinstance(restart_state,str):
+    restart_state=xarray.open_dataset(restart_state)
+if isinstance(restart_state,xarray.Dataset):
+    copy_to_layers(restart_state, layers)
+    tstart=restart_state.dropna(dim='time')['time'].isel(time=-1).item()
+elif isinstance(restart_state,list) and isinstance(restart_state[0],layer):
+    layers=restart_state
+
+
+
 success=True
 for step in range(nsteps):
     # First deposit leaf litter, including last year worth of root Mn uptake
-    if (step*dt)%(365*24*3600) == 0: # End of year. Needs dt to be even divisor of one day to work
+    if (step*dt/3600+tstart*24)%(365*24) == 0: # End of year. Needs dt to be even divisor of one day to work
         layers[0].total_immobile['Cellulose']=layers[0].total_immobile['Cellulose'] + litter_mass*(1-litter_ligninfrac)/layers[0].volume/C_molarmass*1000
         layers[0].total_immobile['Lignin']=layers[0].total_immobile['Lignin'] + litter_mass*litter_ligninfrac/layers[0].volume/C_molarmass*1000
         
@@ -329,8 +561,13 @@ for step in range(nsteps):
 
         layers[0].total_mobile['Mn++']=layers[0].total_mobile['Mn++'] + Mn_uptake_total/(layers[0].porosity*layers[0].saturation*layers[0].volume*1000)
         print('Leaf litter Mn concentration = %1.1f mmol/kg'%(Mn_uptake_total*1e3/litter_mass))
+        print('Layer Mn++ concentration: %1.2g M'%layers[0].total_mobile['Mn++'])
+        leaf_Mn_concs[int((step*dt)/(365*24*3600))]=Mn_uptake_total*1e3/litter_mass
+        print('Top layer birnessite: %1.2g ug/g. Bottom layer: %1.2g ug/g'%(layers[0].mineral_volume_fraction['Birnessite2']*7/molar_volume_birnessite*1e6*Mn_molarmass/layers[0].BD,
+                        layers[-1].mineral_volume_fraction['Birnessite2']*7/molar_volume_birnessite*1e6*Mn_molarmass/layers[-1].BD))
     
     # Next advect mobile species. This assumes we can separate advective transport and reactions at this time step length
+    # Alternate strategy would be to pass these rates to run_onestep and spread them over the variable timesteps
     for spec in layers[0].primary_names:
         if spec in immobile_specs:
             continue # Skip this one because it's not really mobile, more a workaround for Lignin decomp
@@ -338,14 +575,28 @@ for step in range(nsteps):
         flow_out[:]=0.0
         for num in range(len(layers)-1):
             # First calculate net flow for each layer
-            flow_out[num]=flow_rate[num]*layers[num].total_mobile[spec]*10*dt # mol/L*cm/s*(10L/m2)/cm -> mol/s
-            flow_in[num+1]=flow_rate[num]*layers[num].total_mobile[spec]*10*dt
+            flow_out[num]=flow_rate[num]*layers[num].total_mobile[spec]*10 # mol/L*cm/s*(10L/m2)/cm -> mol/s
+            flow_in[num+1]=flow_rate[num]*layers[num].total_mobile[spec]*10
+        # Leaching out of bottom layer (to groundwater/loss)
+        flow_out[-1]=flow_rate[-1]*layers[-1].total_mobile[spec]*10
         for num in range(len(layers)):
             # Then calculate change in concentration using amount of water in the layer
             # Units of mobile species are M (mol/L water)
             spec_mol_layer=layers[num].total_mobile[spec]*layers[num].volume*1000*layers[num].porosity*layers[num].saturation # mol of the species in the layer initially
-            spec_mol_layer=spec_mol_layer+flow_in[num]-flow_out[num]
+            spec_mol_layer=spec_mol_layer+(flow_in[num]-flow_out[num])*dt
             layers[num].total_mobile[spec]=spec_mol_layer/(layers[num].volume*1000*layers[num].porosity*layers[num].saturation)
+            layers[num].flow_in[spec]=flow_in[num]
+            layers[num].flow_out[spec]=flow_out[num]
+
+    # Just keep HCO3- equilibrated with the atmosphere in top layer
+    # Also remove equal amount of H+ because we are tracking bicarbonate, not CO2(aq)
+    dCO2=layers[0].total_mobile['HCO3-']-initial_HCO3
+    layers[0].total_mobile['HCO3-']=layers[0].total_mobile['HCO3-']-dCO2
+    layers[0].total_immobile['H+']=layers[0].total_immobile['H+']-dCO2*1000*layers[0].porosity*layers[0].saturation
+    # Equilibrate O2 also
+    # layers[0].total_mobile['O2(aq)']=initial_O2
+    # Should set up stepper so it can handle equilibrium boundary conditions better
+            
             
             
     # Next do chemistry.
@@ -364,33 +615,33 @@ for step in range(nsteps):
                     else:
                         dq[spec]=0.0
                         # print('O2 before: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
-            num_cuts=run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+            num_cuts=l.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
             l.copy_from_alquimia(data)
             # Write output
-            l.write_output(data,step+1,dt,num_cuts)
+            l.write_output(step+1,dt,num_cuts)
             # print('O2 after: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
     except RuntimeError as err:
         print('ERROR on timestep %d, layer %d: %s'%(step,n,err))
         print('Returning output so far')
-        l.write_output(data,step,dt,num_cuts)
+        l.write_output(step,dt,num_cuts)
         success=False
         break
     except KeyboardInterrupt as err:
         print('INTERRUPTED on timestep %d'%(step))
         print('Returning output so far')
-        l.write_output(data,step,dt,num_cuts)
+        l.write_output(step,dt,num_cuts)
         success=False
         break
     
 
             
     
-    if step%100==0:
+    if step%100==0 and step>0:
         t1=time.time()
-        mean_cuts=numpy.mean([l.output['ncuts'][step-100:step].mean() for l in layers])
+        cuts=[l.output['ncuts'][step-100:step].mean() for l in layers]
         mean_dt=numpy.mean([l.output['actual_dt'][step-100:step].mean() for l in layers])
-        print('*** Step {step:d} of {nsteps:d}. Time elapsed: {t:d} s ({tperstep:1.1f} s per {steplength:1.1f} hour timestep). Mean cuts: {meancuts:1.1f} Mean dt: {meandt:1.1f} s ***'.format(
-                step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=mean_cuts,meandt=mean_dt,steplength=dt/3600))
+        print('*** Step {step:d} of {nsteps:d} ({nyears:1.1f} of {totalyears:d} years). Time elapsed: {t:1.1f} min ({tperstep:1.1f} s per {steplength:1.1f} hour timestep). Mean cuts: {meancuts:s} Mean dt: {meandt:1.1f} s ***'.format(
+                step=step,nsteps=nsteps,t=(t1-t0)/60,tperstep=(t1-tprev)/25,meancuts=str(cuts),meandt=mean_dt,steplength=dt/3600,nyears=step*dt/(3600*24*365),totalyears=int(nsteps*dt/(3600*24*365))))
         tprev=t1
 
 
@@ -401,47 +652,73 @@ drawn=decomp_network.draw_network_with_reactions(reaction_network,omit=['NH4+','
                      'Fe(OH)2':'Fe(OH)$_2$','Fe(OH)3':'Fe(OH)$_3$','Mn++':r'Mn$^\mathrm{+\!\!+}$','Mn+++':r'Mn$^\mathrm{+\!\!+\!\!\!+}$','Acetate-':'Acetate',})
 
 
-for l in layers:
-    l.convert_output()
+output=convert_to_xarray(layers,t0=tstart,leaf_Mn=leaf_Mn_concs)
+if isinstance(restart_state,xarray.Dataset):
+    output=xarray.concat([restart_state,output.isel(time=slice(1,None))],dim='time')
 
 molar_volume_manganite = 24.45 # cm3/mol
 molar_volume_MnOH2am = 22.3600
 molar_volume_birnessite = 251.1700
-BD=2.0 # Approximate soil bulk density
 
-f,axs=pyplot.subplots(ncols=3,nrows=len(layers),sharex=True,clear=True,num='Simulation results',figsize=(7,6.5))
-t=layers[0].output_DF.index/365
-for num in range(len(layers)):
-    axs[num,0].plot(t,layers[num].output_DF['Total Sorbed Cellulose']*12/100**3,label='Cellulose')
-    axs[num,0].plot(t,layers[num].output_DF['Total Sorbed Lignin']*12/100**3,label='Lignin')
-    axs[num,0].plot(t,layers[num].output_DF['Total DOM1']*12/1000*layers[num].porosity*layers[num].saturation,label='DOM')
-    axs[num,0].plot(t,layers[num].output_DF['Total Sorbed DOM1']*12/100**3,label='Sorbed DOM')
-    
-    axs[num,0].set_ylabel('C density\n(g C cm$^{-3}$)')
-    
-    axs[num,1].plot(t,layers[num].output_DF['Total Mn++']*1e6/1000*layers[num].porosity*layers[num].saturation*Mn_molarmass/BD,label='Mn$^{+\!\!+}$')
-    axs[num,1].plot(t,layers[num].output_DF['Total Mn+++']*1e6/1000*layers[num].porosity*layers[num].saturation*Mn_molarmass/BD,label='Mn$^{+\!\!+\!\!+}$')
-    # axs[num,1].plot(t,layers[num].output_DF['Manganite VF']/molar_volume_manganite*1e6*Mn_molarmass/BD,label='Manganite')
-    axs[num,2].plot(t,layers[num].output_DF['Birnessite2 VF']*7/molar_volume_birnessite*1e6*Mn_molarmass/BD,label='Birnessite')
-    
-    axs[num,1].plot(t,layers[num].output_DF['Total Tracer2']*1e6/1000*layers[num].porosity*layers[num].saturation*Mn_molarmass/BD,label='Mn$^{+\!\!+}$ root uptake')
-    
-    # ax=axs[num,1].twinx()
-    # axs[num,2].plot(t,layers[num].output_DF['Mn(OH)2(am) VF']/molar_volume_MnOH2am*1e6*Mn_molarmass/BD,label='Mn(OH)$_2$(am)',ls='-')
-    axs[num,2].plot(t,(layers[num].output_DF['Total Mn++']+layers[num].output_DF['Total Mn+++'])*1e6/1000*layers[num].porosity*layers[num].saturation*Mn_molarmass/BD + 
-                        (layers[num].output_DF['Birnessite2 VF']*7/molar_volume_birnessite)*1e6*Mn_molarmass/BD,'k-',label='Total Mn')
-    
-    axs[num,1].set_ylabel('Mn concentration\n($\mu$g g$^{-1}$)')
-    axs[num,2].set_ylabel('Mn concentration\n($\mu$g g$^{-1}$)')
-    # axs[num,1].set_ylim(*axs[0,1].get_ylim())
 
-    
-axs[0,0].legend()
-axs[-1,0].set_xlabel('Time (years)')
-axs[0,1].legend()
-axs[0,2].legend()
+def plot_output(output,axs,subsample=5,do_legend=True,**kwargs):
+    for num in range(len(output.depth)):
+        out=output.isel(depth=num,time=slice(None,None,subsample)).dropna(dim='time')
+        t=out.time/(365)
+        porosity=out['Porosity']
+        saturation=out['saturation']
+        BD=out['BD']
+        axs[num,0].plot(t,out['Total Sorbed Cellulose']*12/100**3,label='Cellulose',c='C0',**kwargs)
+        axs[num,0].plot(t,out['Total Sorbed Lignin']*12/100**3,label='Lignin',c='C1',**kwargs)
+        axs[num,0].plot(t,out['Total DOM1']*12/1000*out['Porosity']*out.saturation,c='C2',label='DOM',**kwargs)
+        # axs[num,0].plot(t,out['Total Sorbed DOM1']*12/100**3,label='Sorbed DOM')
+        axs[num,0].plot(t,out['Total DOM3']*12/1000*out['Porosity']*out.saturation,c='C3',label='Sorbed DOM',**kwargs)
+        axs[num,0].set_ylabel('C density\n(g C cm$^{-3}$)')
+        
+        axs[num,1].plot(t,out['Total Mn++']*1e6/1000*porosity*saturation*Mn_molarmass/BD,label='Mn$^{+\!\!+}$',c='C0',**kwargs)
+        axs[num,1].plot(t,out['Total Mn+++']*1e6/1000*porosity*saturation*Mn_molarmass/BD,label='Mn$^{+\!\!+\!\!+}$',c='C1',**kwargs)
+        # axs[num,1].plot(t,layers[num].output_DF['Manganite VF']/molar_volume_manganite*1e6*Mn_molarmass/BD,label='Manganite')
+        axs[num,2].plot(t,out['Birnessite2 VF']*7/molar_volume_birnessite*1e6*Mn_molarmass/BD,label='Birnessite',c='C0',**kwargs)
+        
+        annual_root_uptake=out['Total Tracer2'].groupby(numpy.floor(t)).max() 
+        axs[num,1].plot(annual_root_uptake.time,annual_root_uptake*1e6/1000*porosity.mean()*saturation*Mn_molarmass/BD,label='Annual Mn$^{+\!\!+}$ root uptake',c='C2',**kwargs)
+        
+        axs[num,3].plot(t,-numpy.log10(out['Free H+']),label='pH',c='C0',**kwargs)
+        
+        # ax=axs[num,1].twinx()
+        # axs[num,2].plot(t,layers[num].output_DF['Mn(OH)2(am) VF']/molar_volume_MnOH2am*1e6*Mn_molarmass/BD,label='Mn(OH)$_2$(am)',ls='-')
+        axs[num,2].plot(t,(out['Total Mn++']+out['Total Mn+++'])*1e6/1000*porosity*saturation*Mn_molarmass/BD + 
+                            (out['Birnessite2 VF']*7/molar_volume_birnessite)*1e6*Mn_molarmass/BD,c='k',label='Total Mn',**kwargs)
+        
+        axs[num,1].set_ylabel('Mn concentration\n($\mu$g g$^{-1}$)')
+        axs[num,2].set_ylabel('Mn concentration\n($\mu$g g$^{-1}$)')
+        axs[num,3].set_ylabel('pH')
+        # axs[num,1].set_ylim(*axs[0,1].get_ylim())
 
-axs[-1,1].set_xlabel('Time (years)')
-axs[-1,2].set_xlabel('Time (years)')
-axs[0,0].set_title('Organic Carbon')
-axs[0,1].set_title('Manganese')
+        for n,cation in enumerate(['Al+++','Ca++','K+','Mg++','Na+','Mn++','Mn+++']):
+            axs[num,4].plot(t,output['Total Sorbed '+cation].isel(depth=num,time=slice(None,None,subsample)).dropna(dim='time')/(output.BD.isel(depth=2)*1e-3*100**3)*1000,c='C'+str(n),label=cation,**kwargs)
+        axs[num,4].plot(t,output['CEC H+'].isel(depth=num,time=slice(None,None,subsample)).dropna(dim='time')/(output.BD.isel(depth=2)*1e-3*100**3)*1000,label='H+',c='C'+str(n+1),**kwargs)
+        
+        axs[num,4].set_ylabel('Exch conc\n(mmol/kg)')
+        
+
+        
+    axs[-1,0].set_xlabel('Time (years)')
+    if do_legend:
+        axs[0,0].legend()
+        axs[0,1].legend()
+        axs[0,2].legend()
+        axs[0,4].legend()
+
+    axs[-1,1].set_xlabel('Time (years)')
+    axs[-1,2].set_xlabel('Time (years)')
+    axs[-1,3].set_xlabel('Time (years)')
+    axs[-1,4].set_xlabel('Time (years)')
+    axs[0,0].set_title('Organic Carbon')
+    axs[0,1].set_title('Manganese ions')
+    axs[0,2].set_title('Total Mn')
+    axs[0,3].set_title('pH')
+    axs[0,4].set_title('Exchangeable cations')
+
+f,axs=pyplot.subplots(ncols=5,nrows=len(output.depth),sharex=True,clear=True,num='Simulation results',figsize=(12,6.5))
+plot_output(output,axs)

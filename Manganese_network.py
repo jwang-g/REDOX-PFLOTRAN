@@ -14,16 +14,24 @@ decomp_network.decomp_pool(name='DOM2',CN=50,constraints={'initial':1e-30},kind=
 decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'5.0 P'}),
 decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':1e4}),
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
-decomp_network.decomp_pool(name='Mn+++',kind='primary',constraints={'initial':'1.0e-30 M Birnessite2'}),
+decomp_network.decomp_pool(name='Mn+++',kind='primary',constraints={'initial':'1.0e-30 M Birnessite2'}), # Should I just use MnO4-- as the primary instead? That would allow using original Bernessite def
 decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}),
 decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
 decomp_network.decomp_pool(name='Tracer2',kind='primary',constraints={'initial':1e-15}), # To accumulate root Mn++ uptake
 # decomp_network.decomp_pool(name='CH4(aq)',kind='primary',constraints={'initial':1e-15}),
 # decomp_network.decomp_pool(name='Acetate-',kind='primary',constraints={'initial':1e-15}),
+decomp_network.decomp_pool(name='Mg++',kind='primary',constraints={'initial':0.5e-3}),
+decomp_network.decomp_pool(name='Ca++',kind='primary',constraints={'initial':0.5e-3}),
+decomp_network.decomp_pool(name='Na+',kind='primary',constraints={'initial':2e-3}),
+decomp_network.decomp_pool(name='K+',kind='primary',constraints={'initial':2e-3}),
+decomp_network.decomp_pool(name='Al+++',kind='primary',constraints={'initial':0.5e-3}),
+# decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'0.37e-5'}),
+# decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-2'}),
 
 decomp_network.decomp_pool(name='CO2(g)',kind='gas'),
 decomp_network.decomp_pool(name='O2(g)',kind='gas'),
+decomp_network.decomp_pool(name='H2O',kind='implicit'),
 
 decomp_network.decomp_pool(name='CO2(aq)',kind='secondary'),
 decomp_network.decomp_pool(name='OH-',kind='secondary'),
@@ -31,6 +39,7 @@ decomp_network.decomp_pool(name='MnO4--',kind='secondary'),
 # decomp_network.decomp_pool(name='Acetic_acid(aq)',kind='secondary'),
 # decomp_network.decomp_pool(name='MnIIIDOM2(aq)',kind='secondary'),
 # Should add MnIII complex with DOM1
+decomp_network.decomp_pool(name='MnIIIDOM1(aq)',kind='secondary'),
 
 # Hui/Beth say pyrolusite probably not precipitating in soils. Look for delta-MnO2? Maybe try 'Mn(OH)2(am)'?
 # See Roberts Earth Sci Rev article for some discussion of minerals? More Fe focused though
@@ -61,12 +70,21 @@ decomp_network.decomp_pool(name='>Carboxylate-',kind='surf_complex',mineral='Roc
 # This should hopefully work for sorption on Mn minerals. BUT, probably need to run with alquimia to allow site density to change over time
 # since site density depending on mineral surface area is not implemented in PFLOTRAN currently
 #    Update: This is wrong, documentation out of date. Site density should update as mineral volume fraction changes
-decomp_network.decomp_pool(name='>DOM1',kind='surf_complex',mineral='Rock(s)',site_density=1.0e4,complexes=['>sorbed_DOM1']),
+# decomp_network.decomp_pool(name='>DOM1',kind='surf_complex',mineral='Rock(s)',site_density=1.0e4,complexes=['>sorbed_DOM1']),
 # decomp_network.decomp_pool(name='Sorbed DOM1',kind='isotherm',mineral='Manganite',site_density=0.0e3,complexes=['>sorbed_DOM1']),
+
+# Alternative attempt: Treat sorption as a set of two reactions. To avoid editing pflotran code, use a microbial and a general reaction
+# This requires us to manually treat the sorbed stuff as immobile in the code we are using to run the model
+decomp_network.decomp_pool(name='DOM3',constraints={'initial':1e-30},kind='primary'),
+# Sorption capacity is treated as an immobile biomass term in the sorption equation, which makes eq sorbed DOM proportional to that term
+decomp_network.decomp_pool(name='Sorption_capacity',constraints={'initial':1e-20},kind='immobile'),
+# sorption rate is microbial DOM1 -> DOM3 (d/dt = V1*sorption_capacity*DOM1/(DOM1+k))
+# Desorption rate is general DOM3 -> DOM1 (d/dt = V2*DOM3)
+# Equilibrium sorption = V1/V2*sorption_capacity*DOM/(k+DOM) so actual maximum sorption is V1/V2*sorption_capacity
 ]
 
 # Fraction of Mn+++ that is not recycled in Mn-Peroxidase enzyme loop
-def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,Mn3_scale=1e-5,change_rate={}):
+def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,Mn3_scale=1e-5,CEC=40.0,change_rate={},DOM_sorption_k=1.0):
     Mn_molarmass=54.94 #g/mol
     C_molarmass=12.01
     leaf_Cfrac_mass=0.4
@@ -75,14 +93,15 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
     reactions = [
             decomp_network.reaction(name='Hydrolysis',reactant_pools={'Cellulose':1.0},product_pools={'DOM1':1.0},
                                             rate_constant=2e-1,rate_units='y', 
-                                        inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=1e-1)],reactiontype='SOMDECOMP'),
+                                        # inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=1e-1)],
+                                        reactiontype='SOMDECOMP'),
                                         
     # Need a way to make a soluble reactive compound from lignin. Treating it like hydrolysis, but allowing only a small amount to be generated
             decomp_network.reaction(name='Lignin exposure',reactant_pools={'Lignin':1.0},product_pools={'DOM2':1.0},
                                             rate_constant=2e-1,rate_units='y', 
-                                        inhibition_terms=[decomp_network.inhibition(species='DOM2',type='MONOD',k=1e-1),
-                                        decomp_network.inhibition(species='Cellulose',type='MONOD',k=3e3) # Suggested by Sun et al 2019, which found that MnP activity only increased late in decomposition
-                                        ],
+                                        inhibition_terms=[decomp_network.inhibition(species='DOM2',type='MONOD',k=1e-2),
+                                        decomp_network.inhibition(species='Cellulose',type='MONOD',k=3e3), # Suggested by Sun et al 2019, which found that MnP activity only increased late in decomposition
+                                        decomp_network.inhibition(species='Mn++',type='INVERSE_MONOD',k=Mn2_scale)],
                                         reactiontype='SOMDECOMP'),
                                         
     # Mn reduction turns DOM2 (lignin-based) into DOM1 (odixized, decomposable)
@@ -101,7 +120,7 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
         # 1 DOM2 + 1 Mn++ + x H+ -> 1 DOM1 + (1-x) Mn++ + x Mn+++
             decomp_network.reaction(name='Mn Peroxidase',reactant_pools={'DOM2':1.0,'Mn++':Mn_peroxidase_Mn3_leakage,'H+':Mn_peroxidase_Mn3_leakage},
                                                          product_pools={'DOM1':1.0,'Mn+++':Mn_peroxidase_Mn3_leakage},
-                                                         monod_terms=[decomp_network.monod(species='DOM2',k=2e-1,threshold=1.1e-20),decomp_network.monod(species='Mn++',k=Mn2_scale,threshold=1.1e-20)],
+                                                         monod_terms=[decomp_network.monod(species='DOM2',k=1e0,threshold=1.1e-20),decomp_network.monod(species='Mn++',k=Mn2_scale,threshold=1.1e-20)],
                                                          # inhibition_terms=[decomp_network.inhibition(species='Mn++',k=1.3e-14,type='INVERSE_MONOD')],
                                                          rate_constant=5e-6,reactiontype='MICROBIAL'),
                                         
@@ -115,17 +134,32 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
     # CH2O + H2O -> CO2 + 4H+ + 4 e-
     # O2   + 4H+ + 4 e- -> 2H2O
             decomp_network.reaction(name='DOM aerobic respiration',reactant_pools={'DOM1':1.0,'O2(aq)':1.0},product_pools={'HCO3-':1.0,'H+':1.0,'Tracer':1.0,'Mn++':leaf_Mn_frac},
-                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM1',k=1e-1,threshold=1.1e-14)],
+                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM1',k=1e0,threshold=1.1e-14)],
                                         rate_constant=1.0e-5,reactiontype='MICROBIAL'),
 
     # Manganese reduction reaction
     # CH2O + 2 H2O -> HCO3- + 5 H+ + 4 e-
     # 4 Mn+++ + 4 e- -> 4 Mn++
-            decomp_network.reaction(name='DOM1 Mn+++ reduction',stoich='1.0 DOM1 + 4.0 Mn+++ -> 1.0 HCO3- + 4.0 Mn++ + 5.0 H+',
+    # Microbial-mediated manganese reduction, happens under anoxic conditions only
+            decomp_network.reaction(name='DOM1 Mn+++ reduction',stoich='1.0 DOM1 + 4.0 Mn+++ -> 1.0 HCO3- + 4.0 Mn++ + 5.0 H+ + 1.0 Tracer',
                                         monod_terms=[decomp_network.monod(species='DOM1',k=1e-1),decomp_network.monod(species='Mn+++',k=Mn3_scale)],
                                         inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=1e-8,type='MONOD')],
                                         rate_constant=2e-10,reactiontype='MICROBIAL'),
 
+    # Abiotic Mn reduction, happens under oxic conditions
+            decomp_network.reaction(name='DOM1 Mn+++ abiotic reduction',stoich='1.0 DOM1 + 4.0 Mn+++ -> 1.0 HCO3- + 4.0 Mn++ + 5.0 H+ + 1.0 Tracer',
+                                        rate_constant=2e-5,reactiontype='GENERAL'),
+
+    # Microbial oxidation of Mn(II) under oxic conditions. See Tebo et al 2004. Mostly done by bacteria. Reduces O2 to water. Function unknown but might be chemoautotrophic
+    # Mn++ + 0.5 O2 + H2O -> Mn(+4)O2 + 2 H+ (but this includes an intermediate Mn3O4 step)
+    # or Mn++ + 0.25 O2 + 1.5 H2O -> Mn(+3)OOH + 2 H+
+    # or 3 Mn++ + 0.5 O2 + 3 H2O -> Mn(+3)3O4 + 6 H+
+    # Simplified version assuming further oxidation happens in Birnessite precipitation step:
+    # Mn++ + H+ + 0.25 O2 -> Mn+++ + 0.5 H2O
+    # then (implicitly) 7 Mn+++ + 1.25 O2 + 15.5 H2O -> Mn7O13*5H2O + 21 H+
+            decomp_network.reaction(name='Bacterial Mn++ oxidation',stoich='Mn++ + H+ + 0.25 O2(aq) -> Mn+++ + 0.5 H2O',
+                                    monod_terms=[decomp_network.monod(species='Mn++',k=Mn2_scale),decomp_network.monod(species='O2(aq)',k=1e-4,threshold=1.1e-12)],
+                                    rate_constant=8e-8,reactiontype='MICROBIAL'), # Rate constant estimated from Fig 8 in Tebo et al 2004
 
     # C2H3O2- + 2 H2O -> 2 CO2 + 7 H+ + 8 e-
     # 2 O2    + 8 H+ + 8 e- -> 4 H2O
@@ -137,10 +171,21 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
             # PFLOTRAN will not let you do isotherm sorption if there are any secondary species :-( - reaction_database.F90 line 3424
             # decomp_network.sorption_isotherm(name='DOM sorption',mineral='Rock(s)',sorbed_species='DOM1',k=0.1,langmuir_b=1.0,sorbed_name='Sorbed DOM1'),
             
-    # Root uptake of Mn++
-            decomp_network.reaction(name='Root uptake of Mn++',stoich='1.0 Mn++ -> 1.0 Tracer2',monod_terms=[decomp_network.monod(species='Mn++',k=Mn2_scale,threshold=1.1e-20)],
+    # Root uptake of Mn++. Does this need a charge balancing release of anions?
+    # According to Haynes (1990), imbalance in root anion vs cation uptake is usually balanced by H+ or OH- release. I guess in this case we need to assume that all other ions are balanced except for Mn?
+            decomp_network.reaction(name='Root uptake of Mn++',stoich='1.0 Mn++ -> 1.0 Tracer2 + 2 H+',monod_terms=[decomp_network.monod(species='Mn++',k=Mn2_scale,threshold=1.1e-20)],
                                     biomass='Root_biomass',biomass_yield=0.0,
                                     rate_constant=1.0e-5,reactiontype='MICROBIAL'),
+            
+            # Cation exchange
+            decomp_network.ion_exchange(name='Cation exchange',cations={'Mn++':2.0,'Mn+++':0.6e0,'Al+++':1.0,'Mg++':0.8,'Ca++':4.1,'Na+':1.1,'K+':1.1,'H+':5.0},CEC=CEC,mineral=None),
+            
+            # sorption rate is microbial DOM1 -> DOM3 (d/dt = V1*sorption_capacity*DOM1/(DOM1+k))
+            # Desorption rate is general DOM3 -> DOM1 (d/dt = V2*DOM3)
+            # Equilibrium sorption = V1/V2*sorption_capacity*DOM/(k+DOM) so actual maximum sorption is V1/V2*sorption_capacity
+            decomp_network.reaction(name='DOM sorption',stoich='DOM1 -> DOM3',monod_terms=[decomp_network.monod(species='DOM1',k=DOM_sorption_k)],
+                                biomass='Sorption_capacity',biomass_yield=0.0,rate_constant=1.0e-10,reactiontype='MICROBIAL'),
+            decomp_network.reaction(name='DOM desorption',stoich='DOM3 -> DOM1',reactiontype='GENERAL',rate_constant=1.0e-10),
             
     ] # End of reactions list
 
