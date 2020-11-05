@@ -110,7 +110,8 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flu
         
         
         # flux[pos] = (bc_conc-local_conc)*diffquo[spec]*actual_dt
-        flux[pos] = (bc_conc-local_conc)*(1-numpy.exp(-diffquo[spec]*actual_dt))
+        # Run half step of flux first, then other half after chemistry
+        flux[pos] = (bc_conc-local_conc)*(1-numpy.exp(-diffquo[spec]*actual_dt/2))
         
         data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + flux[pos]
         
@@ -135,17 +136,43 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flu
                                         ffi.addressof(data.aux_data),status)
         data.state.porosity=porosity
         converged=status.converged
+                
+        
     if converged:
         check_status(status,False)
         
         chem.GetAuxiliaryOutput(ffi.new('void **',data.engine_state),ffi.addressof(data.properties),ffi.addressof(data.state),
                                         ffi.addressof(data.aux_data),ffi.addressof(data.aux_output),status)
         check_status(status,False)
-        # if (numpy.array(get_alquimiavector(data.state.total_mobile))<numpy.array(get_alquimiavector(data.aux_output.primary_free_ion_concentration))).any():
-        #     print('Total mobile:',get_alquimiavector(data.state.total_mobile))
-        #     print('Free mobile:',get_alquimiavector(data.aux_output.primary_free_ion_concentration))
-        #     print('Total - Free:',numpy.array(get_alquimiavector(data.state.total_mobile))-numpy.array(get_alquimiavector(data.aux_output.primary_free_ion_concentration)))
-        #     raise RuntimeError('Total ion concentration less than free ion concentration')
+        
+        # Second half of flux
+        flux=numpy.zeros(data.meta_data.primary_names.size)
+        for spec in diffquo.keys():
+            pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+            bc_conc=bc.total_mobile.data[pos]
+            local_conc=data.state.total_mobile.data[pos]
+            
+            
+            # flux[pos] = (bc_conc-local_conc)*diffquo[spec]*actual_dt
+            # Run half step of flux first, then other half after chemistry
+            flux[pos] = (bc_conc-local_conc)*(1-numpy.exp(-diffquo[spec]*actual_dt/2))
+            
+            data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + flux[pos]
+            
+            if bc_conc<0:
+                raise ValueError('Boundary condition concentration of %s < 0'%spec)
+            if local_conc<0:
+                raise RuntimeError('Initial concentration of %s < 0'%spec)
+
+            # Here we test if the flux was fast enough to change concentration significantly relative to bc value
+            # If the change is more than flux_tol*bc, we cut the time step to resolve changes better
+            if abs(data.state.total_mobile.data[pos] - local_conc) > bc_conc*flux_tol:
+                # print('Cutting time step to resolve flux better')
+                cut_for_flux=True
+                        
+        if cut_for_flux:
+            raise RuntimeError('Cut for flux after chemistry')
+        
         return max_cuts
     else:
         # Undo influx because we will do it again in the shorter run
@@ -221,6 +248,15 @@ def convert_condition_to_alquimia(cond,name):
             condition.aqueous_constraints.data[num].constraint_type[0:len('mineral')]='mineral'.encode()
             condition.aqueous_constraints.data[num].value=float(constraint.split()[0].replace('d','e'))
             condition.aqueous_constraints.data[num].associated_species[0:len(constraint.split()[2])]=constraint.split()[2].encode()
+        elif constraint.split()[1]=='TOTAL_SORB':
+            condition.aqueous_constraints.data[num].constraint_type[0:len('total_sorbed')]='total_sorbed'.encode()
+            condition.aqueous_constraints.data[num].value=float(constraint.split()[0].replace('d','e'))
+        elif constraint.split()[1]=='TOTAL_AQ_PLUS_SORB':
+            condition.aqueous_constraints.data[num].constraint_type[0:len('total_aqueous_plus_sorbed')]='total_aqueous_plus_sorbed'.encode()
+            condition.aqueous_constraints.data[num].value=float(constraint.split()[0].replace('d','e'))
+        elif constraint.split()[1]=='Z':
+            condition.aqueous_constraints.data[num].constraint_type[0:len('charge')]='charge'.encode()
+            condition.aqueous_constraints.data[num].value=float(constraint.split()[0].replace('d','e'))
         else:
             raise ValueError('Unrecognized constraint type: %s'%constraint)
 
@@ -283,7 +319,8 @@ def init_alquimia(input_file,hands_off=True):
     return (chem,data,sizes,status)
 
 def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,saturation=1.0,hands_off=True,
-                    water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,bc=None,diffquo={},rateconstants={},truncate_concentration=0.0,CEC=None):
+                    water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,bc=None,
+                    diffquo={},rateconstants={},truncate_concentration=0.0,CEC=None,printstep=50):
     
     import time
     t0=time.time()
@@ -409,105 +446,66 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
             if len(l)>0:
                 secondary_names.append(l)
 
+    c=cell(volume=volume,rateconstants=rateconstants,diffquo=diffquo,secondary_names=secondary_names)
+    c.copy_from_alquimia(data)
 
-    import numpy
-    output={
-        'total_mobile':numpy.ma.masked_all((nsteps,data.state.total_mobile.size),dtype=float),
-        'free':numpy.ma.masked_all((nsteps,data.state.total_mobile.size),dtype=float),
-        'immobile':numpy.ma.masked_all((nsteps,data.state.total_mobile.size),dtype=float),
-        'aq_complex':numpy.ma.masked_all((nsteps,data.aux_output.secondary_free_ion_concentration.size),dtype=float),
-        'mineral_VF':numpy.ma.masked_all((nsteps,data.state.mineral_volume_fraction.size),dtype=float),
-        'mineral_rate':numpy.ma.masked_all((nsteps,data.state.mineral_volume_fraction.size),dtype=float),
-        'time':numpy.arange(nsteps,dtype=float)*dt,
-        'actual_dt':numpy.ma.masked_all(nsteps,dtype=float),'ncuts':numpy.ma.masked_all(nsteps,dtype=int),
-        'porosity':numpy.ma.masked_all(nsteps,dtype=float)
-        # There is some other stuff to add. Secondary species, mineral reaction rates, etc
-    }
+    c.setup_output(nsteps+1,dt)
+    c.write_output(0,dt)
 
-    output['total_mobile'][0,:]=get_alquimiavector(data.state.total_mobile)
-    output['free'][0,:]=get_alquimiavector(data.aux_output.primary_free_ion_concentration)
-    output['aq_complex'][0,:]=get_alquimiavector(data.aux_output.secondary_free_ion_concentration)
-    output['immobile'][0,:]=get_alquimiavector(data.state.total_immobile)
-    output['mineral_VF'][0,:]=get_alquimiavector(data.state.mineral_volume_fraction)
-    output['time'][0]=0.0
-    output['mineral_rate'][0,:]=get_alquimiavector(data.aux_output.mineral_reaction_rate)
-    output['porosity'][0]=data.state.porosity
 
     tprev=t0
     num_cuts=0 # Keep track of cuts from previous step, so it doesn't start from zero each time
     success=True
     for step in range(1,nsteps):
         try:
+            c.copy_to_alquimia(data)
             dq={}
             if bc is not None:
                 primarynames=get_alquimiavector(data.meta_data.primary_names)
                 for spec in primarynames:
-                    if spec in diffquo.keys():
-                        if numpy.iterable(diffquo[spec]):
-                            dq[spec]=diffquo[spec][step%len(diffquo[spec])]
+                    if spec in c.diffquo.keys():
+                        if numpy.iterable(c.diffquo[spec]):
+                            dq[spec]=c.diffquo[spec][step%len(c.diffquo[spec])]
                         else:
-                            dq[spec]=diffquo[spec]
+                            dq[spec]=c.diffquo[spec]
                     else:
                         dq[spec]=0.0
                         # print('O2 before: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
-            num_cuts=run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+            num_cuts=c.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+            c.copy_from_alquimia(data)
+            # Write output
+            c.write_output(step+1,dt,num_cuts)
             # print('O2 after: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
         except RuntimeError as err:
-            print('ERROR on timestep %d: %s'%(step,err))
+            print('ERROR on timestep %d, layer %d: %s'%(step,n,err))
             print('Returning output so far')
-            output['total_mobile'][step,:]=get_alquimiavector(data.state.total_mobile)
-            output['immobile'][step,:]=get_alquimiavector(data.state.total_immobile)
-            output['mineral_VF'][step,:]=get_alquimiavector(data.state.mineral_volume_fraction)
-            output['time'][step]=step*dt
-            
-            
-            output['mineral_rate'][step,:]=get_alquimiavector(data.aux_output.mineral_reaction_rate)
-            output['free'][step,:]=get_alquimiavector(data.aux_output.primary_free_ion_concentration)
-            output['aq_complex'][step,:]=get_alquimiavector(data.aux_output.secondary_free_ion_concentration)
-            output['porosity'][step]=data.state.porosity
+            c.write_output(data,step,dt,num_cuts)
             success=False
             break
         except KeyboardInterrupt as err:
             print('INTERRUPTED on timestep %d'%(step))
             print('Returning output so far')
-            output['total_mobile'][step,:]=get_alquimiavector(data.state.total_mobile)
-            output['immobile'][step,:]=get_alquimiavector(data.state.total_immobile)
-            output['mineral_VF'][step,:]=get_alquimiavector(data.state.mineral_volume_fraction)
-            output['time'][step]=step*dt
-            
-            
-            output['mineral_rate'][step,:]=get_alquimiavector(data.aux_output.mineral_reaction_rate)
-            output['free'][step,:]=get_alquimiavector(data.aux_output.primary_free_ion_concentration)
-            output['aq_complex'][step,:]=get_alquimiavector(data.aux_output.secondary_free_ion_concentration)
-            output['porosity'][step]=data.state.porosity
+            c.write_output(data,step,dt,num_cuts)
             success=False
             break
                 
         
-        if step%25==0:
+        if step%printstep==0:
             t1=time.time()
             print('*** Step {step:d} of {nsteps:d}. Time elapsed: {t:d} s ({tperstep:1.1g} s per {steplength:1.1g} hour timestep). Mean cuts: {meancuts:1.1f} Mean dt: {meandt:1.1f} s ***'.format(
-                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=output['ncuts'][step-10:step].mean(),meandt=output['actual_dt'][step-10:step].mean(),steplength=dt/3600))
+                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=c.output['ncuts'][step-10:step].mean(),meandt=c.output['actual_dt'][step-10:step].mean(),steplength=dt/3600))
             tprev=t1
-        output['total_mobile'][step,:]=get_alquimiavector(data.state.total_mobile)
-        output['immobile'][step,:]=get_alquimiavector(data.state.total_immobile)
-        output['mineral_VF'][step,:]=get_alquimiavector(data.state.mineral_volume_fraction)
-        output['time'][step]=step*dt
-        output['actual_dt'][step]=dt/2**num_cuts
-        output['ncuts'][step]=num_cuts
-        output['mineral_rate'][step,:]=get_alquimiavector(data.aux_output.mineral_reaction_rate)
-        output['free'][step,:]=get_alquimiavector(data.aux_output.primary_free_ion_concentration)
-        output['aq_complex'][step,:]=get_alquimiavector(data.aux_output.secondary_free_ion_concentration)
-        output['porosity'][step]=data.state.porosity
         
     
         
     import pandas
     # Put into a dataframe in the same format as reading it out of a tecfile
-    output_DF,output_units=convert_output(output,data.meta_data,secondary_names)
+    # output_DF,output_units=convert_output(output,data.meta_data,secondary_names)
     
     # Need to free all the Alquimia arrays?
     lib.FreeAlquimiaData(data)
+    
+    c.convert_output()
     
     if success:
         print('''
@@ -517,8 +515,287 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
         *****************************************************
 
         ''')
-    return output_DF,output_units
-    
+    return c.output_DF,c.output_units
+
+
+class cell:
+    def __init__(self,volume,saturation=1.0,temperature=20.0,water_density=1000.0,porosity=0.25,pressure=101325.0,BD=1.5,CEC=50.0,rateconstants={},diffquo={},secondary_names=[]):
+        self.volume=volume # m3
+        self.saturation=saturation   # out of 1.0
+        self.temperature=temperature # degrees C
+        self.water_density=water_density # kg/m3
+        self.porosity=porosity # out of 1.0
+        self.pressure=pressure # Pa
+        self.mineral_specific_surface_area={}
+        self.mineral_volume_fraction={}
+        self.surface_site_density={}
+        self.total_immobile={}
+        self.total_mobile={}
+        self.free_mobile={}
+        self.rateconstants=rateconstants
+        self.mineral_rate_cnst={}
+        self.aux_ints=[]
+        self.aux_doubles=[]
+        self.mineral_reaction_rate={}
+        self.secondary_free_ion_concentration={}
+        self.diffquo=diffquo
+        self.BD=BD   # g/cm3
+        self.CEC=CEC # meq/kg
+        self.secondary_names=secondary_names
+        
+        # Some things that I'm not using are skipped
+        
+    def copy_from_alquimia(self,data):
+        self.volume=data.properties.volume
+        self.saturation=data.properties.saturation
+        self.temperature=data.state.temperature
+        self.water_density=data.state.water_density
+        self.porosity=data.state.porosity
+        self.pressure=data.state.aqueous_pressure
+        
+        self.mineral_names=get_alquimiavector(data.meta_data.mineral_names)
+        for num in range(data.meta_data.mineral_names.size):
+            self.mineral_rate_cnst[self.mineral_names[num]]=data.properties.mineral_rate_cnst.data[num]
+            self.mineral_specific_surface_area[self.mineral_names[num]]=data.state.mineral_specific_surface_area.data[num]
+            self.mineral_volume_fraction[self.mineral_names[num]]=data.state.mineral_volume_fraction.data[num]
+            self.mineral_reaction_rate[self.mineral_names[num]]=data.aux_output.mineral_reaction_rate.data[num]
+            
+        self.primary_names=get_alquimiavector(data.meta_data.primary_names)
+        for num in range(len(self.primary_names)):
+            self.total_immobile[self.primary_names[num]]=data.state.total_immobile.data[num]
+            self.total_mobile[self.primary_names[num]]=data.state.total_mobile.data[num]
+            self.free_mobile[self.primary_names[num]]=data.aux_output.primary_free_ion_concentration.data[num]
+            
+        for num in range(len(self.secondary_names)):
+            self.secondary_free_ion_concentration[self.secondary_names[num]]=data.aux_output.secondary_free_ion_concentration.data[num]
+            
+        self.surface_site_names=get_alquimiavector(data.meta_data.surface_site_names)
+        for num in range(len(self.surface_site_names)):
+            self.surface_site_density[self.surface_site_names[num]]=data.state.surface_site_density.data[num]
+            
+        self.aux_ints=get_alquimiavector(data.aux_data.aux_ints)
+        self.aux_doubles=get_alquimiavector(data.aux_data.aux_doubles)
+        
+        
+    def copy_to_alquimia(self,data):
+        data.properties.volume=self.volume
+        data.properties.saturation=self.saturation
+        data.state.temperature=self.temperature
+        data.state.water_density=self.water_density
+        data.state.porosity=self.porosity
+        data.state.aqueous_pressure=self.pressure
+        
+        
+        for num in range(len(self.mineral_names)):
+            data.properties.mineral_rate_cnst.data[num]=self.mineral_rate_cnst[self.mineral_names[num]]
+            data.state.mineral_specific_surface_area.data[num]=self.mineral_specific_surface_area[self.mineral_names[num]]
+            data.state.mineral_volume_fraction.data[num]=self.mineral_volume_fraction[self.mineral_names[num]]
+            
+        for num in range(len(self.surface_site_names)):
+            data.state.surface_site_density.data[num]=self.surface_site_density[self.surface_site_names[num]]
+            
+        for num in range(len(self.primary_names)):
+            data.state.total_immobile.data[num]=self.total_immobile[self.primary_names[num]]
+            data.state.total_mobile.data[num]=self.total_mobile[self.primary_names[num]]
+            
+        for num in range(len(self.aux_ints)):
+            data.aux_data.aux_ints.data[num]=self.aux_ints[num]
+        for num in range(len(self.aux_doubles)):
+            data.aux_data.aux_doubles.data[num]=self.aux_doubles[num]
+        
+
+    def setup_output(self,nsteps,dt):
+        self.output={
+            'total_mobile':numpy.ma.masked_all((nsteps,len(self.total_mobile)),dtype=float),
+            'free':numpy.ma.masked_all((nsteps,len(self.total_mobile)),dtype=float),
+            'immobile':numpy.ma.masked_all((nsteps,len(self.total_mobile)),dtype=float),
+            'aq_complex':numpy.ma.masked_all((nsteps,len(self.secondary_names)),dtype=float),
+            'mineral_VF':numpy.ma.masked_all((nsteps,len(self.mineral_rate_cnst)),dtype=float),
+            'mineral_rate':numpy.ma.masked_all((nsteps,len(self.mineral_rate_cnst)),dtype=float),
+            'time':numpy.arange(nsteps,dtype=float)*dt,
+            'actual_dt':numpy.ma.masked_all(nsteps,dtype=float),'ncuts':numpy.ma.masked_all(nsteps,dtype=int),
+            'porosity':numpy.ma.masked_all(nsteps,dtype=float),
+            'CEC H+':numpy.ma.masked_all(nsteps,dtype=float)
+        }
+        
+    def write_output(self,step,dt,num_cuts=0):
+        self.output['total_mobile'][step,:]=numpy.array([self.total_mobile[name] for name in self.primary_names])
+        self.output['free'][step,:]=numpy.array([self.free_mobile[name] for name in self.primary_names])
+        self.output['aq_complex'][step,:]=numpy.array([self.secondary_free_ion_concentration[name] for name in self.secondary_names])
+        self.output['immobile'][step,:]=numpy.array([self.total_immobile[name] for name in self.primary_names])
+        self.output['mineral_VF'][step,:]=numpy.array([self.mineral_volume_fraction[name] for name in self.mineral_names])
+        self.output['time'][step]=step*dt
+        self.output['mineral_rate'][step,:]=numpy.array([self.mineral_reaction_rate[name] for name in self.mineral_names])
+        self.output['porosity'][step]=self.porosity
+        self.output['actual_dt'][step]=dt/2**num_cuts
+        self.output['ncuts'][step]=num_cuts
+        # Keep track of how much H+ is in the carboxylate buffer rather than the CEC site, so we can plot CEC-exchangeable H+ later. 
+        # Assumes there is one ion exchange site, and that the buffering sorption site is on Rock(s)
+        # Aux doubles in this spot stores free surface site density (probably best not to rely on aux_doubles in general though)
+        self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[len(self.total_mobile)*2+len(self.secondary_free_ion_concentration)+1+self.surface_site_names.index('>Carboxylate-')])
+        
+    def convert_output(self):
+        import pandas
+        output_DF=pandas.DataFrame(index=self.output['time'])
+        output_DF['Porosity']=self.output['porosity']
+        output_DF['ncuts']=self.output['ncuts']
+        output_DF['actual_dt']=self.output['actual_dt']
+        output_units={'time':'s','Porosity':'NA','ncuts':'NA','actual_dt':'s'}
+        total=pandas.DataFrame(self.output['total_mobile'],columns=self.primary_names,index=self.output['time']).add_prefix('Total ')
+        for col in total.columns:
+            output_DF[col]=total[col]
+        output_units.update([('Total '+s,'M') for s in self.primary_names])
+        free=pandas.DataFrame(self.output['free'],columns=self.primary_names,index=self.output['time']).add_prefix('Free ')
+        for col in free.columns:
+            output_DF[col]=free[col]
+        output_units.update([('Free '+s,'M') for s in self.primary_names])
+        sorbed=pandas.DataFrame(self.output['immobile'],columns=self.primary_names,index=self.output['time']).add_prefix('Total Sorbed ')
+        for col in sorbed.columns:
+            output_DF[col]=sorbed[col]
+        output_units.update([('Total Sorbed '+s,'mol/m^3') for s in self.primary_names])
+        mineral_VF=pandas.DataFrame(self.output['mineral_VF'],columns=self.mineral_names,index=self.output['time']).add_suffix(' VF')
+        for col in mineral_VF.columns:
+            output_DF[col]=mineral_VF[col]
+        output_units.update([(s+' VF','m^3 mnrl/m^3 bulk') for s in self.mineral_names])
+        mineral_rate=pandas.DataFrame(self.output['mineral_rate'],columns=self.mineral_names,index=self.output['time']).add_suffix(' Rate')
+        for col in mineral_rate.columns:
+            output_DF[col]=mineral_rate[col]
+        output_units.update([(s+' Rate','mol/m^3/sec') for s in self.mineral_names])
+        secondary=pandas.DataFrame(self.output['aq_complex'],columns=self.secondary_names,index=self.output['time'])
+        for col in secondary.columns:
+            output_DF[col]=secondary[col]
+        output_units.update([(s,'M') for s in self.secondary_names])
+        
+        output_DF['CEC H+']=pandas.DataFrame(self.output['CEC H+'],index=self.output['time'])
+        output_units['CEC H+']='mol/m^3'
+        
+        self.output_DF=output_DF.reset_index(drop=True).set_index(output_DF.index/(24*3600))
+        self.output_units=output_units
+        
+        
+    def run_onestep(self,chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flux_tol=0.15,truncate_concentration=0.0,rateconstants={},min_cuts=0):
+        self.copy_to_alquimia(data)
+        converged=False
+        porosity=data.state.porosity
+        
+        max_cuts=num_cuts
+        actual_dt=dt/2**num_cuts
+        
+        for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+            data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
+        
+        for spec in diffquo.keys():
+            pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+            if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
+                # print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
+                for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+                    if '->' in reactname and spec in reactname.split('->')[0].split():  # reactants
+                        
+                        # print('Setting rate of reaction %s to zero'%reactname)
+                        data.properties.aqueous_kinetic_rate_cnst.data[num]=0.0
+        
+        cut_for_flux=False
+        flux=numpy.zeros(data.meta_data.primary_names.size)
+        for spec in diffquo.keys():
+            pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+            bc_conc=bc.total_mobile.data[pos]
+            local_conc=data.state.total_mobile.data[pos]
+            
+            
+            # flux[pos] = (bc_conc-local_conc)*diffquo[spec]*actual_dt
+            # Run half step of flux first, then other half after chemistry
+            flux[pos] = (bc_conc-local_conc)*(1-numpy.exp(-diffquo[spec]*actual_dt/2))
+            
+            data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + flux[pos]
+            
+            if bc_conc<0:
+                raise ValueError('Boundary condition concentration of %s < 0'%spec)
+            if local_conc<0:
+                raise RuntimeError('Initial concentration of %s < 0'%spec)
+
+            # Here we test if the flux was fast enough to change concentration significantly relative to bc value
+            # If the change is more than flux_tol*bc, we cut the time step to resolve changes better
+            # if flux[pos] != 0:
+            #     print(data.state.total_mobile.data[pos],local_conc,data.state.total_mobile.data[pos] - local_conc,bc_conc)
+            if abs(data.state.total_mobile.data[pos] - local_conc) > bc_conc*flux_tol:
+                # print('Cutting time step to resolve flux better')
+                cut_for_flux=True
+                
+                
+        if cut_for_flux or num_cuts<min_cuts:
+            converged=False
+        else:
+            chem.ReactionStepOperatorSplit(ffi.new('void **',data.engine_state),actual_dt,ffi.addressof(data.properties),ffi.addressof(data.state),
+                                            ffi.addressof(data.aux_data),status)
+            data.state.porosity=porosity
+            converged=status.converged
+                    
+            
+        if converged:
+            check_status(status,False)
+            
+            chem.GetAuxiliaryOutput(ffi.new('void **',data.engine_state),ffi.addressof(data.properties),ffi.addressof(data.state),
+                                            ffi.addressof(data.aux_data),ffi.addressof(data.aux_output),status)
+            check_status(status,False)
+            
+            # Second half of flux
+            flux=numpy.zeros(data.meta_data.primary_names.size)
+            for spec in diffquo.keys():
+                pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+                bc_conc=bc.total_mobile.data[pos]
+                local_conc=data.state.total_mobile.data[pos]
+                
+                
+                # flux[pos] = (bc_conc-local_conc)*diffquo[spec]*actual_dt
+                # Run half step of flux first, then other half after chemistry
+                flux[pos] = (bc_conc-local_conc)*(1-numpy.exp(-diffquo[spec]*actual_dt/2))
+                
+                data.state.total_mobile.data[pos] = data.state.total_mobile.data[pos] + flux[pos]
+                
+                if bc_conc<0:
+                    raise ValueError('Boundary condition concentration of %s < 0'%spec)
+                if local_conc<0:
+                    raise RuntimeError('Initial concentration of %s < 0'%spec)
+
+                # Here we test if the flux was fast enough to change concentration significantly relative to bc value
+                # If the change is more than flux_tol*bc, we cut the time step to resolve changes better
+                if abs(data.state.total_mobile.data[pos] - local_conc) > bc_conc*flux_tol:
+                    # print('Cutting time step to resolve flux better')
+                    cut_for_flux=True
+                    converged=False
+
+        if converged:
+            self.copy_from_alquimia(data)
+            return max_cuts
+        else:
+
+            if actual_dt/2<min_dt:
+                if cut_for_flux:
+                    raise RuntimeError('Pflotran failed to converge (because of boundary fluxes) after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
+                else:
+                    raise RuntimeError('Pflotran failed to converge after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
+            
+            # data will be reset to layer contents at beginning of next call
+            # Run it twice, because we cut the time step in half
+            ncuts=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+            # If this completes, it means that run_onestep was successful
+            self.copy_from_alquimia(data)
+            if ncuts>max_cuts:
+                max_cuts=ncuts
+                
+            # This starts from ncuts so it doesn't have to try all the ones that failed again
+            for n in range(2**(ncuts-(num_cuts+1))):
+                ncuts2=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+                self.copy_from_alquimia(data)
+                if ncuts2>max_cuts:
+                    max_cuts=ncuts2
+
+            return max_cuts
+        
+
+
+
+
     
 def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewater_ax=None,do_legend=False,gdrywt=False,BD=None,SOC_pct=None,cellulose_SOC_frac=1.0):
     if gdrywt:

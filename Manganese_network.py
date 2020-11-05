@@ -15,7 +15,7 @@ decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'5.0 
 decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':1e4}),
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
 decomp_network.decomp_pool(name='Mn+++',kind='primary',constraints={'initial':'1.0e-30 M Birnessite2'}), # Should I just use MnO4-- as the primary instead? That would allow using original Bernessite def
-decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}),
+decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}), # Change this to reflect observed exchangeable Mn
 decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
 decomp_network.decomp_pool(name='Tracer2',kind='primary',constraints={'initial':1e-15}), # To accumulate root Mn++ uptake
@@ -84,7 +84,7 @@ decomp_network.decomp_pool(name='Sorption_capacity',constraints={'initial':1e-20
 ]
 
 # Fraction of Mn+++ that is not recycled in Mn-Peroxidase enzyme loop
-def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,Mn3_scale=1e-5,CEC=40.0,change_rate={},DOM_sorption_k=1.0):
+def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,Mn3_scale=1e-5,NH4_scale=1e-2,CEC=40.0,change_rate={},DOM_sorption_k=1.0):
     Mn_molarmass=54.94 #g/mol
     C_molarmass=12.01
     leaf_Cfrac_mass=0.4
@@ -97,12 +97,21 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
                                         reactiontype='SOMDECOMP'),
                                         
     # Need a way to make a soluble reactive compound from lignin. Treating it like hydrolysis, but allowing only a small amount to be generated
+    # Model runs faster if Mn limitation is on this step (source limit) instead of limiting decomposition rate of DOM2 and building up inhibiting DOM2 concentrations
             decomp_network.reaction(name='Lignin exposure',reactant_pools={'Lignin':1.0},product_pools={'DOM2':1.0},
                                             rate_constant=2e-1,rate_units='y', 
-                                        inhibition_terms=[decomp_network.inhibition(species='DOM2',type='MONOD',k=1e-2),
-                                        decomp_network.inhibition(species='Cellulose',type='MONOD',k=3e3), # Suggested by Sun et al 2019, which found that MnP activity only increased late in decomposition
-                                        decomp_network.inhibition(species='Mn++',type='INVERSE_MONOD',k=Mn2_scale)],
+                                        inhibition_terms=[decomp_network.inhibition(species='DOM2',type='MONOD',k=1e0),
+                                        decomp_network.inhibition(species='Cellulose',type='MONOD',k=40), # Suggested by Sun et al 2019, which found that MnP activity only increased late in decomposition
+                                        decomp_network.inhibition(species='Mn++',type='INVERSE_MONOD',k=Mn2_scale),decomp_network.inhibition(species='NH4+',k=NH4_scale,type='MONOD')
+                                        ],
                                         reactiontype='SOMDECOMP'),
+                                        
+            # Direct depolymerization of lignin into DOM1. Basically to allow some decomposition to occur in absence of Mn++ so lignin doesn't build up indefinitely
+            # Still deciding whether to do this way or by DOM2 oxidation? Or leaching of DOM2? Or not at all?
+            decomp_network.reaction(name='Lignin depolymerization',reactant_pools={'Lignin':1.0},product_pools={'DOM1':1.0},
+                                            rate_constant=2e-1,rate_units='y', 
+                                        inhibition_terms=[decomp_network.inhibition(species='Mn++',type='MONOD',k=Mn2_scale)],
+                                                            reactiontype='SOMDECOMP'),
                                         
     # Mn reduction turns DOM2 (lignin-based) into DOM1 (odixized, decomposable)
             # decomp_network.reaction(name='Lignin Mn reduction',reactant_pools={'DOM2':1.0,'Mn+++':1.0},product_pools={'Mn++':1.0,'H+':1.0,'DOM1':1.0},
@@ -120,21 +129,23 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
         # 1 DOM2 + 1 Mn++ + x H+ -> 1 DOM1 + (1-x) Mn++ + x Mn+++
             decomp_network.reaction(name='Mn Peroxidase',reactant_pools={'DOM2':1.0,'Mn++':Mn_peroxidase_Mn3_leakage,'H+':Mn_peroxidase_Mn3_leakage},
                                                          product_pools={'DOM1':1.0,'Mn+++':Mn_peroxidase_Mn3_leakage},
-                                                         monod_terms=[decomp_network.monod(species='DOM2',k=1e0,threshold=1.1e-20),decomp_network.monod(species='Mn++',k=Mn2_scale,threshold=1.1e-20)],
-                                                         # inhibition_terms=[decomp_network.inhibition(species='Mn++',k=1.3e-14,type='INVERSE_MONOD')],
+                                                         monod_terms=[decomp_network.monod(species='DOM2',k=1e-1,threshold=1.1e-20),decomp_network.monod(species='Mn++',k=Mn2_scale*1e1,threshold=1.1e-20)],
+                                                         inhibition_terms=[decomp_network.inhibition(species='NH4+',k=NH4_scale,type='MONOD')],
                                                          rate_constant=5e-6,reactiontype='MICROBIAL'),
                                         
-    # Calculating these as per unit carbon, so dividing by the 6 carbons in a glucose
-    # C6H12O6 + 4 H2O -> 2 CH3COO- + 2 HCO3- + 4 H+ + 4 H2
-            # decomp_network.reaction(name='fermentation',reactant_pools={'DOM1':6/6},product_pools={'Acetate-':2/6,'HCO3-':2/6,'H+':4/6+4*2/6,'Tracer':2/6,'Mn++':leaf_Mn_frac}, # balancing pH of FeIII release requires an extra 5.5 H+ to be released here
-            #                                 rate_constant=1e-10,reactiontype='MICROBIAL', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
-            #                             inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='MONOD'),decomp_network.inhibition(species='Acetate-',k=6.25e-5,type='MONOD')],
-            #                             monod_terms=[decomp_network.monod(species='DOM1',k=1e-5,threshold=1.1e-15)]),
 
     # CH2O + H2O -> CO2 + 4H+ + 4 e-
     # O2   + 4H+ + 4 e- -> 2H2O
             decomp_network.reaction(name='DOM aerobic respiration',reactant_pools={'DOM1':1.0,'O2(aq)':1.0},product_pools={'HCO3-':1.0,'H+':1.0,'Tracer':1.0,'Mn++':leaf_Mn_frac},
                                             monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM1',k=1e0,threshold=1.1e-14)],
+                                        rate_constant=1.0e-5,reactiontype='MICROBIAL'),
+                                        
+    # CH2O + H2O -> CO2 + 4H+ + 4 e-
+    # O2   + 4H+ + 4 e- -> 2H2O
+    # Aerobic respiration of DOM2, to allow some lignin decomposition in absence of Mn. Assume it is very slow
+            decomp_network.reaction(name='DOM2 aerobic respiration',reactant_pools={'DOM2':1.0,'O2(aq)':1.0},product_pools={'HCO3-':1.0,'H+':1.0,'Tracer':1.0,'Mn++':leaf_Mn_frac},
+                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM2',k=1e0,threshold=1.1e-14)],
+                                            inhibition_terms=[decomp_network.inhibition(species='Mn++',type='MONOD',k=Mn2_scale)],
                                         rate_constant=1.0e-5,reactiontype='MICROBIAL'),
 
     # Manganese reduction reaction
@@ -178,7 +189,7 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
                                     rate_constant=1.0e-5,reactiontype='MICROBIAL'),
             
             # Cation exchange
-            decomp_network.ion_exchange(name='Cation exchange',cations={'Mn++':2.0,'Mn+++':0.6e0,'Al+++':1.0,'Mg++':0.8,'Ca++':4.1,'Na+':1.1,'K+':1.1,'H+':5.0},CEC=CEC,mineral=None),
+            decomp_network.ion_exchange(name='Cation exchange',cations={'Mn++':20.0,'Mn+++':0.6,'Al+++':100.0,'Mg++':1.1,'Ca++':1.0,'Na+':0.5,'K+':0.1,'H+':1.1},CEC=CEC,mineral=None),
             
             # sorption rate is microbial DOM1 -> DOM3 (d/dt = V1*sorption_capacity*DOM1/(DOM1+k))
             # Desorption rate is general DOM3 -> DOM1 (d/dt = V2*DOM3)
