@@ -184,7 +184,7 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
             
     # Root uptake of Mn++. Does this need a charge balancing release of anions?
     # According to Haynes (1990), imbalance in root anion vs cation uptake is usually balanced by H+ or OH- release. I guess in this case we need to assume that all other ions are balanced except for Mn?
-            decomp_network.reaction(name='Root uptake of Mn++',stoich='1.0 Mn++ -> 1.0 Tracer2 + 2 H+',monod_terms=[decomp_network.monod(species='Mn++',k=Mn2_scale,threshold=1.1e-20)],
+            decomp_network.reaction(name='Root uptake of Mn++',stoich='1.0 Mn++ -> 1.0 Tracer2 + 2 H+',monod_terms=[decomp_network.monod(species='Mn++',k=1e-7,threshold=1.1e-20)],
                                     biomass='Root_biomass',biomass_yield=0.0,
                                     rate_constant=1.0e-5,reactiontype='MICROBIAL'),
             

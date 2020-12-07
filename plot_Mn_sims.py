@@ -9,24 +9,31 @@ import xarray
 #   'Mn_ph55_saved_2020-08-31.nc',
 # ]
 
-
-
-data_date='2020-11-03'
-phs=arange(4,6.1,0.5)
-# phs=[4.0,4.5,5.0]
-result_files= ['Mn_output/Mn_pH%1.1f_%s.nc'%(pH,data_date) for pH in phs]
-
 leafC_mass_conv=1.0 # For simulations after I started applying the C to dry mass conversion in the sims. Otherwise it should be 0.4
 
-result_datas=[]
-for f in result_files:
-    with xarray.open_dataset(f,decode_times=False) as d:
-        d.load()
-        result_datas.append(d)
+data_date='2020-11-17'
+phs=arange(4,6.1,0.5)
+Ndeps=[0,50,150]
+# Ndeps=[0]
+# phs=[4.0,4.5,5.0]
 
-result_data=xarray.concat(result_datas,dim='sim',join='outer')
+result_datas_byNdep=[]
+for Ndep in Ndeps:
+    result_files= ['Mn_output/Mn_pH%1.1f_Ndep%03d_%s.nc'%(pH,Ndep,data_date) for pH in phs]
 
-incubation_files=['Mn_output/Mn_incubations_pH%1.1f_%s.nc'%(pH,data_date) for pH in phs]
+    result_datas=[]
+    for f in result_files:
+        with xarray.open_dataset(f,decode_times=False) as d:
+            d.load()
+            result_datas.append(d)
+
+    result_datas_byNdep.append(xarray.concat(result_datas,dim='pH_sim',join='outer'))
+    
+data_allNdeps=xarray.concat(result_datas_byNdep,dim='Ndep_sim',join='outer')
+
+result_data=data_allNdeps.isel(Ndep_sim=0)
+
+incubation_files=['Mn_output/Mn_incubations_pH%1.1f_Ndep%03d_%s.nc'%(pH,0,data_date) for pH in phs]
 incubation_datas=[]
 for f in incubation_files:
     with xarray.open_dataset(f,decode_times=False) as d:
@@ -70,7 +77,7 @@ ax.plot(pH_sims,total_MAOM.isel(time=9),':o',c='k',label='MAOM')
 ax.set_xlabel('Soil pH')
 ax.set_ylabel('OM stock (kg C m$^{-2}$)')
 ax.set_title('Mineral-associated organic matter')
-ax.set_ylim(bottom=0)
+# ax.set_ylim(bottom=0)
 
 ax=axs[0,0]
 # Converting these from per kgC to kg dry mass by multiplying by 0.4
@@ -120,18 +127,18 @@ for num in range(len(axs)):
     axs[num,0].text(0.01,1.08,'('+ascii_lowercase[num]+')',transform=axs[num,0].transAxes)
 
 
-f,axs=subplots(1,len(result_data['sim']),clear=True,num='Mn profiles',squeeze=False,figsize=(14.,3.))
+f,axs=subplots(1,len(result_data['pH_sim']),clear=True,num='Mn profiles',squeeze=False,figsize=(14.,3.))
 cm=get_cmap('cool')
 norm=matplotlib.colors.Normalize(pH_sims.min(),pH_sims.max())
 
 
-for n,sim in enumerate(result_data['sim']):
-    axs[0,n].plot(totalMn.isel(time=9,sim=sim),result_data['z_middle'].isel(sim=sim),':',c='C0',label='Total Mn: Year 10')
-    axs[0,n].plot(totalMn.isel(time=19,sim=sim),result_data['z_middle'].isel(sim=sim),'--',c='C0',label='Year 20')
-    axs[0,n].plot(totalMn.isel(time=39,sim=sim),result_data['z_middle'].isel(sim=sim),'-',c='C0',label='Year 40')
-    l=axs[0,n].plot(birnessite.isel(time=9,sim=sim),result_data['z_middle'].isel(sim=sim),':',c='C1')
-    axs[0,n].plot(birnessite.isel(time=19,sim=sim),result_data['z_middle'].isel(sim=sim),'--',c='C1')
-    axs[0,n].plot(birnessite.isel(time=30,sim=sim),result_data['z_middle'].isel(sim=sim),'-',label='Birnessite',c='C1')
+for n,sim in enumerate(result_data['pH_sim']):
+    axs[0,n].plot(totalMn.isel(time=9,pH_sim=sim),result_data['z_middle'].isel(pH_sim=sim),':',c='C0',label='Total Mn: Year 10')
+    axs[0,n].plot(totalMn.isel(time=19,pH_sim=sim),result_data['z_middle'].isel(pH_sim=sim),'--',c='C0',label='Year 20')
+    axs[0,n].plot(totalMn.isel(time=39,pH_sim=sim),result_data['z_middle'].isel(pH_sim=sim),'-',c='C0',label='Year 40')
+    # l=axs[0,n].plot(birnessite.isel(time=9,pH_sim=sim),result_data['z_middle'].isel(pH_sim=sim),':',c='C1')
+    # axs[0,n].plot(birnessite.isel(time=19,pH_sim=sim),result_data['z_middle'].isel(pH_sim=sim),'--',c='C1')
+    # axs[0,n].plot(birnessite.isel(time=30,pH_sim=sim),result_data['z_middle'].isel(pH_sim=sim),'-',label='Birnessite',c='C1')
     axs[0,n].set_ylim(result_data.depth.max(),result_data.depth.min())
     axs[0,n].set_title('pH = %1.1f'%pH_sims[sim])
     axs[0,n].set_ylabel('Depth (cm)')
@@ -155,9 +162,9 @@ for z in range(len(result_data['depth'])):
 axs[z,0].set_xlabel('Soil pH')
 axs[0,0].legend()
 axs[1,0].legend(handles=(axs[1,0].lines[0],axs[1,0].lines[3]),labels=('Birnessite','Total Mn'))
-axs[0,0].set_title('%d-%d cm (Organic layer)'%(result_data['z_top'].isel(sim=0,depth=0),result_data['z_bottom'].isel(sim=0,depth=0)))
+axs[0,0].set_title('%d-%d cm (Organic layer)'%(result_data['z_top'].isel(pH_sim=0,depth=0),result_data['z_bottom'].isel(pH_sim=0,depth=0)))
 for z in range(1,len(result_data['depth'])):
-    axs[z,0].set_title('%d-%d cm'%(result_data['z_top'].isel(sim=0,depth=z),result_data['z_bottom'].isel(sim=0,depth=z)))
+    axs[z,0].set_title('%d-%d cm'%(result_data['z_top'].isel(pH_sim=0,depth=z),result_data['z_bottom'].isel(pH_sim=0,depth=z)))
 
 ######
 # Plot annual decomp for comparison with litter decomposition studies
@@ -175,14 +182,14 @@ f,axs=subplots(1,2,num='Litter annual mass loss',clear=True)
 incubation_length=5
 litter_massloss=(1-(incubation_data['Total Sorbed Lignin']+incubation_data['Total Sorbed Cellulose']).isel(time=slice(365*2+365*2,None,365*2*incubation_length),depth=0)/(incubation_data['Total Sorbed Lignin']+incubation_data['Total Sorbed Cellulose']).isel(time=1+365*2,depth=0)).to_masked_array().ravel()*100
 lignin_massloss=(1-(incubation_data['Total Sorbed Lignin']).isel(time=slice(365*2+365*2,None,365*2*incubation_length),depth=0)/(incubation_data['Total Sorbed Lignin']).isel(time=1+365*2,depth=0)).to_masked_array().ravel()*100
-Mn_conc=result_data['litter_Mn'].to_masked_array().ravel()[::incubation_length]*1e-3*Mn_molarmass*leafC_mass_conv
+Mn_conc=result_data['litter_Mn'].to_masked_array().ravel()[::incubation_length]*leafC_mass_conv
 x=argsort(Mn_conc)
 # axs[0].plot(Mn_conc[x],litter_massloss[x],'-o',label='Model mass loss')
 axs[0].plot(Mn_conc[x],lignin_massloss[x],'-o',label='Model lignin mass loss')
 # axs[0].plot(Berg_massloss1['x'],Berg_massloss1['Massloss'],'+',label='Berg multiple species')
-axs[0].plot(Berg_massloss2['x'],Berg_massloss2['Massloss'],'+',label='Berg et al. (2013) measurements')
+axs[0].plot(Berg_massloss2['x']/(1e-3*Mn_molarmass),Berg_massloss2['Massloss'],'+',label='Berg et al. (2013) measurements')
 # axs[0].plot(Davey_data['Mn mg-g-1 DM'],Davey_data['Limit value']*(1-exp(-Davey_data['k value']*365*1*100/Davey_data['Limit value'])),'x',label='Davey Oak')  
-axs[0].set_xlabel('Litter Mn concentration (mg g$^{-1}$)')
+axs[0].set_xlabel('Litter Mn concentration (mmol kg$^{-1}$)')
 axs[0].set_ylabel('Mass loss (%)')
 axs[0].legend()
 axs[0].set_title('One year mass loss')
@@ -210,19 +217,19 @@ cmap=get_cmap('viridis')
 for site in range(len(Davey_data)):
     m=Davey_data['Limit value'][site]
     k=Davey_data['k value'][site]
-    davey_line=axs[1].plot(t,m*(1-exp(-k*t/(m/100))),c=cmap(Davey_data['Mn mg-g-1 DM'][site]/Mn_conc.max()),ls=':')
+    davey_line=axs[1].plot(t,m*(1-exp(-k*t/(m/100))),c=cmap(Davey_data['Mn mg-g-1 DM'][site]/(1e-3*Mn_molarmass)/Mn_conc.max()),ls=':')
     
 initial_mass=(incubation_data['Total Sorbed Lignin']+incubation_data['Total Sorbed Cellulose']).isel(time=1,depth=0)   
 t=arange(0,365*incubation_length-.5,0.5)
 for sim in incubation_data.sim:
     for rep in range(len(result_data['litter_year'])//incubation_length):
         massloss=(1-(incubation_data['Total Sorbed Lignin']+incubation_data['Total Sorbed Cellulose']).isel(depth=0,sim=sim)[1+365*2*rep*incubation_length:365*2*(rep+1)*incubation_length]/initial_mass.sel(sim=sim))*100
-        mod_line=axs[1].plot(t,massloss,c=cmap(result_data['litter_Mn'].isel(sim=sim,litter_year=rep*incubation_length)*1e-3*Mn_molarmass*leafC_mass_conv/Mn_conc.max()))
+        mod_line=axs[1].plot(t,massloss,c=cmap(result_data['litter_Mn'].isel(pH_sim=sim,litter_year=rep*incubation_length)*leafC_mass_conv/Mn_conc.max()))
 
 axs[1].set_xlabel('Time (days)')
 axs[1].set_ylabel('Mass loss (%)')
 cb=f.colorbar(matplotlib.cm.ScalarMappable(cmap=cmap,norm=Normalize(vmin=0,vmax=Mn_conc.max())),ax=axs[1])
-cb.set_label('Litter Mn concentration (mg g$^{-1}$)')
+cb.set_label('Litter Mn concentration (mmol kg$^{-1}$)')
 axs[1].legend(handles=davey_line+mod_line,labels=['Davey et al. (2007) measurements','Model'])
 
 axs[0].text(0.01,1.02,'(a)',transform=axs[0].transAxes)
@@ -302,10 +309,43 @@ def plot_output(output,axs,subsample=48,do_legend=False,**kwargs):
     axs[0,3].set_title('pH')
     axs[0,4].set_title('Exchangeable cations')
 
-f,axs=subplots(ncols=5,nrows=len(result_data.depth),sharex=True,clear=True,num='Simulation results',figsize=(12,6.5))
-plot_output(result_data.isel(sim=1),axs,do_legend=True)
-plot_output(result_data.isel(sim=0),axs,do_legend=False,ls='--')
-plot_output(result_data.isel(sim=2),axs,do_legend=False,ls=':')
+f,axs=subplots(ncols=5,nrows=len(result_data.depth),sharex=False,clear=True,num='Simulation results',figsize=(12,6.5))
+plot_output(result_data.isel(pH_sim=1),axs,do_legend=True)
+plot_output(result_data.isel(pH_sim=0),axs,do_legend=False,ls='--')
+plot_output(result_data.isel(pH_sim=2),axs,do_legend=False,ls=':')
+
+
+
+
+total_cellulose=(data_allNdeps['Total Sorbed Cellulose'].isel(time=slice(365*2*35,None,None)).mean(dim='time') *12e-3*(data_allNdeps.z_bottom-data_allNdeps.z_top)/100).sum(dim='depth') 
+total_lignin=(data_allNdeps['Total Sorbed Lignin'].isel(time=slice(365*2*35,None,None)).mean(dim='time') *12e-3*(data_allNdeps.z_bottom-data_allNdeps.z_top)/100).sum(dim='depth') 
+
+f,ax=subplots(ncols=2,num='pH by Ndep',clear=True)
+h=ax[0].pcolormesh(arange(phs[0]-.25,phs[-1]+0.25,0.5),[0,25,75,175],total_cellulose+total_lignin,edgecolors='w')
+cb=f.colorbar(h,ax=ax[0])
+cb.set_label('Total litter C (kg C m$^{-2}$)')
+ax[0].set_xlabel('pH')
+ax[0].set_ylabel('N deposition rate (kg N ha$^{-1}$ year$^{-1}$)')
+ax[0].set_title('Interaction of pH and nitrogen deposition')
+
+
+markers=['o','s','^','h']
+for Ndep in range(len(Ndeps)):
+    ax[1].plot(phs,(total_cellulose+total_lignin).isel(Ndep_sim=Ndep),label='Ndep = %d kg N ha$^{-1}$ year$^{-1}$'%Ndeps[Ndep],marker=markers[Ndep],lw=1.5,ms=7.0)
+
+ax[1].set_xlabel('pH')
+ax[1].set_ylabel('Total litter C (kg C m$^{-2}$)')
+ax[1].legend()
+ax[1].set_ylim(bottom=0)
+ax[1].set_title('Interaction of pH and nitrogen deposition')
+
+f,ax=subplots(num='pH by Ndep 2',clear=True)
+for Ndep in range(len(Ndeps)):
+    for ph in range(4):
+        bar(Ndep+(1-ph/4)*0.8,(0.163*0.5)/(total_lignin).isel(Ndep_sim=Ndep,pH_sim=ph),width=0.8/4,color=((ph+1)/4,(ph+1)/4,(ph+1)/4),edgecolor='k')
+xticks([0.4,1.4,2.4],['N0','N50','N150'])
+legend(['%1.0f mmol kg$^{-1}$'%data_allNdeps['litter_Mn'].isel(Ndep_sim=0,pH_sim=n,litter_year=39) for n in range(4)],title='Litter Mn')
+ax.set_ylabel('Lignin turnover time (year$^{-1}$)')
 
 import Manganese_network as Mn
 import decomp_network
