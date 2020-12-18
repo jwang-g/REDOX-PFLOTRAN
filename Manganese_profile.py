@@ -345,7 +345,7 @@ def copy_to_layers(data_xarray,layers):
                 layers[depth].mineral_volume_fraction[var[:-3]]=data_xarray[var].dropna(dim='time').isel(time=-1,depth=depth).item()
 
 leakage=5e-5
-reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=1e-4,Mn_peroxidase_Mn3_leakage=leakage,Mn3_scale=1e-12,NH4_scale=1e-2) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
+reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=1e-4,Mn_peroxidase_Mn3_leakage=leakage,Mn3_scale=1e-13,NH4_scale=1e-2) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
 
 rateconstants={
 '1.0e+00 DOM1  + 1.0e+00 O2(aq)  -> 1.0e+00 HCO3-  + 1.0e+00 H+  + 1.0e+00 Tracer  + 0.0e+00 Mn++':1e-7,
@@ -368,7 +368,7 @@ rateconstants={
 
 input_file='manganese.in'
 
-decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt',input_file,log_formulation=False,CO2name='Tracer',truncate_concentration=1e-25)
+decomp_network.PF_network_writer(reaction_network,precision=1).write_into_input_deck('SOMdecomp_template.txt',input_file,log_formulation=False,CO2name='Tracer',truncate_concentration=1e-25)
 
 incubation_length=5 # Years of litter decomp
 
@@ -394,8 +394,24 @@ starting_time=time.time()
 # Whalen et al 2018: Background N dep is 8-10 kg N/ha/year
 # Treatments were +50 kg N/ha/year and +150 kgN/ha/year (as NH4NO3)
 # 1 kg N/ha/year
-for Ndep in numpy.array([0,50,150])*1000/molar_mass['N']/100**2/(365*24*3600): # Converted to mol N/m2/s
-# for Ndep in [0.0]:
+Ndeps=   [0,50,150,0,0]
+warmings=[0, 0,  0,2,5] # Degrees C
+Q10=2.0
+not_T_sens = [
+    '1.0e+00 Mn++  -> 1.0e+00 Tracer2  + 2.0e+00 H+',
+    '1.0e+00 DOM1  + 4.0e+00 Mn+++  <-> 1.0e+00 HCO3-  + 4.0e+00 Mn++  + 5.0e+00 H+  + 1.0e+00 Tracer',
+    '1.0e+00 DOM3  <-> 1.0e+00 DOM1',
+    '1.0e+00 DOM1  -> 1.0e+00 DOM3',
+]
+for sim in range(len(Ndeps)):
+# for Ndep in numpy.array([0,50,150])*1000/molar_mass['N']/100**2/(365*24*3600): # Converted to mol N/m2/s
+    Ndep=Ndeps[sim]*1000/molar_mass['N']/100**2/(365*24*3600)
+    warming=warmings[sim]
+    rateconstants_warmed=rateconstants.copy()
+    for react in rateconstants_warmed:
+        if react in not_T_sens:
+            continue
+        rateconstants_warmed[react]=rateconstants_warmed[react]*Q10**(warming/10.0)
     for pH in numpy.arange(4.0,6.5,0.5):
     # for pH in numpy.arange(5.5,6.5,0.5):
 
@@ -403,7 +419,7 @@ for Ndep in numpy.array([0,50,150])*1000/molar_mass['N']/100**2/(365*24*3600): #
         # Set up layers
         # Top (organic) layer should be thinner and have lower bulk density though
         # Low bulk density causes simulation to slow or crash though. Actually CEC being too low (<100 combined with BD<1) is the problem
-        layers=[layer(0.05,rateconstants=rateconstants,BD=0.425,porosity=0.5,CEC=400.0)]+[layer(0.1,rateconstants=rateconstants) for num in range(4)]
+        layers=[layer(0.05,rateconstants=rateconstants_warmed,BD=0.425,porosity=0.5,CEC=400.0)]+[layer(0.1,rateconstants=rateconstants_warmed) for num in range(4)]
 
         
         for l in layers:
@@ -510,11 +526,11 @@ for Ndep in numpy.array([0,50,150])*1000/molar_mass['N']/100**2/(365*24*3600): #
         
         
             *************************************
-            * Starting simulation with pH = %1.1f, Ndep = %03d *
+            * Starting simulation with pH = %1.1f, Ndep = %03d, Warming = %d *
             *************************************
             
             
-            '''%(pH,int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) ))))
+            '''%(pH,int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),warming))
 
 
         
@@ -553,7 +569,7 @@ for Ndep in numpy.array([0,50,150])*1000/molar_mass['N']/100**2/(365*24*3600): #
             # layers[l].surface_site_density['>DOM1']=1e3
             layers[l].total_immobile['Sorption_capacity']=1/12*100**3*0.01 # 1 g/cm3
             layers[l].diffquo={'O2(aq)':0.001**((l+1)*0.75)}
-            layers[l].total_mobile['DOM3']=7
+            layers[l].total_mobile['DOM3']=5.3
 
         # Treat top layer as O horizon with less root biomass and mineral Mn
         layers[0].total_immobile['Root_biomass']=root_biomass_top/(root_Cfrac*12)*100**3*1e-3
@@ -687,7 +703,7 @@ for Ndep in numpy.array([0,50,150])*1000/molar_mass['N']/100**2/(365*24*3600): #
                             else:
                                 dq[spec]=0.0
                                 # print('O2 before: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
-                    num_cuts=l.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+                    num_cuts=l.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=l.rateconstants)
                     l.copy_from_alquimia(data)
                     # Write output
                     l.write_output(step+1,dt,num_cuts)
@@ -725,8 +741,8 @@ for Ndep in numpy.array([0,50,150])*1000/molar_mass['N']/100**2/(365*24*3600): #
             
         import datetime
         today=datetime.datetime.today()
-        output.to_netcdf('Mn_output/Mn_pH%1.1f_Ndep%03d_%04d-%02d-%02d.nc'%(pH,int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),today.year,today.month,today.day))
-        convert_to_xarray([incubation_layer],leaf_Mn=leaf_Mn_concs).to_netcdf('Mn_output/Mn_incubations_pH%1.1f_Ndep%03d_%04d-%02d-%02d.nc'%(pH,int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),today.year,today.month,today.day))
+        output.to_netcdf('Mn_output/Mn_pH{ph:1.1f}_Ndep{Ndep:03d}_warming{warming:d}_{year:04d}-{month:02d}-{day:02d}.nc'.format(ph=pH,Ndep=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),year=today.year,month=today.month,day=today.day,warming=warming))
+        convert_to_xarray([incubation_layer],leaf_Mn=leaf_Mn_concs).to_netcdf('Mn_output/Mn_incubations_pH{ph:1.1f}_Ndep{Ndep:03d}_warming{warming:d}_{year:04d}-{month:02d}-{day:02d}.nc'.format(ph=pH,Ndep=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),year=today.year,month=today.month,day=today.day,warming=warming))
 
 
 print('\n\n\n Simulation finished. Total time: %1.1f minutes\n'%((time.time()-starting_time)/60))

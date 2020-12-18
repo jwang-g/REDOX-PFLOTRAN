@@ -1,5 +1,6 @@
 from pylab import *
 import xarray
+import os
 
 # result_files = [
 # 'Mn_ph35_saved_2020-08-31.nc',
@@ -11,21 +12,26 @@ import xarray
 
 leafC_mass_conv=1.0 # For simulations after I started applying the C to dry mass conversion in the sims. Otherwise it should be 0.4
 
-data_date='2020-11-17'
+data_date='2020-12-07'
+data_date='2020-12-14'
 phs=arange(4,6.1,0.5)
 Ndeps=[0,50,150]
+warmings=[0,2,5]
 # Ndeps=[0]
 # phs=[4.0,4.5,5.0]
 
 result_datas_byNdep=[]
 for Ndep in Ndeps:
-    result_files= ['Mn_output/Mn_pH%1.1f_Ndep%03d_%s.nc'%(pH,Ndep,data_date) for pH in phs]
+    result_files= ['Mn_output/Mn_pH%1.1f_Ndep%03d_warming%d_%s.nc'%(pH,Ndep,0,data_date) for pH in phs]
 
     result_datas=[]
     for f in result_files:
-        with xarray.open_dataset(f,decode_times=False) as d:
-            d.load()
-            result_datas.append(d)
+        if os.path.exists(f):
+            with xarray.open_dataset(f,decode_times=False) as d:
+                d.load()
+                result_datas.append(d)
+        else:
+            print('File %s not found'%f)
 
     result_datas_byNdep.append(xarray.concat(result_datas,dim='pH_sim',join='outer'))
     
@@ -33,13 +39,34 @@ data_allNdeps=xarray.concat(result_datas_byNdep,dim='Ndep_sim',join='outer')
 
 result_data=data_allNdeps.isel(Ndep_sim=0)
 
-incubation_files=['Mn_output/Mn_incubations_pH%1.1f_Ndep%03d_%s.nc'%(pH,0,data_date) for pH in phs]
+result_datas_bywarming=[]
+for warming in warmings:
+    result_files= ['Mn_output/Mn_pH%1.1f_Ndep%03d_warming%d_%s.nc'%(pH,0,warming,data_date) for pH in phs]
+
+    result_datas=[]
+    for f in result_files:
+        if os.path.exists(f):
+            with xarray.open_dataset(f,decode_times=False) as d:
+                d.load()
+                result_datas.append(d)
+
+        else:
+            print('File %s not found'%f)
+
+    result_datas_bywarming.append(xarray.concat(result_datas,dim='pH_sim',join='outer'))
+    
+data_warmings=xarray.concat(result_datas_bywarming,dim='warming_sim',join='outer')
+
+
+incubation_files=['Mn_output/Mn_incubations_pH%1.1f_Ndep%03d_warming%d_%s.nc'%(pH,0,0,data_date) for pH in phs]
 incubation_datas=[]
 for f in incubation_files:
-    with xarray.open_dataset(f,decode_times=False) as d:
-        d.load()
-        incubation_datas.append(d)
-
+    if os.path.exists(f):
+        with xarray.open_dataset(f,decode_times=False) as d:
+            d.load()
+            incubation_datas.append(d)
+    else:
+        print('File %s not found'%f)
 incubation_data=xarray.concat(incubation_datas,dim='sim',join='outer')
 
 
@@ -178,7 +205,7 @@ Berg_massloss2=pandas.read_csv(datadir+'Berg et al 2015/Fig 4B.csv')
 
 
 
-f,axs=subplots(1,2,num='Litter annual mass loss',clear=True)
+f,axs=subplots(1,2,num='Litter annual mass loss',clear=True,figsize=(8,4.6))
 incubation_length=5
 litter_massloss=(1-(incubation_data['Total Sorbed Lignin']+incubation_data['Total Sorbed Cellulose']).isel(time=slice(365*2+365*2,None,365*2*incubation_length),depth=0)/(incubation_data['Total Sorbed Lignin']+incubation_data['Total Sorbed Cellulose']).isel(time=1+365*2,depth=0)).to_masked_array().ravel()*100
 lignin_massloss=(1-(incubation_data['Total Sorbed Lignin']).isel(time=slice(365*2+365*2,None,365*2*incubation_length),depth=0)/(incubation_data['Total Sorbed Lignin']).isel(time=1+365*2,depth=0)).to_masked_array().ravel()*100
@@ -320,24 +347,27 @@ plot_output(result_data.isel(pH_sim=2),axs,do_legend=False,ls=':')
 total_cellulose=(data_allNdeps['Total Sorbed Cellulose'].isel(time=slice(365*2*35,None,None)).mean(dim='time') *12e-3*(data_allNdeps.z_bottom-data_allNdeps.z_top)/100).sum(dim='depth') 
 total_lignin=(data_allNdeps['Total Sorbed Lignin'].isel(time=slice(365*2*35,None,None)).mean(dim='time') *12e-3*(data_allNdeps.z_bottom-data_allNdeps.z_top)/100).sum(dim='depth') 
 
-f,ax=subplots(ncols=2,num='pH by Ndep',clear=True)
+f,ax=subplots(ncols=2,num='pH by Ndep',clear=True,figsize=(12,5))
 h=ax[0].pcolormesh(arange(phs[0]-.25,phs[-1]+0.25,0.5),[0,25,75,175],total_cellulose+total_lignin,edgecolors='w')
 cb=f.colorbar(h,ax=ax[0])
 cb.set_label('Total litter C (kg C m$^{-2}$)')
 ax[0].set_xlabel('pH')
 ax[0].set_ylabel('N deposition rate (kg N ha$^{-1}$ year$^{-1}$)')
-ax[0].set_title('Interaction of pH and nitrogen deposition')
-
+ax[0].set_title('Interaction of pH and N deposition')
+ax[0].text(0.01,1.03,'(a)',transform=ax[0].transAxes)
 
 markers=['o','s','^','h']
 for Ndep in range(len(Ndeps)):
-    ax[1].plot(phs,(total_cellulose+total_lignin).isel(Ndep_sim=Ndep),label='Ndep = %d kg N ha$^{-1}$ year$^{-1}$'%Ndeps[Ndep],marker=markers[Ndep],lw=1.5,ms=7.0)
+    x=data_allNdeps.litter_Mn.isel(Ndep_sim=Ndep).mean(dim='litter_year')
+    ax[1].plot(x,(total_cellulose+total_lignin).isel(Ndep_sim=Ndep),label='Ndep = %d kg N ha$^{-1}$ year$^{-1}$'%Ndeps[Ndep],marker=markers[Ndep],lw=1.5,ms=5.0)
 
-ax[1].set_xlabel('pH')
+# ax[1].set_xlabel('pH')
+ax[1].set_xlabel('Leaf Mn concentration (mmol kg$^{-1}$)')
 ax[1].set_ylabel('Total litter C (kg C m$^{-2}$)')
 ax[1].legend()
 ax[1].set_ylim(bottom=0)
-ax[1].set_title('Interaction of pH and nitrogen deposition')
+ax[1].set_title('Interaction of leaf Mn concentration and N deposition')
+ax[1].text(0.01,1.03,'(b)',transform=ax[1].transAxes)
 
 f,ax=subplots(num='pH by Ndep 2',clear=True)
 for Ndep in range(len(Ndeps)):
@@ -346,6 +376,87 @@ for Ndep in range(len(Ndeps)):
 xticks([0.4,1.4,2.4],['N0','N50','N150'])
 legend(['%1.0f mmol kg$^{-1}$'%data_allNdeps['litter_Mn'].isel(Ndep_sim=0,pH_sim=n,litter_year=39) for n in range(4)],title='Litter Mn')
 ax.set_ylabel('Lignin turnover time (year$^{-1}$)')
+
+
+
+total_cellulose=(data_warmings['Total Sorbed Cellulose'].isel(time=slice(365*2*35,None,None)).mean(dim='time') *12e-3*(data_warmings.z_bottom-data_warmings.z_top)/100).sum(dim='depth') 
+total_lignin=(data_warmings['Total Sorbed Lignin'].isel(time=slice(365*2*35,None,None)).mean(dim='time') *12e-3*(data_warmings.z_bottom-data_warmings.z_top)/100).sum(dim='depth') 
+
+total_litter=((data_warmings['Total Sorbed Cellulose']+data_warmings['Total Sorbed Lignin']).coarsen(time=365*2,boundary='trim').mean()*12e-3*(data_warmings.z_bottom-data_warmings.z_top)/100).sum(dim='depth')
+
+f,ax=subplots(ncols=2,nrows=2,num='pH by Warming',clear=True,figsize=(11,6.8))
+h=ax[0,1].pcolormesh(arange(phs[0]-.25,phs[-1]+0.25,0.5),[0,1,3,6],total_litter.isel(time=39),edgecolors='w')
+cb=f.colorbar(h,ax=ax[0,1])
+cb.set_label('Total litter C (kg C m$^{-2}$)')
+ax[0,1].set_xlabel('pH')
+ax[0,1].set_ylabel('Warming ($^\circ$C)')
+ax[0,1].set_title('Interaction of pH and warming (40 years)')
+ax[0,1].text(0.01,1.03,'(b)',transform=ax[0,1].transAxes)
+
+h=ax[0,0].pcolormesh(arange(phs[0]-.25,phs[-1]+0.25,0.5),[0,1,3,6],total_litter.isel(time=15),edgecolors='w')
+cb=f.colorbar(h,ax=ax[0,0])
+cb.set_label('Total litter C (kg C m$^{-2}$)')
+ax[0,0].set_xlabel('pH')
+ax[0,0].set_ylabel('Warming ($^\circ$C)')
+ax[0,0].set_title('Interaction of pH and warming (15 years)')
+ax[0,0].text(0.01,1.03,'(a)',transform=ax[0,0].transAxes)
+
+
+markers=['o','s','^','h']
+for warming in range(len(warmings)):
+    # x=data_warmings.litter_Mn.isel(warming_sim=warming).mean(dim='litter_year')
+    # ax[1].plot(x,(total_cellulose+total_lignin).isel(warming_sim=warming),label='Warming = %d $^\circ$C'%warmings[warming],marker=markers[warming],lw=1.5,ms=5.0,color=get_cmap('inferno')((warming+0.5)/len(warmings)))
+    ax[1,0].plot(data_warmings.litter_year,data_warmings.litter_Mn.isel(warming_sim=warming,pH_sim=0),color=get_cmap('inferno')((warming+0.5)/len(warmings)),label='Warming: %d$^\circ$C'%warmings[warming])
+    ax[1,0].plot(data_warmings.litter_year,data_warmings.litter_Mn.isel(warming_sim=warming,pH_sim=2),color=get_cmap('inferno')((warming+0.5)/len(warmings)),ls='--')
+    ax[1,0].plot(data_warmings.litter_year,data_warmings.litter_Mn.isel(warming_sim=warming,pH_sim=4),color=get_cmap('inferno')((warming+0.5)/len(warmings)),ls=':')
+    
+    ax[1,1].plot(data_warmings.litter_year,total_litter.isel(warming_sim=warming,pH_sim=0),color=get_cmap('inferno')((warming+0.5)/len(warmings)),label='pH = 4.0')
+    ax[1,1].plot(data_warmings.litter_year,total_litter.isel(warming_sim=warming,pH_sim=2),color=get_cmap('inferno')((warming+0.5)/len(warmings)),ls='--',label='pH = 5.0')
+    ax[1,1].plot(data_warmings.litter_year,total_litter.isel(warming_sim=warming,pH_sim=4),color=get_cmap('inferno')((warming+0.5)/len(warmings)),ls=':',label='pH = 6.0')
+
+ax[1,0].set_ylabel('Leaf Mn concentration (mmol kg$^{-1}$)')
+ax[1,0].set_xlabel('Year')
+ax[1,0].legend(handles=ax[1,0].lines[::3]+ax[1,1].lines[:3],ncol=2)
+ax[1,0].set_ylim(bottom=0)
+ax[1,0].set_title('Leaf Mn concentration over time')
+ax[1,0].text(0.01,1.03,'(c)',transform=ax[1,0].transAxes)
+
+ax[1,1].set_ylabel('Total litter C (kg C m$^{-2}$)')
+ax[1,1].set_xlabel('Year')
+# ax[1,1].legend(handles=ax[1,1].lines[:3])
+ax[1,1].set_ylim(bottom=0)
+ax[1,1].set_title('Litter C over time')
+ax[1,1].text(0.01,1.03,'(d)',transform=ax[1,1].transAxes)
+
+
+# # ax[1].set_xlabel('pH')
+# ax[1].set_xlabel('Leaf Mn concentration (mmol kg$^{-1}$)')
+# ax[1].set_ylabel('Total litter C (kg C m$^{-2}$)')
+# ax[1].legend()
+# ax[1].set_ylim(bottom=0)
+# ax[1].set_title('Interaction of leaf Mn concentration and warming')
+# ax[1].text(0.01,1.03,'(b)',transform=ax[1].transAxes)
+# 
+# for phnum in range(len(total_lignin.pH_sim)):
+#     c=data_warmings.litter_Mn.isel(pH_sim=ph).mean(dim='litter_year')
+#     ax[2].plot(warmings,(total_cellulose+total_lignin).isel(pH_sim=phnum),'-o',label='pH = %1.1f'%phs[phnum])
+# ax[2].set_xlabel('Warming (C)')
+# ax[2].set_ylabel('Total litter C (kg C m$^{-2}$)')
+# ax[2].legend()
+# ax[2].set_ylim(bottom=0)
+# ax[2].set_title('Interaction of leaf Mn concentration and warming')
+# ax[2].text(0.01,1.03,'(c)',transform=ax[2].transAxes)
+
+f,axs=subplots(ncols=5,nrows=len(result_data.depth),sharex=False,clear=True,num='Warming results low ph',figsize=(12,6.5))
+plot_output(data_warmings.isel(pH_sim=0,warming_sim=0),axs,do_legend=True)
+plot_output(data_warmings.isel(pH_sim=0,warming_sim=1),axs,do_legend=False,ls='--')
+plot_output(data_warmings.isel(pH_sim=0,warming_sim=2),axs,do_legend=False,ls=':')
+
+f,axs=subplots(ncols=5,nrows=len(result_data.depth),sharex=False,clear=True,num='Warming results high ph',figsize=(12,6.5))
+plot_output(data_warmings.isel(pH_sim=3,warming_sim=0),axs,do_legend=True)
+plot_output(data_warmings.isel(pH_sim=3,warming_sim=1),axs,do_legend=False,ls='--')
+plot_output(data_warmings.isel(pH_sim=3,warming_sim=2),axs,do_legend=False,ls=':')
+
 
 import Manganese_network as Mn
 import decomp_network
