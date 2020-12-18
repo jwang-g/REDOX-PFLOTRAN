@@ -55,8 +55,8 @@ END
 LINEAR_SOLVER TRANSPORT
   SOLVER DIRECT
   !SOLVER ITERATIVE     ! default: ITERATIVE or KRYLOV: KSP_TYPE of BCGS and PC_TYPE of BJACOBI, if not modified below
-  PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
-  KSP_TYPE fgmres      ! default: BCGS. NOT much difference 
+  !PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
+  !KSP_TYPE fgmres      ! default: BCGS. NOT much difference 
 END
 
 NEWTON_SOLVER TRANSPORT
@@ -107,7 +107,7 @@ ALPHA 1.9401d-4
 
 #=========================== output options ===================================
 OUTPUT
-  PERIODIC_OBSERVATION TIMESTEP 1
+  PERIODIC_OBSERVATION TIME 1.0 h
   #SCREEN PERIODIC 10
   #PERIODIC TIMESTEP 1
   #FORMAT HDF5
@@ -123,7 +123,7 @@ END
 #=========================== times ============================================
 TIME
   FINAL_TIME 1.d1 y
-  INITIAL_TIMESTEP_SIZE 0.5d0 h
+  INITIAL_TIMESTEP_SIZE 1.0d0 h
   MAXIMUM_TIMESTEP_SIZE 12.d0 h
 END
 

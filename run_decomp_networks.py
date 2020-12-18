@@ -98,15 +98,16 @@ CORPSE_result,CORPSE_units=decomp_network.PF_network_writer(decomp_network_CORPS
 # CTC decomposition network
 decomp_network_CTC=decomp_network.decomp_network()
 
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL1',CN=  12.,constraints={'initial':1e-10},kind='immobile') )
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL2',CN=  12.,constraints={'initial':1e-10},kind='immobile'))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL3',CN=  10.,constraints={'initial':1e-10},kind='immobile'))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL4',CN=  10.,constraints={'initial':1e-10},kind='immobile'))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR1',constraints={'initial':1e3},initCN=20,kind='immobile'))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR2',constraints={'initial':1e-10},initCN=20,kind='immobile')    )
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR3',constraints={'initial':1e-10},initCN=20,kind='immobile'))
-decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CWD',constraints={'initial':1e-10},initCN=20,kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL1',CN=  12.*14.007/12.011 ,constraints={'initial':1e-10/12.011},kind='immobile') )
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL2',CN=  12.*14.007/12.011 ,constraints={'initial':1e-10/12.011},kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL3',CN=  10.*14.007/12.011 ,constraints={'initial':1e-10/12.011},kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='SOIL4',CN=  10.*14.007/12.011 ,constraints={'initial':1e-10/12.011},kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR1',constraints={'initial':1e3/12.011},initCN=20*14.007/12.011 ,kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR2',constraints={'initial':1e-10/12.011},initCN=20*14.007/12.011 ,kind='immobile')    )
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR3',constraints={'initial':1e-10/12.011},initCN=20*14.007/12.011 ,kind='immobile'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CWD',constraints={'initial':1e-10/12.011},initCN=20*14.007/12.011 ,kind='immobile'))
 decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CO2(aq)',kind='primary'))
+decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='NH4+',kind='primary'))
 decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-10},kind='immobile'))
 
 # CWD decomposition to  litter
@@ -132,7 +133,7 @@ decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL3':
 decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL4':1.0},product_pools={'CO2(aq)':1.0},
             rate_constant=0.0001,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='SOIL4 decomp',reactiontype='SOMDECOMP'))
 
-CTC_result,CTC_units=decomp_network.PF_network_writer(decomp_network_CTC).run_simulation('SOMdecomp_template.txt','CTC',pflotran_exe,CO2name='CO2(aq)',length_days=2000)
+CTC_result,CTC_units=decomp_network.PF_network_writer(decomp_network_CTC).run_simulation('SOMdecomp_template.txt','CTC',pflotran_exe,CO2name='CO2(aq)',length_days=1)
 
 from pylab import *
 figure('CTC pools',clear=True)

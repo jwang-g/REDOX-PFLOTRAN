@@ -144,12 +144,13 @@ class reaction(dict):
 
 # Class for writing network out into Pflotran reaction sandbox format
 class PF_writer:
-    def __init__(self,network,indent_spaces=2,base_indent=0):
+    def __init__(self,network,indent_spaces=2,base_indent=0,precision=2):
         self.level=[]
         self.output=''
         self.indent_spaces=indent_spaces
         self.base_indent=base_indent
         self.network=network
+        self.precision=precision
         return 
         
     def reset(self):
@@ -180,9 +181,9 @@ class PF_network_writer(PF_writer):
                 continue
             already_done.append(reaction['name'])
             if reaction['reactiontype'] == 'MICROBIAL':
-                self.output = self.output + PF_microbial_reaction_writer(reaction,base_indent=self.current_indent()).write_reaction()
+                self.output = self.output + PF_microbial_reaction_writer(reaction,base_indent=self.current_indent(),precision=self.precision).write_reaction()
             elif reaction['reactiontype'] == 'GENERAL':
-                self.output = self.output + PF_general_reaction_writer(reaction,base_indent=self.current_indent()).write_reaction()
+                self.output = self.output + PF_general_reaction_writer(reaction,base_indent=self.current_indent(),precision=self.precision).write_reaction()
         
         # List all sandbox reactions
         sandbox_reacts=self.network.edge_subgraph([(ins,outs,ks) for ins,outs,ks,r in self.network.edges(data='reaction',keys=True) if r['reactiontype']=='SOMDECOMP'])
@@ -195,7 +196,7 @@ class PF_network_writer(PF_writer):
                 if 'CO2' in pool or 'HCO3-' in pool:
                     continue
                 if 'CN' in sandbox_reacts.nodes[pool]:
-                    self.add_line(pool.ljust(20)+'{CN:1.1f}'.format(CN=sandbox_reacts.nodes[pool]['CN']))
+                    self.add_line(pool.ljust(20)+'{CN:1.{prec}f}'.format(CN=sandbox_reacts.nodes[pool]['CN'],prec=self.precision))
                 else:
                     self.add_line(pool.ljust(20)+'# Variable C:N pool')
             self.decrease_level()
@@ -206,7 +207,7 @@ class PF_network_writer(PF_writer):
                 if reaction['name'] in already_done:
                     continue
                 already_done.append(reaction['name'])
-                self.output = self.output + PF_sandbox_reaction_writer(reaction,base_indent=self.current_indent()).write_reaction()
+                self.output = self.output + PF_sandbox_reaction_writer(reaction,base_indent=self.current_indent(),precision=self.precision).write_reaction()
                         
 
             self.add_line('CO2_SPECIES_NAME '+CO2name)
@@ -224,6 +225,8 @@ class PF_network_writer(PF_writer):
         base_indent=0
         with open(templatefile_name,'r') as templatefile:
             template_lines=templatefile.readlines()
+            
+        fmt='%%1.%de'%self.precision
     
         for line in template_lines:
             if 'CHEMISTRY' in line and not line.strip().startswith('#'):
@@ -307,16 +310,16 @@ class PF_network_writer(PF_writer):
                         if 'rates' in self.network.nodes[pool]:
                             self.add_line('MULTIRATE_KINETIC')
                             if 'site_fractions' in self.network.nodes[pool]:
-                                self.add_line('SITE_FRACTION '+' '.join(['%1.2e'%frac for frac in self.network.nodes[pool]['site_fractions']]))
+                                self.add_line('SITE_FRACTION '+' '.join([fmt%frac for frac in self.network.nodes[pool]['site_fractions']]))
                             else:
-                                self.add_line('SITE_FRACTION '+' '.join(['%1.2e'%(1/len(self.network.nodes[pool]['rates'])) for rate in self.network.nodes[pool]['rates']]))
-                            self.add_line('RATES '+' '.join(['%1.2e '%frac for frac in self.network.nodes[pool]['rates']]))
+                                self.add_line('SITE_FRACTION '+' '.join([fmt%(1/len(self.network.nodes[pool]['rates'])) for rate in self.network.nodes[pool]['rates']]))
+                            self.add_line('RATES '+' '.join([fmt%frac+' ' for frac in self.network.nodes[pool]['rates']]))
                         elif 'rate' in self.network.nodes[pool]:
                             self.add_line('KINETIC')
                         else:
                             self.add_line('EQUILIBRIUM')
                         self.add_line('MINERAL {mineral:s}'.format(mineral=self.network.nodes[pool]['mineral']))
-                        self.add_line('SITE {sitename:s} {density:1.2e}'.format(sitename=pool,density=self.network.nodes[pool]['site_density']))
+                        self.add_line('SITE {sitename:s} {density:{fmt}}'.format(sitename=pool,density=self.network.nodes[pool]['site_density'],fmt=fmt[1:]))
                         self.increase_level('COMPLEXES')
                         for complex in self.network.nodes[pool]['complexes']:
                             self.add_line(complex)
@@ -330,13 +333,13 @@ class PF_network_writer(PF_writer):
                         self.increase_level('ION_EXCHANGE_RXN')
                         if reaction['mineral'] is not None:
                             self.add_line('MINERAL '+reaction['mineral'])
-                        self.add_line('CEC %1.2e'%reaction['CEC'])
+                        self.add_line('CEC '+fmt%reaction['CEC'])
                         self.increase_level('CATIONS')
                         for cation in reaction['cations']:
                             if reaction['cations'][cation]==1.0:
-                                self.add_line('%s %1.2e REFERENCE'%(cation,reaction['cations'][cation]))
+                                self.add_line('{cation:s} {val:{fmt}} REFERENCE'.format(cation=cation,val=reaction['cations'][cation],fmt=fmt[1:]))
                             else:
-                                self.add_line('%s %1.2e'%(cation,reaction['cations'][cation]))
+                                self.add_line('{cation:s} {val:{fmt}}'.format(cation=cation,val=reaction['cations'][cation],fmt=fmt[1:]))
                         self.decrease_level()
                         self.decrease_level()
                 
@@ -349,9 +352,9 @@ class PF_network_writer(PF_writer):
                             continue
                         already_done.append(reaction['name'])
                         self.increase_level(reaction['sorbed_species'])
-                        self.add_line('DISTRIBUTION_COEFFICIENT {k:1.2e}'.format(k=reaction['k']))
+                        self.add_line('DISTRIBUTION_COEFFICIENT {k:{fmt}}'.format(k=reaction['k']),fmt=fmt[1:])
                         self.add_line('KD_MINERAL_NAME {mineral:s}'.format(mineral=reaction['mineral']))
-                        self.add_line('LANGMUIR_B {b:1.2e}'.format(b=reaction['langmuir_b']))
+                        self.add_line('LANGMUIR_B {b:{fmt}}'.format(b=reaction['langmuir_b']),fmt=fmt[1:])
                         self.decrease_level()
                     self.decrease_level()
                 self.decrease_level()
@@ -366,7 +369,7 @@ class PF_network_writer(PF_writer):
                     self.add_line('LOG_FORMULATION')
                     
                 if truncate_concentration is not None:
-                    self.add_line('TRUNCATE_CONCENTRATION {conc:1.1e}'.format(conc=truncate_concentration))
+                    self.add_line('TRUNCATE_CONCENTRATION {conc:{fmt}}'.format(conc=truncate_concentration,fmt=fmt[1:]))
                     
                 self.add_line('DATABASE %s'%database)
             
@@ -380,12 +383,12 @@ class PF_network_writer(PF_writer):
                         continue
                     constraint=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)
                     if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass','Sorption_capacity']:
-                        self.add_line( pool.ljust(20) + ' {const:1.1e}'.format(const=constraint))
+                        self.add_line( pool.ljust(20) + ' {const:{fmt}}'.format(const=constraint,fmt=fmt[1:]))
                     else:
                         if 'initCN' not in self.network.nodes[pool]:
                             raise ValueError('initCN must be provided for flexible CN pools: pool %s'%pool)
-                        self.add_line( (pool+'C').ljust(20) + '{const:1.1e}'.format(const=constraint))
-                        self.add_line( (pool+'N').ljust(20) + '{const:1.1e}'.format(const=constraint/self.network.nodes[pool]['initCN']))
+                        self.add_line( (pool+'C').ljust(20) + '{const:{fmt}}'.format(const=constraint,fmt=fmt[1:]))
+                        self.add_line( (pool+'N').ljust(20) + '{const:{fmt}}'.format(const=constraint/self.network.nodes[pool]['initCN'],fmt=fmt[1:]))
                 self.add_line( '#### NOTE: End of auto-inserted immobile species ####')
                 self.decrease_level()
                 
@@ -397,7 +400,7 @@ class PF_network_writer(PF_writer):
                         if isinstance(constraint,str):
                             self.add_line( (pool).ljust(20) + constraint)
                         else:
-                            self.add_line( (pool).ljust(20) + '{const:1.1e}'.format(const=constraint))
+                            self.add_line( (pool).ljust(20) + '{const:{fmt}}'.format(const=constraint,fmt=fmt[1:]))
                             
                 self.add_line( '#### NOTE: End of auto-inserted concentration constraints ####')
                 self.decrease_level()
@@ -410,13 +413,13 @@ class PF_network_writer(PF_writer):
                         if isinstance(constraint,str):
                             self.add_line( (pool).ljust(20) + self.network.nodes[pool]['constraints'].get(constraintname,1e-20))
                         else:
-                            self.add_line( (pool).ljust(20) + '{const:1.1e} 1.0'.format(const=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)))
+                            self.add_line( (pool).ljust(20) + '{const:{fmt}} 1.0'.format(const=self.network.nodes[pool]['constraints'].get(constraintname,1e-20),fmt=fmt[1:]))
                             
                 self.add_line( '#### NOTE: End of auto-inserted mineral constraints ####')
                 self.decrease_level()
                 
             elif 'FINAL_TIME' in line and length_days is not None:
-                self.add_line( 'FINAL_TIME {ndays:1.1e} d\n'.format(ndays=length_days))
+                self.add_line( 'FINAL_TIME {ndays:1.{prec}e} d\n'.format(ndays=length_days,prec=self.precision))
             else:
                 if not line.isspace():
                     base_indent=len(line)-len(line.lstrip())
@@ -452,6 +455,7 @@ class PF_network_writer(PF_writer):
         
 class PF_sandbox_reaction_writer(PF_writer):
     def write_reaction(self,base_indent=None,indent_spaces=None):
+        fmt='1.%de'%self.precision
         reaction_data=self.network.copy()
         assert len(reaction_data['reactant_pools']) == 1,'Only one reactant pool is allowed for sandbox reactions'
         assert list(reaction_data['reactant_pools'].values())[0] == 1.0,'Stoichiometry of upstream pool in sandbox reaction must be 1.0'
@@ -466,21 +470,21 @@ class PF_sandbox_reaction_writer(PF_writer):
         downstream_pools = reaction_data.pop('product_pools')
         for pool in downstream_pools.keys():
             if 'CO2' not in pool and 'HCO3-' not in pool: # CO2 is included implicitly as the rest of CUE
-                self.add_line('DOWNSTREAM_POOL'.ljust(20)+pool.ljust(20)+'{CUE:1.1e}'.format(CUE=downstream_pools[pool]))
+                self.add_line('DOWNSTREAM_POOL'.ljust(20)+pool.ljust(20)+'{CUE:{fmt}}'.format(CUE=downstream_pools[pool],fmt=fmt))
         turnover_name=reaction_data.pop('turnover_name','TURNOVER_TIME')
-        self.add_line(turnover_name.ljust(20)+'{time:1.1e} {units:s}'.format(time=reaction_data.pop('rate_constant'),units=reaction_data.pop('rate_units')))
+        self.add_line(turnover_name.ljust(20)+'{time:{fmt}} {units:s}'.format(time=reaction_data.pop('rate_constant'),units=reaction_data.pop('rate_units'),fmt=fmt))
         for monod in reaction_data.pop('monod_terms',[]):
                 self.increase_level('MONOD')
                 self.add_line('SPECIES_NAME'.ljust(20)+monod['species'])
-                self.add_line('HALF_SATURATION_CONSTANT'+' {const:1.1e}'.format(const=monod['k']))
+                self.add_line('HALF_SATURATION_CONSTANT'+' {const:{fmt}}'.format(const=monod['k'],fmt=fmt))
                 if 'threshold' in monod:
-                    self.add_line('THRESHOLD_CONCENTRATION {const:1.1e}'.format(const=monod['threshold']))
+                    self.add_line('THRESHOLD_CONCENTRATION {const:{fmt}}'.format(const=monod['threshold'],fmt=fmt))
                 self.decrease_level()
         for inhib in reaction_data.pop('inhibition_terms',[]):
                 self.increase_level('INHIBITION')
                 self.add_line('SPECIES_NAME'.ljust(20)+inhib['species'])
                 self.add_line('TYPE {inhtype:s}'.format(inhtype=inhib['type']))
-                self.add_line('INHIBITION_CONSTANT'+' {const:1.1e}'.format(const=inhib['k']))
+                self.add_line('INHIBITION_CONSTANT'+' {const:{fmt}}'.format(const=inhib['k'],fmt=fmt))
                 self.decrease_level()
         # Write out the rest of the reaction attributes
         reaction_data.pop('reactiontype',None)
@@ -489,7 +493,7 @@ class PF_sandbox_reaction_writer(PF_writer):
             if isinstance(val,str):
                 self.add_line(param.ljust(20)+val)
             elif isinstance(val,float):
-                self.add_line(param.ljust(20)+' {val:1.2e}'.format(val=val))
+                self.add_line(param.ljust(20)+' {val:{fmt}}'.format(val=val),fmt=fmt)
             else:
                 raise ValueError('Parameter {param:s} was not a str or float'.format(param=param))
         self.decrease_level()
@@ -506,7 +510,7 @@ class PF_general_reaction_writer(PF_writer):
                 first = False
             else:
                 line = line + ' + '
-            line = line + '{stoich:1.1e} {chem:s} '.format(stoich=reactants[chem],chem=chem)
+            line = line + '{stoich:1.{prec}e} {chem:s} '.format(stoich=reactants[chem],chem=chem,prec=self.precision)
         line = line + ' <-> '
         first = True
         for chem in products:
@@ -514,7 +518,7 @@ class PF_general_reaction_writer(PF_writer):
                 first = False
             else:
                 line = line + ' + '
-            line = line + '{stoich:1.1e} {chem:s} '.format(stoich=products[chem],chem=chem)
+            line = line + '{stoich:1.{prec}e} {chem:s} '.format(stoich=products[chem],chem=chem,prec=self.precision)
         return line
     def write_reaction(self,base_indent=None,indent_spaces=None):
         reaction_data=self.network.copy()
@@ -531,8 +535,8 @@ class PF_general_reaction_writer(PF_writer):
         line=line+self.write_reaction_stoich(reactants,products)
         self.add_line(line)
 
-        self.add_line('FORWARD_RATE'.ljust(20)+'{time:1.1e}'.format(time=reaction_data.pop('rate_constant')))
-        self.add_line('BACKWARD_RATE'.ljust(20)+'{time:1.1e}'.format(time=reaction_data.pop('backward_rate_constant',0.0)))
+        self.add_line('FORWARD_RATE'.ljust(20)+'{time:1.{prec}e}'.format(time=reaction_data.pop('rate_constant'),prec=self.precision))
+        self.add_line('BACKWARD_RATE'.ljust(20)+'{time:1.{prec}e}'.format(time=reaction_data.pop('backward_rate_constant',0.0),prec=self.precision))
         # Write out the rest of the reaction attributes
         # What to do with biomass? Maybe better not to use it
         self.decrease_level()
@@ -540,7 +544,7 @@ class PF_general_reaction_writer(PF_writer):
         return self.output
         
 class PF_microbial_reaction_writer(PF_writer):
-    def write_reaction_stoich(self,reactants,products):
+    def write_reaction_stoich(self,reactants,products,):
         line=''
         first = True
         for chem in reactants:
@@ -548,7 +552,7 @@ class PF_microbial_reaction_writer(PF_writer):
                 first = False
             else:
                 line = line + ' + '
-            line = line + '{stoich:1.1e} {chem:s} '.format(stoich=reactants[chem],chem=chem)
+            line = line + '{stoich:1.{prec}e} {chem:s} '.format(stoich=reactants[chem],chem=chem,prec=self.precision)
         line = line + ' -> '
         first = True
         for chem in products:
@@ -556,9 +560,9 @@ class PF_microbial_reaction_writer(PF_writer):
                 first = False
             else:
                 line = line + ' + '
-            line = line + '{stoich:1.1e} {chem:s} '.format(stoich=products[chem],chem=chem)
+            line = line + '{stoich:1.{prec}e} {chem:s} '.format(stoich=products[chem],chem=chem,prec=self.precision)
         return line
-    def write_reaction(self,base_indent=None,indent_spaces=None):
+    def write_reaction(self,base_indent=None,indent_spaces=None,):
         reaction_data=self.network.copy()
         
         if base_indent is not None:
@@ -573,26 +577,26 @@ class PF_microbial_reaction_writer(PF_writer):
         line=line+self.write_reaction_stoich(reactants,products)
         self.add_line(line)
 
-        self.add_line('RATE_CONSTANT'.ljust(20)+'{time:1.1e}'.format(time=reaction_data.pop('rate_constant')))
+        self.add_line('RATE_CONSTANT'.ljust(20)+'{time:1.{prec}e}'.format(time=reaction_data.pop('rate_constant'),prec=self.precision))
         for monod in reaction_data.pop('monod_terms',[]):
                 self.increase_level('MONOD')
                 self.add_line('SPECIES_NAME'.ljust(20)+monod['species'])
-                self.add_line('HALF_SATURATION_CONSTANT'+' {const:1.1e}'.format(const=monod['k']))
+                self.add_line('HALF_SATURATION_CONSTANT'+' {const:1.{prec}e}'.format(const=monod['k'],prec=self.precision))
                 if 'threshold' in monod:
-                    self.add_line('THRESHOLD_CONCENTRATION {const:1.1e}'.format(const=monod['threshold']))
+                    self.add_line('THRESHOLD_CONCENTRATION {const:1.{prec}e}'.format(const=monod['threshold'],prec=self.precision))
                 self.decrease_level()
         for inhib in reaction_data.pop('inhibition_terms',[]):
                 self.increase_level('INHIBITION')
                 self.add_line('SPECIES_NAME'.ljust(20)+inhib['species'])
                 self.add_line('TYPE {inhtype:s}'.format(inhtype=inhib['type']))
-                self.add_line('INHIBITION_CONSTANT'+' {const:1.1e}'.format(const=inhib['k']))
+                self.add_line('INHIBITION_CONSTANT'+' {const:1.{prec}e}'.format(const=inhib['k'],prec=self.precision))
                 self.decrease_level()
         # Write out the rest of the reaction attributes
         # What to do with biomass? Maybe better not to use it
         if 'biomass' in reaction_data:
             self.increase_level('BIOMASS')
             self.add_line('SPECIES_NAME '+reaction_data['biomass'])
-            self.add_line('YIELD %1.2f'%reaction_data.pop('biomass_yield',0))
+            self.add_line('YIELD {yld:1.{prec}f}'.format(prec=self.precision,yld=reaction_data.pop('biomass_yield',0)))
             self.decrease_level()
         self.decrease_level()
     
