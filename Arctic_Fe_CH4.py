@@ -157,7 +157,7 @@ rateconstants={
 reaction_network =  decomp_network.decomp_network(pools=pools,reactions=reactions)
 
 networkfig2=pyplot.figure('Reaction network (with reactions)',clear=True)
-drawn=decomp_network.draw_network_with_reactions(reaction_network,node_size=700,arrowstyle='->',arrowsize=8.5,edge_color='gray',
+drawn=decomp_network.draw_network_with_reactions(reaction_network,node_size=700,arrowstyle='->',arrowsize=8.5,#edge_color='gray',
             omit=['NH4+','Rock(s)','gas','surf_complex','secondary','H+','implicit','H2(aq)'],
             namechanges={'cellulose':'Cellulose','DOM1':'DOM','O2(aq)':'O$_2$(aq)','CH4(aq)':'CH$_4$(aq)','HCO3-':'CO2(aq)',
                          'Fe(OH)2':'Fe(OH)$_2$','Fe(OH)3':'Fe(OH)$_3$','Fe++':r'Fe$^\mathrm{+\!\!+}$','Fe+++':r'Fe$^\mathrm{+\!\!+\!\!\!+}$','Acetate-':'Acetate'})

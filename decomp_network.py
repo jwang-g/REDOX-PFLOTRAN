@@ -780,7 +780,7 @@ def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',
     return to_draw
     
 def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,
-            node_colors=node_colors,namechanges={},node_alpha=0.8,markers={'Reaction':'*'},pos=None,**kwargs):
+            node_colors=node_colors,namechanges={},node_alpha=0.8,node_size=None,edge_color=None,markers={'Reaction':'*'},pos=None,**kwargs):
     to_draw=network.copy()
     
     for p in network.nodes:
@@ -821,16 +821,16 @@ def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',a
     # Non-reactions:
     nonreactions=array(['Reaction' not in to_draw.nodes[n]['kind'] for n in to_draw.nodes])
     minerals=array(['mineral' in to_draw.nodes[n]['kind'] for n in to_draw.nodes])
-    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[nonreactions&~minerals].tolist(),node_color=nodecolors[nonreactions&~minerals],node_shape='o',alpha=node_alpha,**kwargs)
-    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[minerals].tolist(),node_color=nodecolors[minerals],node_shape=markers.get('mineral','o'),alpha=node_alpha,**kwargs)
+    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[nonreactions&~minerals].tolist(),node_color=nodecolors[nonreactions&~minerals],node_size=node_size,node_shape='o',alpha=node_alpha,**kwargs)
+    nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[minerals].tolist(),node_color=nodecolors[minerals],node_shape=markers.get('mineral','o'),alpha=node_alpha,node_size=node_size,**kwargs)
         
     nx.draw_networkx_labels(to_draw,pos=pos,labels={n:namechanges.get(n,n) for n in to_draw.nodes},font_size=font_size,**kwargs)
     
     reactionnodes=array(to_draw.nodes())[~nonreactions].tolist()
     nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=reactionnodes,node_shape=markers.get('Reaction','*'),
-                node_color=nodecolors[~nonreactions],alpha=node_alpha,**kwargs)
+                node_color=nodecolors[~nonreactions],alpha=node_alpha,node_size=node_size,**kwargs)
     
-    nx.draw_networkx_edges(to_draw,pos=pos,arrowsize=arrowsize,arrowstyle=arrowstyle,**kwargs)
+    nx.draw_networkx_edges(to_draw,pos=pos,arrowsize=arrowsize,arrowstyle=arrowstyle,edge_color=edge_color,**kwargs)
         
     
     

@@ -93,7 +93,7 @@ IMMOBILE_SPECIES
   # HRimm
   #### NOTE: End of auto-inserted immobile species ####
 /
-GAS_SPECIES
+PASSIVE_GAS_SPECIES
   #### NOTE: Beginning of auto-inserted gas species ####
   CO2(g)
   O2(g)

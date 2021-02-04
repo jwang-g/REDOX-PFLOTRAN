@@ -296,6 +296,7 @@ def init_alquimia(input_file,hands_off=True):
     engine_state=ffi.new('void **',data.engine_state)
 
     # Initialize Petsc first
+    from mpi4py import MPI
     initialized = ffi.new('PetscBool *')
     lib.PetscInitialized(initialized)   
     if not initialized[0]:
@@ -342,6 +343,7 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     engine_state=ffi.new('void **',data.engine_state)
     
     # Initialize Petsc first
+    from mpi4py import MPI # This initializes MPI. Necessary for it to work on CADES due to MPI installation
     initialized = ffi.new('PetscBool *')
     lib.PetscInitialized(initialized)   
     if not initialized[0]:
@@ -479,13 +481,13 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
         except RuntimeError as err:
             print('ERROR on timestep %d, layer %d: %s'%(step,n,err))
             print('Returning output so far')
-            c.write_output(data,step,dt,num_cuts)
+            c.write_output(step,dt,num_cuts)
             success=False
             break
         except KeyboardInterrupt as err:
             print('INTERRUPTED on timestep %d'%(step))
             print('Returning output so far')
-            c.write_output(data,step,dt,num_cuts)
+            c.write_output(step,dt,num_cuts)
             success=False
             break
                 
@@ -632,7 +634,7 @@ class cell:
         # Keep track of how much H+ is in the carboxylate buffer rather than the CEC site, so we can plot CEC-exchangeable H+ later. 
         # Assumes there is one ion exchange site, and that the buffering sorption site is on Rock(s)
         # Aux doubles in this spot stores free surface site density (probably best not to rely on aux_doubles in general though)
-        self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[len(self.total_mobile)*2+len(self.secondary_free_ion_concentration)+1+self.surface_site_names.index('>Carboxylate-')])
+        self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[len(self.total_mobile)*2+len(self.secondary_free_ion_concentration)+self.surface_site_names.index('>Carboxylate-')])
         
     def convert_output(self):
         import pandas
@@ -956,7 +958,8 @@ if __name__ == '__main__':
            "1.0e+00 Acetate-  + 2.0e+00 O2(aq)  -> 2.0e+00 HCO3-  + 2.0e+00 H+  + 2.0e+00 Tracer"                : 1.0e-8*1.0,
            "1.0e+00 Acetate-  + 8.0e+00 Fe+++  -> 2.0e+00 HCO3-  + 8.0e+00 Fe++  + 9.0e+00 H+  + 2.0e+00 Tracer" : 5.0e-10*1.0,
            "1.0e+00 Acetate-  -> 1.0e+00 CH4(aq)  + 1.0e+00 HCO3-  + 1.0e+00 Tracer"                             : 1.0e-11*1.0,
-           "cellulose decay (SOMDEC sandbox)"                                                                    : 1.0/(365*24*3600)
+           "cellulose decay to DOM1 (SOMDEC sandbox)"                                                                    : 1.0/(365*24*3600),
+           "cellulose decay to CO2 (SOMDEC sandbox)"                                                                    : 1.0/(365*24*3600)
     }
     
     
