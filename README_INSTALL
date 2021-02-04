@@ -1,0 +1,52 @@
+# These are steps to get python-alquimia-PFLOTRAN running on the CADES computer
+
+# Install PFLOTRAN and build chemical reactions library
+# This is a fork of PFLOTRAN with some additional reactions and infrastructure for coupling with ELM
+git clone https://github.com/fmyuan/pflotran-elm-interface.git
+pushd pflotran-interface/src/pflotran
+export PETSC_DIR=/software/user_tools/current/cades-ccsi/petsc-x/openmpi-1.10-gcc-5.3
+make pflotran pflotran_rxn
+popd
+export PFLOTRAN_DIR=$PWD/pflotran-interface
+
+# Install required python packages
+module load anaconda3
+
+# This configures your shell so it works better with conda. Only need to run once
+conda init
+# May need to log out and log in again
+
+# This makes a local copy of the python installations that you can update (only need to run once)
+conda create --name myanaconda3 --clone base
+conda activate myanaconda3
+conda install pygraphviz xarray
+pip install mpi4py
+
+# Install python scripts for running alquimia-based biogeochemical simulations
+git clone --recursive https://github.com/bsulman/REDOX-PFLOTRAN.git
+
+# Build alquimia interface
+cd REDOX-PFLOTRAN/alquimia
+mkdir build
+cd build
+PETSC_ARCH='' cmake .. \
+  -DCMAKE_INSTALL_PREFIX=. \
+  -DCMAKE_C_COMPILER=$OPENMPI_DIR/bin/mpicc \
+  -DCMAKE_CXX_COMPILER=$OPENMPI_DIR/bin/mpicxx \
+  -DCMAKE_Fortran_COMPILER=$OPENMPI_DIR/bin/mpif90 \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DXSDK_WITH_PFLOTRAN=ON \
+  -DTPL_PFLOTRAN_LIBRARIES=$PFLOTRAN_DIR/libpflotranchem.a \
+  -DTPL_PFLOTRAN_INCLUDE_DIRS=$PFLOTRAN_DIR
+
+make install
+
+cd ../..
+
+# This script builds the code needed for connecting python scripts with alquimia
+python make_alquimia_python_interface.py 
+
+# Try running a script:
+python tidal.py
+
+
