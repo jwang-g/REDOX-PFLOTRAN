@@ -293,7 +293,8 @@ class PF_network_writer(PF_writer):
                 self.decrease_level()
                 
                 # Gas species
-                self.increase_level('GAS_SPECIES')
+                # self.increase_level('GAS_SPECIES')
+                self.increase_level('PASSIVE_GAS_SPECIES')
                 self.add_line( '#### NOTE: Beginning of auto-inserted gas species ####')
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='gas':
@@ -431,7 +432,7 @@ class PF_network_writer(PF_writer):
 
         
         
-    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.tec',print_output=False,length_days=None,
+    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.pft',print_output=False,length_days=None,
                         log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',CO2name='HCO3-'):
         inputdeck=simulation_name+'_generated.in'
         print('Setting up input deck in %s'%inputdeck)
@@ -780,7 +781,8 @@ def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',
     return to_draw
     
 def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,
-            node_colors=node_colors,namechanges={},node_alpha=0.8,node_size=None,edge_color=None,markers={'Reaction':'*'},pos=None,**kwargs):
+            node_colors=node_colors,namechanges={},font_color=None,node_alpha=0.8,node_size=None,edge_color=None,markers={'Reaction':'*'},pos=None,
+            width=None,connectionstyle=None,**kwargs):
     to_draw=network.copy()
     
     for p in network.nodes:
@@ -824,13 +826,13 @@ def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',a
     nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[nonreactions&~minerals].tolist(),node_color=nodecolors[nonreactions&~minerals],node_size=node_size,node_shape='o',alpha=node_alpha,**kwargs)
     nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=array(to_draw.nodes())[minerals].tolist(),node_color=nodecolors[minerals],node_shape=markers.get('mineral','o'),alpha=node_alpha,node_size=node_size,**kwargs)
         
-    nx.draw_networkx_labels(to_draw,pos=pos,labels={n:namechanges.get(n,n) for n in to_draw.nodes},font_size=font_size,**kwargs)
+    nx.draw_networkx_labels(to_draw,pos=pos,labels={n:namechanges.get(n,n) for n in to_draw.nodes},font_size=font_size,font_color=font_color,**kwargs)
     
     reactionnodes=array(to_draw.nodes())[~nonreactions].tolist()
     nx.draw_networkx_nodes(to_draw,pos=pos,nodelist=reactionnodes,node_shape=markers.get('Reaction','*'),
                 node_color=nodecolors[~nonreactions],alpha=node_alpha,node_size=node_size,**kwargs)
     
-    nx.draw_networkx_edges(to_draw,pos=pos,arrowsize=arrowsize,arrowstyle=arrowstyle,edge_color=edge_color,**kwargs)
+    nx.draw_networkx_edges(to_draw,pos=pos,connectionstyle=connectionstyle,arrowsize=arrowsize,arrowstyle=arrowstyle,edge_color=edge_color,width=width,**kwargs)
         
     
     

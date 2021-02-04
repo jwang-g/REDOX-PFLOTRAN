@@ -4,9 +4,11 @@
 SIMULATION
   SIMULATION_TYPE SUBSURFACE
   PROCESS_MODELS
-    SUBSURFACE_TRANSPORT transport
-      GLOBAL_IMPLICIT
-      NUMERICAL_JACOBIAN
+    SUBSURFACE_TRANSPORT
+      MODE GIRT
+      OPTIONS
+      # NUMERICAL_JACOBIAN
+      /
     /
   /
 
@@ -52,18 +54,20 @@ CONSTRAINT initial
 END
 
 #=========================== solver options ===================================
-LINEAR_SOLVER TRANSPORT
+NUMERICAL_METHODS TRANSPORT
+LINEAR_SOLVER
   SOLVER DIRECT
   !SOLVER ITERATIVE     ! default: ITERATIVE or KRYLOV: KSP_TYPE of BCGS and PC_TYPE of BJACOBI, if not modified below
   !PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
   !KSP_TYPE fgmres      ! default: BCGS. NOT much difference 
 END
 
-NEWTON_SOLVER TRANSPORT
+NEWTON_SOLVER
   ATOL 1.d-20
   RTOL 1.d-15
   STOL 1.d-10
   ITOL 1.d-10
+END
 END
 
 #=========================== discretization ===================================
