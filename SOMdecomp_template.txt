@@ -31,7 +31,7 @@ REFERENCE_LIQUID_DENSITY 1.d3
 CHEMISTRY
 
 
-
+  #LOG_FORMULATION
   DATABASE ./hanford.dat
 
   OUTPUT
@@ -58,7 +58,7 @@ NUMERICAL_METHODS TRANSPORT
 LINEAR_SOLVER
   SOLVER DIRECT
   !SOLVER ITERATIVE     ! default: ITERATIVE or KRYLOV: KSP_TYPE of BCGS and PC_TYPE of BJACOBI, if not modified below
-  !PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
+  PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
   !KSP_TYPE fgmres      ! default: BCGS. NOT much difference 
 END
 
@@ -67,6 +67,7 @@ NEWTON_SOLVER
   RTOL 1.d-15
   STOL 1.d-10
   ITOL 1.d-10
+  NUMERICAL_JACOBIAN
 END
 END
 
@@ -90,7 +91,7 @@ END
 
 FLUID_PROPERTY
   PHASE gas
-  DIFFUSION_COEFFICIENT 1.000d-05
+  DIFFUSION_COEFFICIENT 0.000d-05
 END
 
 #=========================== material properties ==============================

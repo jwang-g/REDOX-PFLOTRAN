@@ -476,7 +476,7 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
             num_cuts=c.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
             c.copy_from_alquimia(data)
             # Write output
-            c.write_output(step+1,dt,num_cuts)
+            c.write_output(step,dt,num_cuts)
             # print('O2 after: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
         except RuntimeError as err:
             print('ERROR on timestep %d, layer %d: %s'%(step,n,err))
@@ -634,8 +634,11 @@ class cell:
         # Keep track of how much H+ is in the carboxylate buffer rather than the CEC site, so we can plot CEC-exchangeable H+ later. 
         # Assumes there is one ion exchange site, and that the buffering sorption site is on Rock(s)
         # Aux doubles in this spot stores free surface site density (probably best not to rely on aux_doubles in general though)
-        self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[len(self.total_mobile)*2+len(self.secondary_free_ion_concentration)+self.surface_site_names.index('>Carboxylate-')])
-        
+        if '>Carboxylate-' in self.surface_site_names:
+            self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[len(self.total_mobile)*2+len(self.secondary_free_ion_concentration)+self.surface_site_names.index('>Carboxylate-')])
+        else:
+            self.output['CEC H+'][step]=self.total_immobile['H+']
+
     def convert_output(self):
         import pandas
         output_DF=pandas.DataFrame(index=self.output['time'])
@@ -969,7 +972,7 @@ if __name__ == '__main__':
 
     O2_initial=zeros(365*24)
     O2_initial[:100*24]=dq
-    result_highO2,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_atmoO2,bc=pools_atmoO2,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants)
+    result_highO2,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_atmoO2,bc=pools_atmoO2,diffquo={'O2(aq)':O2_const},hands_off=True,rateconstants=rateconstants)
     result,output_units=run_simulation('fermentation.in',365,3600,initcond=pools,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2,diffquo={'O2(aq)':O2_initial})    
     result_lowFe,output_units=run_simulation('fermentation.in',365,3600,initcond=pools_lowFe,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2,diffquo={'O2(aq)':O2_initial})
     
