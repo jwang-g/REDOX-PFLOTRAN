@@ -1,0 +1,13 @@
+*.out
+*-mas.dat
+*_generated.in
+*generated*.tec
+FT_redox.txt
+Network_comparison.png
+pytools_plotting_pf_h5.py
+_alquimia*
+*.out.alquimia
+fort.1
+flow_cut_to_failure.tec
+Figures/
+Mn_output/

@@ -13,7 +13,7 @@ decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'5.0 
 decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':'1.0 G O2(g)'}),
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
 decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'.37e-10 M Fe(OH)3'}),
-decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-2'}),
+decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-3'}),
 decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
 decomp_network.decomp_pool(name='CH4(aq)',kind='primary',constraints={'initial':1e-15}),
@@ -73,8 +73,9 @@ decomp_network.decomp_pool(name='H2O',kind='implicit'),
 conc_scales={
     'DOM1':5e-1,
     'Acetate-':1e-1,
-    'Fe+++':1e-11,
+    'Fe+++':1e-10,
     'O2(aq)':1e-4,
+    'Fe++':1e-1,
 }
 anox_inhib_conc = 1e-5
 
@@ -125,6 +126,10 @@ reactions = [
     # Currently assuming backward reaction rate is zero
     decomp_network.reaction(name='Fe(II) abiotic oxidation',stoich='1.0 Fe++ + 0.25 O2(aq) + 1.0 H+ <-> 1.0 Fe+++ + 0.5 H2O',
                                             rate_constant=1e-2,backward_rate_constant=0.0,reactiontype='GENERAL'),
+                                            
+    decomp_network.reaction(name='Fe(II) microbial oxidation',stoich='1.0 Fe++ + 0.25 O2(aq) + 1.0 H+ -> 1.0 Fe+++ + 0.5 H2O',
+                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=1.1e-10),decomp_network.monod(species='Fe++',k=conc_scales['Fe++'],threshold=1.1e-15)],
+                                            rate_constant=1e-8,reactiontype='MICROBIAL'),
 
     # Acetoclastic methanogenesis
     # C2H3O2- + H+ -> CH4 + HCO3- + H+
@@ -143,27 +148,24 @@ reactions = [
 
 ]
 
+rate_scale=1e-8
 rateconstants={
-       '1.00e+00 Fe++  + 2.50e-01 O2(aq)  + 1.00e+00 H+  <-> 1.00e+00 Fe+++  + 5.00e-01 H2O'                      : 1.0e0*1.0e1,
-       '1.00e+00 DOM1  -> 3.33e-01 Acetate-  + 3.33e-01 HCO3-  + 6.67e-01 H+  + 1.33e+00 H2(aq)  + 3.33e-01 Tracer'  : 6.0e-8*20.0,
-       "1.00e+00 DOM1  + 1.00e+00 O2(aq)  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 Tracer"                    : 3.0e-8*1.0,
-       "1.00e+00 Acetate-  + 2.00e+00 O2(aq)  -> 2.00e+00 HCO3-  + 2.00e+00 H+  + 2.00e+00 Tracer"                : 3.0e-8*1.0,
-       "1.00e+00 Acetate-  + 8.00e+00 Fe+++  -> 2.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 2.00e+00 Tracer" : 1.0e-8*5.0,
-       "1.00e+00 Acetate-  -> 1.00e+00 CH4(aq)  + 1.00e+00 HCO3-  + 1.00e+00 Tracer"                             : 1.0e-9*10.0,
-       "cellulose decay to CO2 (SOMDEC sandbox)"                                                              : 3.17e-8*5.0, #1.0/(365*24*3600)*1.0
-       "cellulose decay to DOM1 (SOMDEC sandbox)"                                                              : 3.17e-8*1.0 #1.0/(365*24*3600)*1.0
+       '1.00e+00 Fe++  + 2.50e-01 O2(aq)  + 1.00e+00 H+  <-> 1.00e+00 Fe+++  + 5.00e-01 H2O'                      : 1.0e0*1.0e1*0,
+       '1.00e+00 Fe++  + 2.50e-01 O2(aq)  + 1.00e+00 H+  -> 1.00e+00 Fe+++  + 5.00e-01 H2O'                      : rate_scale*100,
+       '1.00e+00 DOM1  -> 3.33e-01 Acetate-  + 3.33e-01 HCO3-  + 6.67e-01 H+  + 1.33e+00 H2(aq)  + 3.33e-01 Tracer'  : rate_scale*120,
+       "1.00e+00 DOM1  + 1.00e+00 O2(aq)  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 Tracer"                    : rate_scale*3,
+       "1.00e+00 Acetate-  + 2.00e+00 O2(aq)  -> 2.00e+00 HCO3-  + 2.00e+00 H+  + 2.00e+00 Tracer"                : rate_scale*3,
+       "1.00e+00 Acetate-  + 8.00e+00 Fe+++  -> 2.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 2.00e+00 Tracer" : rate_scale*2,
+       "1.00e+00 Acetate-  -> 1.00e+00 CH4(aq)  + 1.00e+00 HCO3-  + 1.00e+00 Tracer"                             : rate_scale*2,
+       "cellulose decay to CO2 (SOMDEC sandbox)"                                                              : rate_scale*15.85, #1.0/(365*24*3600)*1.0
+       "cellulose decay to DOM1 (SOMDEC sandbox)"                                                              : rate_scale*15.85 #1.0/(365*24*3600)*1.0
 }
 
 reaction_network =  decomp_network.decomp_network(pools=pools,reactions=reactions)
 
-networkfig2=pyplot.figure('Reaction network (with reactions)',clear=True)
-drawn=decomp_network.draw_network_with_reactions(reaction_network,node_size=700,arrowstyle='->',arrowsize=8.5,#edge_color='gray',
-            omit=['NH4+','Rock(s)','gas','surf_complex','secondary','H+','implicit','H2(aq)'],
-            namechanges={'cellulose':'Cellulose','DOM1':'DOM','O2(aq)':'O$_2$(aq)','CH4(aq)':'CH$_4$(aq)','HCO3-':'CO2(aq)',
-                         'Fe(OH)2':'Fe(OH)$_2$','Fe(OH)3':'Fe(OH)$_3$','Fe++':r'Fe$^\mathrm{+\!\!+}$','Fe+++':r'Fe$^\mathrm{+\!\!+\!\!\!+}$','Acetate-':'Acetate'})
 
 # Generate PFLOTRAN input file with correct reactions
-decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt','Arctic_redox.in',log_formulation=False,CO2name='Tracer',truncate_concentration=1e-25)
+decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt','Arctic_redox.in',log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25)
             
 dq=0.01 # Diffusion coefficient when aerobic
 O2_const=numpy.zeros(365*24)+dq
@@ -276,73 +278,59 @@ good_cores_rim_anoxic=5
 good_cores_center_anoxic=[17,3]
 good_cores_oxic=3 # Note, Core 3 is oxic in organic horizon and anoxic in mineral. No crossover.
 
-# Assuming all iron is converted to FeII by end of incubation (?)
-Fe_VF_organic_trough=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Incubation_Temperature']>4)&(Barrow_synthesis_data['Soil_layer']=='Organic')&(Barrow_synthesis_data['Microtopography'].str.lower()=='trough')]['Fe_II'].max()*1e-6*BD_layerest2_trough['Organic',True]*molar_volume_FeOH3*1.5
-Fe_VF_organic_nottrough=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Incubation_Temperature']>4)&(Barrow_synthesis_data['Soil_layer']=='Organic')&(Barrow_synthesis_data['Microtopography'].str.lower()!='trough')]['Fe_II'].max()*1e-6*BD_layerest2_trough['Organic',False]*molar_volume_FeOH3*1.5
-
-pools_organic_trough=decomp_network.change_constraints(pools,{'cellulose':SOC_layer_microtopo_mean['Organic',True]/100/12*BD_layerest2_trough['Organic',True]*100**3*cellulosefrac,
-                                                      'Fe(OH)3':'%1.4f  1.e2 m^2/m^3'%Fe_VF_organic_trough}) #
-pools_organic_trough=decomp_network.change_site_density(pools_organic_trough, '>Carboxylate-', SOC_layer_microtopo_mean['Organic',True]*2e2)
-CEC_organic_trough=SOC_layer_microtopo_mean['Organic',True]*2e2*10
-
-pools_organic_nottrough=decomp_network.change_constraints(pools,{'cellulose':SOC_layer_microtopo_mean['Organic',False]/100/12*BD_layerest2_trough['Organic',False]*100**3*cellulosefrac,
-                                                      'Fe(OH)3':'%1.4f  1.e2 m^2/m^3'%Fe_VF_organic_trough}) #
-pools_organic_nottrough=decomp_network.change_site_density(pools_organic_trough, '>Carboxylate-', SOC_layer_microtopo_mean['Organic',False]*2e2)
-CEC_organic_nottrough=SOC_layer_microtopo_mean['Organic',False]*2e2*10
-
-pools_atmoO2_organic=decomp_network.change_constraints(pools_organic_nottrough,{'O2(aq)':'1.0 G O2(g)','H+':'4.5 P','DOM1':1e-20,
-                    'cellulose':SOC_layer_microtopo_mean['Organic',False]/100/12*BD_layerest2_trough['Organic',False]*100**3*cellulosefrac*0.04, # Accounts for soils being pretty dry
-                    'Fe++':Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Oxic')&(Barrow_synthesis_data.Incubation_Time==0)&(Barrow_synthesis_data['Incubation_Temperature']>4)]\
-                    .drop_duplicates(['Core_ID','Moisture','Fe_II'])['Fe_II'].mean()*1e-6*BD_layerest2_trough['Organic',False]/porosity*1e3},inplace=False)
-pools_atmoO2_organic=decomp_network.change_site_density(pools_atmoO2_organic, '>Carboxylate-', SOC_layer_microtopo_mean['Organic',False]*0.5e1)
-# pools_lowFe_organic=decomp_network.change_constraints(pools_organic,{'Fe(OH)3':'0.0  1.e2 m^2/m^3','Fe+++':1.0e-10,'Fe++':1.0e-10},inplace=False)
-CEC_atmoO2_organic=SOC_layer_microtopo_mean['Organic',False]*0.5e1*50
-
-Fe_VF_mineral_trough=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Incubation_Temperature']>4)&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Mineral')&(Barrow_synthesis_data['Microtopography'].str.lower()=='trough')]['Fe_II'].max()*1e-6*BD_layerest2_trough['Mineral',True]*molar_volume_FeOH3*1.5
-Fe_VF_mineral_nottrough=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Incubation_Temperature']>4)&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Mineral')&(Barrow_synthesis_data['Microtopography'].str.lower()!='trough')]['Fe_II'].max()*1e-6*BD_layerest2_trough['Mineral',False]*molar_volume_FeOH3*1.5
-# Fe_VF_mineral=100*1e-6*BD_layerest2['Mineral']*molar_volume_FeOH3
-
-pools_mineral_trough=decomp_network.change_constraints(pools,{'cellulose':SOC_layer_microtopo_mean['Mineral',True]/100/12*BD_layerest2_trough['Mineral',True]*100**3*cellulosefrac,
-                                                      'Fe(OH)3':'%1.4f  1.e2 m^2/m^3'%Fe_VF_mineral_trough}) #
-pools_mineral_trough=decomp_network.change_site_density(pools_mineral_trough, '>Carboxylate-', SOC_layer_microtopo_mean['Mineral',True]*2e2)
-CEC_mineral_trough=SOC_layer_microtopo_mean['Mineral',True]*2e2*10
-
-pools_mineral_nottrough=decomp_network.change_constraints(pools,{'cellulose':SOC_layer_microtopo_mean['Mineral',False]/100/12*BD_layerest2_trough['Mineral',False]*100**3*cellulosefrac,
-                                                      'Fe(OH)3':'%1.4f  1.e2 m^2/m^3'%Fe_VF_mineral_nottrough,'H+':'4.7 P'}) #
-pools_mineral_nottrough=decomp_network.change_site_density(pools_mineral_nottrough, '>Carboxylate-', SOC_layer_microtopo_mean['Mineral',False]*2e2)
-CEC_mineral_nottrough=SOC_layer_microtopo_mean['Mineral',False]*2e2*10
-
-pools_atmoO2_mineral=decomp_network.change_constraints(pools_mineral_nottrough,{'O2(aq)':'1.0 G O2(g)','H+':'4.5 P','DOM':1e-20,
-                    'cellulose':SOC_layer_microtopo_mean['Mineral',False]/100/12*BD_layerest2_trough['Mineral',False]*100**3*cellulosefrac*0.04, # Accounts for soils being pretty dry
-                    'Fe++':Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Oxic')&(Barrow_synthesis_data.Incubation_Time==0)&(Barrow_synthesis_data['Incubation_Temperature']>4)]\
-                    .drop_duplicates(['Core_ID','Moisture','Fe_II'])['Fe_II'].mean()*1e-6*BD_layerest2_trough['Mineral',False]/porosity*1e3},inplace=False)
-pools_atmoO2_mineral=decomp_network.change_site_density(pools_atmoO2_mineral, '>Carboxylate-', SOC_layer_microtopo_mean['Mineral',False,False]*0.5e1)
-CEC_atmoO2_mineral=SOC_layer_microtopo_mean['Mineral',False,False]*0.5e1*10
-
-pools_lowFe_mineral=decomp_network.change_constraints(pools_mineral_nottrough,{'Fe(OH)3':'0.0  1.e2 m^2/m^3','Fe+++':1.0e-10,'Fe++':1.0e-10},inplace=False)
-
-# pools_permafrost=decomp_network.change_constraint(pools,'cellulose',SOC_layer_microtopo_mean['Permafrost',False]/100/12*BD_layerest2['Permafrost']*100**3)
 
 
 pools_atmoO2_organic,BD_atmoO2_organic,SOC_atmoO2_organic,CEC_atmoO2_organic,porosity_atmoO2_organic=make_initcond(3,'Organic',cellulosefrac=.05,oxic=True,porosity=porosity)
-result_highO2_organic,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_atmoO2_organic,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_organic,porosity=porosity_atmoO2_organic)
-pools_organic_trough,BD_organic_trough,SOC_organic_trough,CEC_organic_trough,porosity_organic_trough=make_initcond(9,'Organic')
-result_organic_trough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_organic_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_trough,porosity=porosity_organic_trough)    
-pools_organic_nottrough,BD_organic_nottrough,SOC_organic_nottrough,CEC_organic_nottrough,porosity_organic_nottrough=make_initcond(5,'Organic',BD_factor=2.0)
-result_organic_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_organic_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_nottrough,porosity=porosity_organic_nottrough)    
+pools_organic_trough,BD_organic_trough,SOC_organic_trough,CEC_organic_trough,porosity_organic_trough=make_initcond(9,'Organic')   
+pools_organic_nottrough,BD_organic_nottrough,SOC_organic_nottrough,CEC_organic_nottrough,porosity_organic_nottrough=make_initcond(5,'Organic',BD_factor=2.0)   
 # result_lowFe_organic,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_lowFe_organic,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc)
 
 # No oxic mineral horizon
 # pools_atmoO2_mineral,BD_atmoO2_mineral,SOC_atmoO2_mineral,CEC_atmoO2_mineral=make_initcond(3,'Mineral',cellulosefrac=.05*.04,oxic=True)
 # result_highO2_mineral,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_atmoO2_mineral,bc=pools_atmoO2_mineral,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_mineral)
 pools_mineral_trough,BD_mineral_trough,SOC_mineral_trough,CEC_mineral_trough,porosity_mineral_trough=make_initcond(9,'Mineral')
-result_mineral_trough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_mineral_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_mineral,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_trough,porosity=porosity_mineral_trough)    
-pools_mineral_nottrough,BD_mineral_nottrough,SOC_mineral_nottrough,CEC_mineral_nottrough,porosity_mineral_nottrough=make_initcond(5,'Mineral',BD_factor=2.0)
-result_mineral_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_mineral_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_mineral,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_nottrough,porosity=porosity_mineral_nottrough)    
+pools_mineral_nottrough,BD_mineral_nottrough,SOC_mineral_nottrough,CEC_mineral_nottrough,porosity_mineral_nottrough=make_initcond(5,'Mineral',BD_factor=2.0)   
+
+result_highO2_organic,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_atmoO2_organic,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_organic,porosity=porosity_atmoO2_organic)
+result_organic_trough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_organic_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_trough,porosity=porosity_organic_trough) 
+result_organic_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_organic_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_nottrough,porosity=porosity_organic_nottrough) 
+result_mineral_trough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_mineral_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_trough,porosity=porosity_mineral_trough)    
+result_mineral_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_mineral_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_nottrough,porosity=porosity_mineral_nottrough) 
+
+oxicfrac=0.1
+nperiodic=3
+
+O2_periodic=numpy.zeros(simlength*24)
+O2_periodic[:int(simlength*24*oxicfrac)]=dq
+result_periodicO2,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength*nperiodic,timestep,initcond=pools_organic_trough,bc=pools_atmoO2_organic,
+    diffquo={'O2(aq)':O2_periodic},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_organic_trough)
+
+
+nperiodic=1
+pH_obs=float(decomp_network.pools_list_to_dict(pools_organic_trough)['H+']['constraints']['initial'].split()[0])  
+periodic_out={}
+for ndryperiods in range(1,5):
+    periodic_out[ndryperiods]={}
+    for pH in pH_obs+numpy.arange(-.5,1.1,0.5):
+
+        O2_periodic=numpy.zeros(int(simlength/ndryperiods)*24)
+        O2_periodic[:int(simlength/ndryperiods*24*oxicfrac)]=dq
+        result_periodicO2,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength*nperiodic,timestep,initcond=decomp_network.change_constraint(pools_organic_trough,'H+','%1.2f P'%pH),bc=pools_atmoO2_organic,
+            diffquo={'O2(aq)':O2_periodic},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_organic_trough)
+        periodic_out[ndryperiods][pH]=result_periodicO2
+
+
 
 
 import plot_pf_output
 from pylab import *
+
+networkfig2=pyplot.figure('Reaction network (with reactions)',clear=True)
+drawn=decomp_network.draw_network_with_reactions(reaction_network,node_size=700,arrowstyle='->',arrowsize=8.5,#edge_color='gray',
+            omit=['NH4+','Rock(s)','gas','surf_complex','secondary','H+','implicit','H2(aq)'],
+            namechanges={'cellulose':'Cellulose','DOM1':'DOM','O2(aq)':'O$_2$(aq)','CH4(aq)':'CH$_4$(aq)','HCO3-':'CO2(aq)',
+                         'Fe(OH)2':'Fe(OH)$_2$','Fe(OH)3':'Fe(OH)$_3$','Fe++':r'Fe$^\mathrm{+\!\!+}$','Fe+++':r'Fe$^\mathrm{+\!\!+\!\!\!+}$','Acetate-':'Acetate'})
+
 
 def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,CO2flux_ax=None,CH4flux_ax=None,porewater_ax=None,cation_ax=None,
                 SOM_args={},pH_args={},Fe_args={},CO2flux_args={},CH4flux_args={},porewater_args={},cation_args={},
@@ -565,7 +553,7 @@ colors={'Anaerobic':'C1','Periodic':'C2','Low Fe':'C3','Aerobic':'C0'}
 
 # With Fe reduction
 # fig,axes=subplots(3,1,num='Organic horizon Anoxic',figsize=(6,8.4),clear=True)
-f,cation_axes=subplots(ncols=5,num='Cations',clear=True)
+f,cation_axes=subplots(ncols=5,num='Cations',clear=True,figsize=(13,4))
 fig,axs=subplots(nrows=4,ncols=5,num='Time series plots',clear=True,figsize=(16,8),sharex=False)
 from string import ascii_lowercase
 for x in range(5):
@@ -676,6 +664,7 @@ for ax in axs[3,:]:
     ax.set_ylim(3.8,6.1)
 
 leg=axs[2,4].legend(loc=(0.03,0.45),ncol=2,edgecolor='k')
+cation_axes[0].legend()
 
 # Measurements did not include oxic mineral horizon incubation
 # 
@@ -704,13 +693,6 @@ leg=axs[2,4].legend(loc=(0.03,0.45),ncol=2,edgecolor='k')
 # rateconstants["1.0e+00 Acetate-  + 8.0e+00 Fe+++  -> 2.0e+00 HCO3-  + 8.0e+00 Fe++  + 9.0e+00 H+  + 2.0e+00 Tracer"] = 1.0e-8*5.0
 # pools_atmoO2_organic2=decomp_network.change_constraints(pools_atmoO2_organic,{'O2(aq)':'1.0 G O2(g)'})
 
-oxicfrac=0.1
-nperiodic=3
-
-O2_periodic=numpy.zeros(simlength*24)
-O2_periodic[:int(simlength*24*oxicfrac)]=dq
-result_periodicO2,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength*nperiodic,timestep,initcond=pools_organic_trough,bc=pools_atmoO2_organic,
-    diffquo={'O2(aq)':O2_periodic},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_organic_trough)
 
 fig,axes=subplots(4,1,num='Periodic inundation',figsize=(6,8.4),clear=True)
 # CH4ax=axes[0].twinx()
@@ -740,19 +722,6 @@ for ax in axes:
 
 
 
-nperiodic=1
-pH_obs=float(decomp_network.pools_list_to_dict(pools_organic_trough)['H+']['constraints']['initial'].split()[0])  
-periodic_out={}
-for ndryperiods in range(1,5):
-    periodic_out[ndryperiods]={}
-    for pH in pH_obs+arange(-1,1.1,0.5):
-
-        O2_periodic=numpy.zeros(int(simlength/ndryperiods)*24)
-        O2_periodic[:int(simlength/ndryperiods*24*oxicfrac)]=dq
-        result_periodicO2,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength*nperiodic,timestep,initcond=decomp_network.change_constraint(pools_organic_trough,'H+','%1.2f P'%pH),bc=pools_atmoO2_organic,
-            diffquo={'O2(aq)':O2_periodic},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_organic_trough)
-        periodic_out[ndryperiods][pH]=result_periodicO2
-
 
 
 
@@ -760,8 +729,8 @@ cm=pyplot.get_cmap('plasma')
 norm=matplotlib.colors.Normalize(min(periodic_out[1].keys()),max(periodic_out[1].keys()))
 fig,axs=subplots(ncols=2,nrows=1,num='Periodic by dry periods',clear=True,squeeze=False,figsize=(7,4))
 for pH in periodic_out[1]:
-    axs[0,0].plot(array([1,2,3,4]),array([periodic_out[n][pH]['Total Tracer'].iloc[simlength*24] for n in range(1,5)])*result_periodicO2['Porosity'].max()/BD_layerest2_trough['Organic',False],'o',label=pH,c=cm(norm(pH)))
-    axs[0,1].plot(array([1,2,3,4]),array([periodic_out[n][pH]['Total CH4(aq)'].iloc[simlength*24] for n in range(1,5)])*result_periodicO2['Porosity'].max()/BD_layerest2_trough['Organic',False],'o',label=pH,c=cm(norm(pH)))
+    axs[0,0].plot(array([1,2,3,4]),array([periodic_out[n][pH]['Total Tracer'].iloc[simlength*24-1] for n in range(1,5)])*result_periodicO2['Porosity'].iloc[1]/BD_layerest2_trough['Organic',False],'o',label=pH,c=cm(norm(pH)))
+    axs[0,1].plot(array([1,2,3,4]),array([periodic_out[n][pH]['Total CH4(aq)'].iloc[simlength*24-1] for n in range(1,5)])*result_periodicO2['Porosity'].iloc[1]/BD_layerest2_trough['Organic',False],'o',label=pH,c=cm(norm(pH)))
 
 axs[0,0].set_xlabel('Number of oxic-anoxic cycles')
 axs[0,1].set_xlabel('Number of oxic-anoxic cycles')
@@ -803,9 +772,9 @@ for nn,ndry in enumerate(ndry_plotted):
     axs[2,nn].set_title('Fe(II) production rate')
     
     
-    axs[2,nn].plot((periodic_out[ndry][pH_obs]['Total Fe++'].diff()*24*1e3*result_periodicO2['Porosity'].max()+periodic_out[ndry][pH_obs]['Total Sorbed Fe++'].diff()*24*1e6/100**3)/BD_layerest2_trough['Organic',False],'-',c=c,label=str(ndry))
-    axs[2,nn].plot((periodic_out[ndry][pH_obs-1]['Total Fe++'].diff()*24*1e3*result_periodicO2['Porosity'].max()++periodic_out[ndry][pH_obs-1]['Total Sorbed Fe++'].diff()*24*1e6/100**3)/BD_layerest2_trough['Organic',False],'--',c=c)
-    axs[2,nn].plot((periodic_out[ndry][pH_obs+1]['Total Fe++'].diff()*24*1e3*result_periodicO2['Porosity'].max()++periodic_out[ndry][pH_obs+1]['Total Sorbed Fe++'].diff()*24*1e6/100**3)/BD_layerest2_trough['Organic',False],':',c=c)
+    axs[2,nn].plot((periodic_out[ndry][pH_obs]['Total Fe++'].diff()*24*1e3*result_periodicO2['Porosity'].iloc[1]+periodic_out[ndry][pH_obs]['Total Sorbed Fe++'].diff()*24*1e6/100**3)/BD_layerest2_trough['Organic',False],'-',c=c,label=str(ndry))
+    axs[2,nn].plot((periodic_out[ndry][pH_obs-1]['Total Fe++'].diff()*24*1e3*result_periodicO2['Porosity'].iloc[1]++periodic_out[ndry][pH_obs-1]['Total Sorbed Fe++'].diff()*24*1e6/100**3)/BD_layerest2_trough['Organic',False],'--',c=c)
+    axs[2,nn].plot((periodic_out[ndry][pH_obs+1]['Total Fe++'].diff()*24*1e3*result_periodicO2['Porosity'].iloc[1]++periodic_out[ndry][pH_obs+1]['Total Sorbed Fe++'].diff()*24*1e6/100**3)/BD_layerest2_trough['Organic',False],':',c=c)
         
     axs[3,nn].plot(periodic_out[ndry][pH_obs]['Fe(OH)3 VF']/molar_volume_FeOH3*1e3/BD_layerest2_trough['Organic',False],'-',c=c)
     axs[3,nn].plot(periodic_out[ndry][pH_obs-1]['Fe(OH)3 VF']/molar_volume_FeOH3*1e3/BD_layerest2_trough['Organic',False],'--',c=c)
