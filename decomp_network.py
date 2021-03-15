@@ -781,7 +781,7 @@ def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',
     return to_draw
     
 def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,
-            node_colors=node_colors,namechanges={},font_color=None,node_alpha=0.8,node_size=None,edge_color=None,markers={'Reaction':'*'},pos=None,
+            node_colors=node_colors,namechanges={},font_color='k',node_alpha=0.8,node_size=None,edge_color=None,markers={'Reaction':'*'},pos=None,
             width=None,connectionstyle=None,**kwargs):
     to_draw=network.copy()
     

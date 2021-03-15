@@ -635,7 +635,7 @@ class cell:
         # Assumes there is one ion exchange site, and that the buffering sorption site is on Rock(s)
         # Aux doubles in this spot stores free surface site density (probably best not to rely on aux_doubles in general though)
         if '>Carboxylate-' in self.surface_site_names:
-            self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[len(self.total_mobile)*2+len(self.secondary_free_ion_concentration)+self.surface_site_names.index('>Carboxylate-')])
+            self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[-len(self.surface_site_names)+self.surface_site_names.index('>Carboxylate-')])
         else:
             self.output['CEC H+'][step]=self.total_immobile['H+']
 

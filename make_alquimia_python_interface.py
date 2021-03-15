@@ -18,10 +18,11 @@ ffi_builder.set_source('_alquimia',
     #include "alquimia/alquimia_util.h"
     #include "alquimia/alquimia_containers.h"
     
-    """,libraries=['alquimia','pflotranchem'],
+    """,libraries=['alquimia','pflotranchem','petsc'],
         library_dirs=[alquimia_dir,pflotran_dir,petsc_lib],
         include_dirs=[petsc_include,petsc_archinclude,mpi_include,alquimia_include],
-        extra_link_args=['-Wl,-rpath=alquimia/build/alquimia'])
+        extra_link_args=['-Wl,-rpath,alquimia/build/alquimia'],
+        )
     
 ffi_builder.cdef("""
         // Declarations shared between python and C
