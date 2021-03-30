@@ -2,7 +2,7 @@
 
 from run_alquimia import get_alquimiavector,ffi,lib,check_status,init_alquimia,convert_condition_to_alquimia
 import decomp_network
-import delmar_network_tidev2 as Mar
+import Delta_Mars_network as Mar
 from matplotlib import pyplot
 import numpy
 import xarray
