@@ -11,3 +11,5 @@ fort.1
 flow_cut_to_failure.tec
 Figures/
 Mn_output/
+Arctic_Fe_output/
+*.pyc

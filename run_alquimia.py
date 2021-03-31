@@ -53,7 +53,7 @@ def convert_output(output,meta_data,secondary_names):
     output_DF['Porosity']=output['porosity']
     output_DF['ncuts']=output['ncuts']
     output_DF['actual_dt']=output['actual_dt']
-    output_units={'time':'s','Porosity':'NA','ncuts':'NA','actual_dt':'s'}
+    output_units={'time':'days','Porosity':'NA','ncuts':'NA','actual_dt':'s'}
     total=pandas.DataFrame(output['total_mobile'],columns=get_alquimiavector(meta_data.primary_names),index=output['time']).add_prefix('Total ')
     for col in total.columns:
         output_DF[col]=total[col]
@@ -321,7 +321,7 @@ def init_alquimia(input_file,hands_off=True):
 
 def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,saturation=1.0,hands_off=True,
                     water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,bc=None,
-                    diffquo={},rateconstants={},truncate_concentration=0.0,CEC=None,printstep=50):
+                    diffquo={},rateconstants={},truncate_concentration=0.0,CEC=None,printstep=50,run_name=''):
     
     import time
     t0=time.time()
@@ -431,9 +431,10 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
 
     *****************************************************
     Successfully initialized alquimia geochemical engine
+    Simulation: %s
     *****************************************************
 
-    ''')
+    '''%run_name)
 
     # Read secondary complex names from input file since Alquimia does not provide them
     with open(input_file,'r') as infile:
@@ -513,10 +514,10 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
         print('''
 
         *****************************************************
-        *           Successfully finished run               *
+        *           Successfully finished run %s             
         *****************************************************
 
-        ''')
+        '''%run_name)
     return c.output_DF,c.output_units
 
 

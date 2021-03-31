@@ -21,7 +21,7 @@ ffi_builder.set_source('_alquimia',
     """,libraries=['alquimia','pflotranchem','petsc'],
         library_dirs=[alquimia_dir,pflotran_dir,petsc_lib],
         include_dirs=[petsc_include,petsc_archinclude,mpi_include,alquimia_include],
-        extra_link_args=['-Wl,-rpath,alquimia/build/alquimia'],
+        extra_link_args=['-Wl,-rpath,alquimia/build/alquimia','-Wl,-rpath,'+petsc_lib],
         )
     
 ffi_builder.cdef("""
