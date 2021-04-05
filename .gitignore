@@ -13,3 +13,5 @@ Figures/
 Mn_output/
 Arctic_Fe_output/
 *.pyc
+*.pft
+.vscode/

@@ -266,11 +266,11 @@ good_cores_oxic=3 # Note, Core 3 is oxic in organic horizon and anoxic in minera
 pools_atmoO2_organic,BD_atmoO2_organic,SOC_atmoO2_organic,CEC_atmoO2_organic,porosity_atmoO2_organic=make_initcond(3,'Organic',cellulosefrac=.05,oxic=True,porosity=porosity)
 pools_organic_trough,BD_organic_trough,SOC_organic_trough,CEC_organic_trough,porosity_organic_trough=make_initcond(9,'Organic')   
 pools_organic_nottrough,BD_organic_nottrough,SOC_organic_nottrough,CEC_organic_nottrough,porosity_organic_nottrough=make_initcond(5,'Organic',BD_factor=2.0)   
-# result_lowFe_organic,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_lowFe_organic,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc)
+# result_lowFe_organic,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,initcond=pools_lowFe_organic,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc)
 
 # No oxic mineral horizon
 # pools_atmoO2_mineral,BD_atmoO2_mineral,SOC_atmoO2_mineral,CEC_atmoO2_mineral=make_initcond(3,'Mineral',cellulosefrac=.05*.04,oxic=True)
-# result_highO2_mineral,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,initcond=pools_atmoO2_mineral,bc=pools_atmoO2_mineral,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_mineral)
+# result_highO2_mineral,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,initcond=pools_atmoO2_mineral,bc=pools_atmoO2_mineral,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_mineral)
 pools_mineral_trough,BD_mineral_trough,SOC_mineral_trough,CEC_mineral_trough,porosity_mineral_trough=make_initcond(9,'Mineral')
 pools_mineral_nottrough,BD_mineral_nottrough,SOC_mineral_nottrough,CEC_mineral_nottrough,porosity_mineral_nottrough=make_initcond(5,'Mineral',BD_factor=2.0)   
 
@@ -285,17 +285,17 @@ pHs=5.0+numpy.arange(-.5,1.1,0.5)
 
 if __name__ == '__main__':
     # Generate PFLOTRAN input file with correct reactions
-    decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt','Arctic_redox.in',log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25)
+    decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt','Arctic_redox_generated.in',log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25)
                 
     O2_const=numpy.zeros(365*24)+dq
     O2_initial=numpy.zeros(simlength*24)
     O2_initial[:int(simlength*24*initfrac)]=dq
 
-    result_highO2_organic,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,run_name='highO2_organic',initcond=pools_atmoO2_organic,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_organic,porosity=porosity_atmoO2_organic)
-    result_organic_trough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,run_name='organic_trough',initcond=pools_organic_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_trough,porosity=porosity_organic_trough) 
-    result_organic_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,run_name='organic_nottrough',initcond=pools_organic_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_nottrough,porosity=porosity_organic_nottrough) 
-    result_mineral_trough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,run_name='mineral_trough',initcond=pools_mineral_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_trough,porosity=porosity_mineral_trough)    
-    result_mineral_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,run_name='mineral_nottrough',initcond=pools_mineral_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_nottrough,porosity=porosity_mineral_nottrough) 
+    result_highO2_organic,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='highO2_organic',initcond=pools_atmoO2_organic,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_organic,porosity=porosity_atmoO2_organic)
+    result_organic_trough,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='organic_trough',initcond=pools_organic_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_trough,porosity=porosity_organic_trough) 
+    result_organic_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='organic_nottrough',initcond=pools_organic_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_nottrough,porosity=porosity_organic_nottrough) 
+    result_mineral_trough,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='mineral_trough',initcond=pools_mineral_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_trough,porosity=porosity_mineral_trough)    
+    result_mineral_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='mineral_nottrough',initcond=pools_mineral_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_nottrough,porosity=porosity_mineral_nottrough) 
 
     
     nperiodic=3
@@ -308,7 +308,7 @@ if __name__ == '__main__':
 
             O2_periodic=numpy.zeros(int(simlength/ndryperiods)*24)
             O2_periodic[:int(simlength/ndryperiods*24*oxicfrac)]=dq
-            result_periodicO2,output_units=run_alquimia.run_simulation('Arctic_redox.in',simlength,timestep,run_name='Periodic cycles=%d, pH=%1.1f'%(ndryperiods,pH),
+            result_periodicO2,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='Periodic cycles=%d, pH=%1.1f'%(ndryperiods,pH),
                 initcond=decomp_network.change_constraint(pools_organic_trough,'H+','%1.2f P'%pH),bc=pools_atmoO2_organic,
                 diffquo={'O2(aq)':O2_periodic},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_organic_trough)
             periodic_out[ndryperiods][pH]=result_periodicO2

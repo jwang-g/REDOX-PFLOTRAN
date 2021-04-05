@@ -104,19 +104,19 @@ conc_scales={
 }
 
 rate_scale=2e-10
-truncate_conc=1e-30
+truncate_conc=1e-50
 thresh=truncate_conc*1.01
 reactions = [
     decomp_network.reaction(name='Aerobic decomposition',reactant_pools={'SOM':1.0},product_pools={'HCO3-':1.0},reactiontype='SOMDECOMP',
-                                            rate_constant=1e-6,rate_units='1/s',turnover_name='RATE_CONSTANT', 
+                                            rate_constant=1e-6,rate_units='1/sec',turnover_name='RATE_CONSTANT', 
                                             # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='THRESHOLD 1.0d20')]),
                                         monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh)]),
                                         
                                         
     decomp_network.reaction(name='Hydrolysis',stoich='1.0 SOM -> 1.0 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
-                                            rate_constant=1e-7,rate_units='1/s', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
+                                            rate_constant=1e-7,rate_units='1/sec', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                         inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=conc_scales['DOM1']),
-                                                          decomp_network.inhibition(species='O2(aq)',k=6.25e-11,type='THRESHOLD -1.0d10')
+                                                          decomp_network.inhibition(species='O2(aq)',k=6.25e-11,type='MONOD',threshold=thresh)#type='THRESHOLD -1.0d10')
                                                           # decomp_network.inhibition(species='O2(aq)',type='MONOD',k=1e-11),
                                                           ]),
     
@@ -218,16 +218,16 @@ reactions = [
 ]
 
 def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewater_ax=None,do_legend=False):
-
+    t=result.index
     if SOM_ax is not None:
-        l=SOM_ax.plot(result['SOM']*1e-3,label='SOM')[0]
+        l=SOM_ax.plot(t,result['SOM']*1e-3,label='SOM')[0]
 
         SOM_ax.set_title('SOM remaining')
         SOM_ax.set_ylabel('Concentration\n(mmol C/cm$^{-3}$)')
         SOM_ax.set_xlabel('Time (days)')
 
     if pH_ax is not None:
-        pH_ax.plot(-numpy.log10(result['Free H+']))
+        pH_ax.plot(t,-numpy.log10(result['Free H+']))
 
         pH_ax.set_title('pH')
         pH_ax.set_ylabel('pH')
@@ -236,12 +236,12 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewat
     if Fe_ax is not None:
         molar_volume=34.3600 # From database. cm3/mol
         molar_weight = 106.8690
-        l=Fe_ax.plot(result['Fe(OH)3 VF']/molar_volume*1e6   ,label='Fe(OH)3')[0]
+        l=Fe_ax.plot(t,result['Fe(OH)3 VF']/molar_volume*1e6   ,label='Fe(OH)3')[0]
         
         # M/L to umol/cm3: 1e6/1e3=1e3
-        l=Fe_ax.plot(result['Total Fe+++']*result['Porosity']*1e3   ,label='Fe+++',ls='--')[0]
+        l=Fe_ax.plot(t,result['Total Fe+++']*result['Porosity']*1e3   ,label='Fe+++',ls='--')[0]
         
-        l=Fe_ax.plot(result['Total Fe++']*result['Porosity']*1e3 ,ls=':'  ,label='Fe++')[0]
+        l=Fe_ax.plot(t,result['Total Fe++']*result['Porosity']*1e3 ,ls=':'  ,label='Fe++')[0]
         
         Fe_ax.set_title('Fe species')
         Fe_ax.set_ylabel('Concentration\n($\mu$mol/cm$^{-3}$)')
@@ -252,9 +252,9 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewat
     if gasflux_ax is not None:
         gasflux_ax.set_yscale('log')
         
-        l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total CH4(aq)']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CH4')[0]
+        l=gasflux_ax.plot(t.values[:-1],numpy.diff(result['Total CH4(aq)']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CH4')[0]
         
-        l=gasflux_ax.plot(result.index.values[:-1],numpy.diff(result['Total Tracer']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CO2',ls='--',c='C5')[0]
+        l=gasflux_ax.plot(t.values[:-1],numpy.diff(result['Total Tracer']*result['Porosity'])/numpy.diff(result.index.values)*1e3,label='CO2',ls='--',c='C5')[0]
 
         gasflux_ax.set_title('Gas fluxes')
         gasflux_ax.set_ylabel('Flux rate\n($\mu$mol cm$^{-3}$ day$^{-1}$)')
@@ -266,16 +266,16 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,gasflux_ax=None,porewat
         porewater_ax.set_yscale('log')
         # porewater_ax.plot(result['Total DOM1'],label='DOM')
         # porewater_ax.plot(result['Total Acetate-'],label='Acetate',c='C3')
-        porewater_ax.plot(result['Total O2(aq)'],'-',label='O2',c='C0')
-        porewater_ax.plot(result['Total NO3-'],'-',c='C1',label='NO3-')
-        porewater_ax.plot(result['Total N2(aq)'],'--',c='C1',label='N2')
-        porewater_ax.plot(result['Total Fe+++'],'-',label='Fe+++',c='C2')
+        porewater_ax.plot(t,result['Total O2(aq)'],'-',label='O2',c='C0')
+        porewater_ax.plot(t,result['Total NO3-'],'-',c='C1',label='NO3-')
+        porewater_ax.plot(t,result['Total N2(aq)'],'--',c='C1',label='N2')
+        porewater_ax.plot(t,result['Total Fe+++'],'-',label='Fe+++',c='C2')
         # porewater_ax.plot(result['Free Fe+++'],':',label='Fe+++',c='C1')
-        porewater_ax.plot(result['Total Fe++'],'--',label='Fe++',c='C2')
+        porewater_ax.plot(t,result['Total Fe++'],'--',label='Fe++',c='C2')
 
-        porewater_ax.plot(result['Total SO4--'],'-',c='C3',label='SO4--')
-        porewater_ax.plot(result['Total HS-'],'--',c='C3',label='H2S')
-        porewater_ax.plot(result['Total CH4(aq)'],'--',c='C4',label='CH4')
+        porewater_ax.plot(t,result['Total SO4--'],'-',c='C3',label='SO4--')
+        porewater_ax.plot(t,result['Total HS-'],'--',c='C3',label='H2S')
+        porewater_ax.plot(t,result['Total CH4(aq)'],'--',c='C4',label='CH4')
         
         porewater_ax.set_title('Porewater concentrations')
         porewater_ax.set_ylabel('Concentration (M)')
@@ -376,29 +376,32 @@ pflotran_exe='../pflotran-interface/src/pflotran/pflotran'
 simlength=30
 
 # Run using standard PFLOTRAN and generated input file
-result,units=decomp_network.PF_network_writer(reaction_network).run_simulation('SOMdecomp_template.txt','saline',pflotran_exe,print_output=False,length_days=simlength,truncate_concentration=truncate_conc,log_formulation=True)
+precision=3
+result,units=decomp_network.PF_network_writer(reaction_network,precision=precision).run_simulation('SOMdecomp_template.txt','saline',pflotran_exe,print_output=False,length_days=simlength,truncate_concentration=truncate_conc,log_formulation=True)
 
 # Run using python interface to alquimia
 #rate_scale=0.0
-decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt','saline_alquimia.in',length_days=simlength,log_formulation=False)
+# decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt','saline_alquimia.in',length_days=simlength,log_formulation=True,truncate_concentration=truncate_conc)
 rateconstants={
-'1.00e+00 DOM1  -> 3.33e-01 Acetate-  + 3.33e-01 HCO3-  + 6.67e-01 H+  + 1.33e+00 H2(aq)  + 3.33e-01 Tracer':rate_scale,
-'1.00e+00 DOM1  + 1.00e+00 O2(aq)  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 Tracer':rate_scale,
-'4.00e+00 H2(aq)  + 1.00e+00 HCO3-  + 1.00e+00 H+  -> 1.00e+00 CH4(aq)  + 3.00e+00 H2O':rate_scale*0.1,
-'1.00e+00 Acetate-  + 2.00e+00 NO3-  + 1.00e+00 H+  -> 2.00e+00 HCO3-  + 1.00e+00 N2(aq)  + 0.00e+00 N2O(aq)  + 2.00e+00 H2O  + 2.00e+00 Tracer':rate_scale*0.8,
-'1.00e+00 Acetate-  + 2.00e+00 O2(aq)  -> 2.00e+00 HCO3-  + 2.00e+00 H+  + 2.00e+00 Tracer':rate_scale,
-'1.00e+00 CH4(aq)  + 1.00e+00 O2(aq)  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 H2O  + 1.00e+00 Tracer':rate_scale,
-'2.00e+00 NH4+  + 4.00e+00 O2(aq)  -> 2.00e+00 NO3-  + 2.00e+00 H2O  + 4.00e+00 H+':rate_scale,
-'1.00e+00 Acetate-  + 8.00e+00 Fe+++  -> 2.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 2.00e+00 Tracer':rate_scale*0.5,
-'1.00e+00 CH4(aq)  + 8.00e+00 Fe+++  + 3.00e+00 H2O  -> 1.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 1.00e+00 Tracer':rate_scale,
-'1.00e+00 CH4(aq)  + 1.00e+00 NO3-  -> 1.00e+00 HCO3-  + 1.00e+00 NH4+  + 1.00e+00 Tracer':rate_scale,
-'1.00e+00 Acetate-  + 1.00e+00 SO4--  -> 2.00e+00 HCO3-  + 2.00e+00 HS-  + 2.00e+00 Tracer':rate_scale*0.3,
-'1.00e+00 CH4(aq)  + 1.00e+00 SO4--  -> 1.00e+00 HCO3-  + 1.00e+00 HS-  + 1.00e+00 H2O  + 1.00e+00 Tracer':rate_scale,
-'1.00e+00 Acetate-  -> 1.00e+00 CH4(aq)  + 1.00e+00 HCO3-  + 1.00e+00 Tracer':rate_scale*0.1,
-'SOM decay to CO2 (SOMDEC sandbox)': 1e-6,
-'SOM decay to DOM1 (SOMDEC sandbox)':1e-7,
+'fermentation':rate_scale,
+'DOM oxidation (O2)':rate_scale,
+'Hydrogenotrophic methanogenesis':rate_scale*0.1,
+'Denitrification':rate_scale*0.8,
+'Acetate oxidation (O2)':rate_scale,
+'Methane oxidation (O2)':rate_scale,
+'Nitrification':rate_scale,
+'Fe(III) reduction':rate_scale*0.5,
+'Methane oxidation (Fe)':rate_scale,
+'Methane oxidation (NO3)':rate_scale,
+'Sulfate reduction':rate_scale*0.3,
+'Methane oxidation (SO4)':rate_scale,
+'Acetoclastic methanogenesis':rate_scale*0.1,
+'Aerobic decomposition': 1e-6,
+'Hydrolysis':1e-7,
 }
-result_alquimia,units_alq=run_alquimia.run_simulation('saline_alquimia.in',hands_off=False,simlength_days=simlength,dt=3600,initcond=pools,rateconstants=rateconstants,truncate_concentration=truncate_conc)
+
+rateconstants_stoich=run_alquimia.convert_rateconstants(rateconstants,reactions,precision=precision)
+result_alquimia,units_alq=run_alquimia.run_simulation('saline_generated.in',hands_off=False,simlength_days=simlength,dt=3600,initcond=pools,rateconstants=rateconstants_stoich,truncate_concentration=truncate_conc)
 
 
 networkfig=pyplot.figure('Reaction network',clear=True,figsize=(7.1,8.9))
@@ -423,27 +426,40 @@ for p in networkfig.axes[0].patches:
     if (ex.max[0]<155 or ex.max[0]>188) and ex.min[1]>300:
         p.set_connectionstyle('arc3,rad=-0.1')
 
-resultsfig,axs=pyplot.subplots(num='Results',clear=True,squeeze=False,nrows=1)
+resultsfig,axs=pyplot.subplots(num='Results',clear=True,squeeze=False,nrows=2)
 # plot_result(result,porewater_ax=axs[1,0],SOM_ax=axs[0,0],do_legend=True)
 # axs[1,0].set_ylim(bottom=1e-13)
 # axs[0,0].legend(fontsize='medium',ncol=2)
+t=result.index
+t_alquimia=result_alquimia.index
+axs[0,0].plot(t,result['Total O2(aq)']/result['Total O2(aq)'].iloc[0],label='O$_2$')
+axs[0,0].plot(t,result['Total NO3-']/(result['Total NO3-']+result['Total N2(aq)']),label='NO$_3^-$')
+axs[0,0].plot(t,result['Total Fe+++']/(result['Total Fe+++']+result['Total Fe++']),label='Fe(III)')
+axs[0,0].plot(t,result['Total SO4--']/(result['Total SO4--']+result['Total HS-']),label='SO$_4^{--}$')
+axs[0,0].plot(t,result['Total CH4(aq)']/result['Total CH4(aq)'].iloc[-1],label='CH$_4$')
 
-axs[0,0].plot(result['Total O2(aq)']/result['Total O2(aq)'].iloc[0],label='O$_2$')
-axs[0,0].plot(result['Total NO3-']/(result['Total NO3-']+result['Total N2(aq)']),label='NO$_3^-$')
-axs[0,0].plot(result['Total Fe+++']/(result['Total Fe+++']+result['Total Fe++']),label='Fe(III)')
-axs[0,0].plot(result['Total SO4--']/(result['Total SO4--']+result['Total HS-']),label='SO$_4^{--}$')
-axs[0,0].plot(result['Total CH4(aq)']/result['Total CH4(aq)'].iloc[-1],label='CH$_4$')
 
-
-axs[0,0].plot(result_alquimia['Total O2(aq)']/result_alquimia['Total O2(aq)'].iloc[0],ls='--',c='C0')
-axs[0,0].plot(result_alquimia['Total NO3-']/(result_alquimia['Total NO3-']+result_alquimia['Total N2(aq)']),ls='--',c='C1')
-axs[0,0].plot(result_alquimia['Total Fe+++']/(result_alquimia['Total Fe+++']+result_alquimia['Total Fe++']),ls='--',c='C2')
-axs[0,0].plot(result_alquimia['Total SO4--']/(result_alquimia['Total SO4--']+result_alquimia['Total HS-']),ls='--',c='C3')
-axs[0,0].plot(result_alquimia['Total CH4(aq)']/result_alquimia['Total CH4(aq)'].iloc[-1],'--',c='C4')
+axs[0,0].plot(t_alquimia,result_alquimia['Total O2(aq)']/result_alquimia['Total O2(aq)'].iloc[0],ls='--',c='C0')
+axs[0,0].plot(t_alquimia,result_alquimia['Total NO3-']/(result_alquimia['Total NO3-']+result_alquimia['Total N2(aq)']),ls='--',c='C1')
+axs[0,0].plot(t_alquimia,result_alquimia['Total Fe+++']/(result_alquimia['Total Fe+++']+result_alquimia['Total Fe++']),ls='--',c='C2')
+axs[0,0].plot(t_alquimia,result_alquimia['Total SO4--']/(result_alquimia['Total SO4--']+result_alquimia['Total HS-']),ls='--',c='C3')
+axs[0,0].plot(t_alquimia,result_alquimia['Total CH4(aq)']/result_alquimia['Total CH4(aq)'].iloc[-1],'--',c='C4')
 
 axs[0,0].set_xlabel('Time (days)',fontsize='medium')
 axs[0,0].set_ylabel('Relative concentration',fontsize='medium')
 axs[0,0].set_title('Simulated terminal electron acceptors',fontsize='large')
 axs[0,0].legend(fontsize='medium',ncol=2)
+
+axs[1,0].plot(t,(result_alquimia['Total O2(aq)']/result_alquimia['Total O2(aq)'].iloc[0]).values-(result['Total O2(aq)']/result['Total O2(aq)'].iloc[0]).values,label='O$_2$')
+axs[1,0].plot(t,(result_alquimia['Total NO3-']/(result_alquimia['Total NO3-']+result_alquimia['Total N2(aq)'])).values-(result['Total NO3-']/(result['Total NO3-']+result['Total N2(aq)'])).values,label='NO$_3^-$')
+axs[1,0].plot(t,(result_alquimia['Total Fe+++']/(result_alquimia['Total Fe+++']+result_alquimia['Total Fe++'])).values-(result['Total Fe+++']/(result['Total Fe+++']+result['Total Fe++'])).values,label='Fe(III)')
+axs[1,0].plot(t,(result_alquimia['Total SO4--']/(result_alquimia['Total SO4--']+result_alquimia['Total HS-'])).values-(result['Total SO4--']/(result['Total SO4--']+result['Total HS-'])).values,label='SO$_4^{--}$')
+axs[1,0].plot(t,(result_alquimia['Total CH4(aq)']/result_alquimia['Total CH4(aq)'].iloc[-1]).values-(result['Total CH4(aq)']/result['Total CH4(aq)'].iloc[-1]).values,label='CH$_4$')
+
+
+axs[1,0].set_xlabel('Time (days)',fontsize='medium')
+axs[1,0].set_ylabel('Relative concentration',fontsize='medium')
+axs[1,0].set_title('Simulated terminal electron acceptors',fontsize='large')
+# axs[1,0].legend(fontsize='medium',ncol=2)
 
 pyplot.show()

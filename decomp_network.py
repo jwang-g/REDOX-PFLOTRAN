@@ -14,6 +14,23 @@ def pools_dict_to_list(pools):
     else:
         return pools
 
+def get_stoich_from_name(name,reactions,precision=2):
+    reacts=pools_list_to_dict(reactions)
+    react=reacts[name]
+    if react['reactiontype']=='MICROBIAL':
+        stoich=PF_microbial_reaction_writer(reactions,precision=precision).write_reaction_stoich(react['reactant_pools'],react['product_pools'])
+    elif react['reactiontype']=='GENERAL':
+        stoich=PF_general_reaction_writer(reactions,precision=precision).write_reaction_stoich(react['reactant_pools'],react['product_pools'])
+    elif react['reactiontype']=='SOMDECOMP':
+        prods=list(react['product_pools'].keys())
+        if len(prods)==1 and (prods[0]=='HCO3-' or 'CO2' in prods[0]):
+            stoich='%s decay to %s (SOMDEC sandbox)'%(list(react['reactant_pools'])[0],'CO2')
+        else:
+            stoich='%s decay to %s (SOMDEC sandbox)'%(list(react['reactant_pools'])[0],list(react['product_pools'])[0])
+    else:
+        raise ValueError("Reaction type '%s' not implemented"%react['reactiontype'])
+    return stoich.strip()
+
 def change_constraint(pools,poolname,newval,constraint='initial',inplace=False):
     'Change a constraint value for a pool in a list of pools. Returns a copy unless inplace is True'
     if not inplace:
@@ -451,6 +468,7 @@ class PF_network_writer(PF_writer):
         import plot_pf_output
         outputfile=simulation_name + '_generated' + output_suffix
         # Set up for more flexibility in output formats
+        print('Reading output from file %s'%outputfile)
         output_data,units=plot_pf_output.read_tecfile(outputfile)
         return output_data,units
         

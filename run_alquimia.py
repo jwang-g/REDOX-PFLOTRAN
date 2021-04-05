@@ -1,3 +1,4 @@
+from decomp_network import get_stoich_from_name
 from _alquimia import ffi,lib
 import numpy
 
@@ -46,6 +47,9 @@ def print_alquimia_object(obj,indent=0):
     else:
         print(' '*indent+obj)
 
+def convert_rateconstants(rateconstants,reactions,precision=2):
+    import decomp_network
+    return dict([(decomp_network.get_stoich_from_name(name,reactions,precision),rateconstants[name]) for name in rateconstants])
 
 def convert_output(output,meta_data,secondary_names):
     import pandas
@@ -500,11 +504,7 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
             tprev=t1
         
     
-        
-    import pandas
-    # Put into a dataframe in the same format as reading it out of a tecfile
-    # output_DF,output_units=convert_output(output,data.meta_data,secondary_names)
-    
+
     # Need to free all the Alquimia arrays?
     lib.FreeAlquimiaData(data)
     
