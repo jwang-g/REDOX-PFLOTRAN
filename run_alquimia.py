@@ -208,7 +208,7 @@ def convert_condition_to_alquimia(cond,name):
     if cond is None:
         condition=ffi.new("AlquimiaGeochemicalCondition *")
         lib.AllocateAlquimiaGeochemicalCondition(len(name), 0, 0, condition);
-        condition.name[0:len(init_cond_name)]=name.encode()
+        condition.name[0:len(name)]=name.encode()
         return condition
 
 
@@ -500,7 +500,7 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
         if step%printstep==0:
             t1=time.time()
             print('*** Step {step:d} of {nsteps:d}. Time elapsed: {t:d} s ({tperstep:1.1g} s per {steplength:1.1g} hour timestep). Mean cuts: {meancuts:1.1f} Mean dt: {meandt:1.1f} s ***'.format(
-                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=c.output['ncuts'][step-10:step].mean(),meandt=c.output['actual_dt'][step-10:step].mean(),steplength=dt/3600))
+                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=c.output['ncuts'][step-10:step].mean(),meandt=c.output['actual_dt'][step-10:step].mean(),steplength=dt/3600),flush=True)
             tprev=t1
         
     

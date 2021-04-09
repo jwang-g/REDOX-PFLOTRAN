@@ -2,6 +2,7 @@ from pylab import *
 import Arctic_Fe_CH4 as arctic
 import decomp_network
 import xarray
+import sys
 
 networkfig2=figure('Reaction network (with reactions)',clear=True)
 drawn=decomp_network.draw_network_with_reactions(arctic.reaction_network,node_size=700,arrowstyle='->',arrowsize=8.5,#edge_color='gray',
@@ -158,10 +159,10 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,CO2flux_ax=None,CH4flux
         porewater_ax.set_yscale('log')
         porewater_ax.plot(t,result['Total DOM1'],label='DOM')
         porewater_ax.plot(t,result['Total Acetate-'],label='Acetate',c='C3')
-        porewater_ax.plot(t,result['Total O2(aq)'],'--',label='O2',c='C4')
-        porewater_ax.plot(t,result['Total Fe+++'],'--',label='Fe+++',c='C1')
-        porewater_ax.plot(t,result['Free Fe+++'],':',label='Fe+++',c='C1')
-        porewater_ax.plot(t,result['Total Fe++'],':',label='Fe++',c='C2')
+        # porewater_ax.plot(t,result['Total O2(aq)'],'--',label='O2',c='C4')
+        # porewater_ax.plot(t,result['Total Fe+++'],'--',label='Fe+++',c='C1')
+        # porewater_ax.plot(t,result['Free Fe+++'],':',label='Fe+++',c='C1')
+        # porewater_ax.plot(t,result['Total Fe++'],':',label='Fe++',c='C2')
         
         porewater_ax.set_title('Porewater concentrations')
         porewater_ax.set_ylabel('Concentration (M)')
@@ -175,11 +176,11 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,CO2flux_ax=None,CH4flux
                 print(obs_cats)
                 for x in range(len(obs_cats)):
                     xx=obs[obs_marker]==obs_cats[x]
-                    porewater_ax.plot(obs.Incubation_Time[xx],obs['TOAC'][xx]*1e-6/BD*1000/porosity,marker=markers[x],linestyle='None',label='Measured TOAC',color='C3',**porewater_args)
-                    porewater_ax.plot(obs.Incubation_Time[xx],obs['WEOC'][xx]*1e-6/BD*1000/porosity,marker=markers[x],linestyle='None',label='Measured WEOC',color='C0',**porewater_args)
+                    porewater_ax.plot(obs.Incubation_Time[xx],obs['TOAC'][xx]*1e-6/BD*1000/result['Porosity'][0].item(),marker=markers[x],linestyle='None',label='Measured TOAC',color='C3',**porewater_args)
+                    porewater_ax.plot(obs.Incubation_Time[xx],obs['WEOC'][xx]*1e-6/BD*1000/result['Porosity'][0].item(),marker=markers[x],linestyle='None',label='Measured WEOC',color='C0',**porewater_args)
             else:
-                porewater_ax.plot(obs.Incubation_Time,obs['TOAC']*1e-6/BD*1000/porosity,marker='o',linestyle='None',label='Measured TOAC',color='C3')
-                porewater_ax.plot(obs.Incubation_Time,obs['WEOC']*1e-6/BD*1000/porosity,marker='o',linestyle='None',label='Measured WEOC',color='C0')
+                porewater_ax.plot(obs.Incubation_Time,obs['TOAC']*1e-6/BD*1000/result['Porosity'][0].item(),marker='o',linestyle='None',label='Measured TOAC',color='C3')
+                porewater_ax.plot(obs.Incubation_Time,obs['WEOC']*1e-6/BD*1000/result['Porosity'][0].item(),marker='o',linestyle='None',label='Measured WEOC',color='C0')
 
 
         
@@ -202,7 +203,10 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,CO2flux_ax=None,CH4flux
 
 colors={'Anaerobic':'C1','Periodic':'C2','Low Fe':'C3','Aerobic':'C0'}
 
-fname='Arctic_Fe_output/results_2021-03-31.nc'
+if len(sys.argv)<2:
+    fname='Arctic_Fe_output/results_2021-03-31.nc'
+else:
+    fname=sys.argv[1]
 result_organic_trough=xarray.open_dataset(fname,group='organic_trough')
 result_organic_nottrough=xarray.open_dataset(fname,group='organic_nottrough')
 result_mineral_trough=xarray.open_dataset(fname,group='mineral_trough')
@@ -212,7 +216,7 @@ result_highO2_organic=xarray.open_dataset(fname,group='highO2_organic')
 # With Fe reduction
 # fig,axes=subplots(3,1,num='Organic horizon Anoxic',figsize=(6,8.4),clear=True)
 f,cation_axes=subplots(ncols=5,num='Cations',clear=True,figsize=(13,4))
-fig,axs=subplots(nrows=4,ncols=5,num='Time series plots',clear=True,figsize=(16,8),sharex=False)
+fig,axs=subplots(nrows=5,ncols=5,num='Time series plots',clear=True,figsize=(16,8),sharex=False)
 from string import ascii_lowercase
 for x in range(5):
     for y in range(4):
@@ -220,7 +224,7 @@ for x in range(5):
 
 axes=axs[:,1]
 obs=arctic.get_layer(9,'Organic')
-plot_result(result_organic_trough,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],cation_ax=cation_axes[1],do_legend=False,BD=arctic.BD_organic_trough,
+plot_result(result_organic_trough,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],porewater_ax=axes[4],cation_ax=cation_axes[1],do_legend=False,BD=arctic.BD_organic_trough,
             gdrywt=True,SOC_pct=arctic.SOC_layermean['Organic'],cellulose_SOC_frac=arctic.cellulosefrac,#BD=BD_layerest2_trough['Organic',True],
             # obs=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Organic')
                     # &(Barrow_synthesis_data['Incubation_Temperature']>4)&(Barrow_synthesis_data['Microtopography'].str.lower()=='trough')])
@@ -240,7 +244,7 @@ for ax in axes:
     
 axes=axs[:,2]
 obs=arctic.get_layer(5,'Organic')
-plot_result(result_organic_nottrough,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],cation_ax=cation_axes[2],do_legend=False,
+plot_result(result_organic_nottrough,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],porewater_ax=axes[4],cation_ax=cation_axes[2],do_legend=False,
             gdrywt=True,SOC_pct=arctic.SOC_layermean['Organic'],cellulose_SOC_frac=arctic.cellulosefrac,BD=arctic.BD_organic_nottrough,
             # obs=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Organic')
                     # &(Barrow_synthesis_data['Incubation_Temperature']>4)&(Barrow_synthesis_data['Microtopography'].str.lower()!='trough')])
@@ -262,7 +266,7 @@ for ax in axes:
 # fig,axes=subplots(3,1,num='Mineral horizon Anoxic',figsize=(6,8.4),clear=True)
 axes=axs[:,3]
 obs=arctic.get_layer(9,'Mineral')
-plot_result(result_mineral_trough,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],cation_ax=cation_axes[3],do_legend=False,
+plot_result(result_mineral_trough,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],porewater_ax=axes[4],cation_ax=cation_axes[3],do_legend=False,
     gdrywt=True,SOC_pct=arctic.SOC_layermean['Mineral'],cellulose_SOC_frac=arctic.cellulosefrac,BD=arctic.BD_mineral_trough,
     # obs=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Mineral')
         # &(Barrow_synthesis_data['Incubation_Temperature']>4)&(Barrow_synthesis_data['Microtopography'].str.lower()=='trough')])
@@ -281,7 +285,7 @@ for ax in axes:
 
 axes=axs[:,4]
 obs=arctic.get_layer(5,'Mineral')
-plot_result(result_mineral_nottrough,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],cation_ax=cation_axes[4],do_legend=False,
+plot_result(result_mineral_nottrough,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],porewater_ax=axes[4],cation_ax=cation_axes[4],do_legend=False,
     gdrywt=True,SOC_pct=arctic.SOC_layermean['Mineral'],cellulose_SOC_frac=arctic.cellulosefrac,BD=arctic.BD_mineral_nottrough,
     # obs=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Anoxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Mineral')&
         # (Barrow_synthesis_data['Incubation_Temperature']>4)&(Barrow_synthesis_data['Microtopography'].str.lower()!='trough')])
@@ -303,7 +307,7 @@ for ax in axes:
 # fig,axes=subplots(3,1,num='Organic horizon Oxic',figsize=(6,8.4),clear=True)
 axes=axs[:,0]
 obs=arctic.get_layer(3,'Organic')
-plot_result(result_highO2_organic,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],cation_ax=cation_axes[0],do_legend=False,
+plot_result(result_highO2_organic,Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],porewater_ax=axes[4],cation_ax=cation_axes[0],do_legend=False,
         gdrywt=True,SOC_pct=arctic.SOC_layermean['Organic'],cellulose_SOC_frac=arctic.cellulosefrac,BD=arctic.BD_atmoO2_organic,
         # obs=Barrow_synthesis_data[(Barrow_synthesis_data.Headspace=='Oxic')&(Barrow_synthesis_data['Soil_layer'].str.capitalize()=='Organic')&(Barrow_synthesis_data['Incubation_Temperature']>4)])
         obs=obs)
@@ -320,6 +324,8 @@ for ax in fig.axes:
     ax.set_xlim(left=-5,right=xmax)
 for ax in axs[3,:]:
     ax.set_ylim(3.8,6.1)
+for ax in axs[4,:]:
+    ax.set_ylim(bottom=1e-5)
 
 leg=axs[2,4].legend(loc=(0.03,0.45),ncol=2,edgecolor='k')
 cation_axes[0].legend()
@@ -400,7 +406,7 @@ for nn,ndry in enumerate(ndry_plotted):
     axs[0,nn].set_title('CO$_2$ flux rate')
     axs[1,nn].set_title('CH$_4$ flux rate')
 
-    axs[2,nn].set_ylim(bottom=0,top=50)
+    axs[2,nn].set_ylim(bottom=0)
     axs[2,nn].set_xlabel('Time (days)')
     axs[2,nn].set_ylabel('Fe(II) production rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
     axs[2,nn].set_title('Fe(II) production rate')

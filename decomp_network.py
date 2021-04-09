@@ -15,8 +15,22 @@ def pools_dict_to_list(pools):
         return pools
 
 def get_stoich_from_name(name,reactions,precision=2):
-    reacts=pools_list_to_dict(reactions)
-    react=reacts[name]
+    if isinstance(reactions,list):
+        react=pools_list_to_dict(reactions)[name]
+    elif isinstance(reactions,dict):
+        react=reactions[name]
+    elif isinstance(reactions,decomp_network):
+        found_react=False
+        for r in reactions.edges:
+            if reactions.edges[r]['name']==name:
+                react=reactions.edges[r]['reaction']
+                found_react=True
+                break
+        if not found_react:
+            raise ValueError('Reaction "%s" not found in reaction network'%name)
+    else:
+        raise ValueError('reactions not in implemented format')
+    
     if react['reactiontype']=='MICROBIAL':
         stoich=PF_microbial_reaction_writer(reactions,precision=precision).write_reaction_stoich(react['reactant_pools'],react['product_pools'])
     elif react['reactiontype']=='GENERAL':
