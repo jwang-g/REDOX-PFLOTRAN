@@ -8,7 +8,7 @@ decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immo
 
 decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':0.5e-1},kind='primary'),
 decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'5.0 P'}),
-decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':'1.0 G O2(g)'}),
+decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':'0.2 G O2(g)'}),
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
 decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'.37e-10 M Fe(OH)3'}),
 decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-3'}),
@@ -81,7 +81,9 @@ anox_inhib_conc = 1e-5
 
 truncate_conc=1e-15
 
-reactions = [
+def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
+
+    reactions = [
     decomp_network.reaction(name='Aerobic decomposition',reactant_pools={'cellulose':1.0},product_pools={'HCO3-':1.0},reactiontype='SOMDECOMP',
                                             rate_constant=1e-1,rate_units='y', 
                                             # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='THRESHOLD 1.0d20')]),
@@ -165,17 +167,19 @@ reactions = [
     # Cation exchange
     decomp_network.ion_exchange(name='Cation exchange',cations={'Fe++':0.1,'Fe+++':0.3,'Mg++':1.1,'Ca++':4.1,'Na+':1.0,'K+':0.9,'H+':1.1},CEC=2000.0,mineral=None)
 
-]
+    ]
+    return reactions
 
+reactions=make_reactions()
 rate_scale=1e-8
 rateconstants_named={
        'Fe(II) abiotic oxidation'              : 0.0,
        'Fe(II) microbial oxidation'            : rate_scale*100,
        'Hydrogen oxidation'                    : rate_scale*100,
        'fermentation'                          : rate_scale*50,
-       "DOM aerobic respiration"               : rate_scale*3,
-       "Acetate aerobic respiration"           : rate_scale*3,
-       "Fe(III) reduction"                     : rate_scale*2,
+       "DOM aerobic respiration"               : rate_scale*50,
+       "Acetate aerobic respiration"           : rate_scale*50,
+       "Fe(III) reduction"                     : rate_scale*5,
        "Acetaclastic methanogenesis"           : rate_scale*2, 
        "Hydrogenotrophic methanogenesis"       : rate_scale*2*0.415, # Scaling factor between acetaclastic and hydrogenotrophic from optimization of Kotsyurbenko et al data 
        "Aerobic decomposition"                 : rate_scale*20.0, #1.0/(365*24*3600)*1.0
@@ -308,6 +312,13 @@ oxicfrac=0.1
 pH_obs=float(decomp_network.pools_list_to_dict(pools_organic_trough)['H+']['constraints']['initial'].split()[0]) 
 pHs=5.0+numpy.arange(-.5,1.1,0.5)
 
+def convert_to_xarray(df,units):
+    ds=df.rename_axis(index='time').to_xarray()
+    # ds['time'].units='days'
+    for v in units:
+        ds[v].attrs['units']=units[v]
+    return ds
+
 if __name__ == '__main__':
     # Generate PFLOTRAN input file with correct reactions
     decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt','Arctic_redox_generated.in',log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25)
@@ -341,13 +352,16 @@ if __name__ == '__main__':
     import datetime
     today=datetime.datetime.today()
     filename='Arctic_Fe_output/results_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
+    import os
+    if os.path.exists(filename):
+        x=2
+        while True:
+            if not os.path.exists(filename[:-3]):
+                filename=filename[:-3]+'_%d.nc'%x
+                break
+            x+=1
 
-    def convert_to_xarray(df,units):
-        ds=df.rename_axis(index='time').to_xarray()
-        # ds['time'].units='days'
-        for v in units:
-            ds[v].attrs['units']=units[v]
-        return ds
+
 
     convert_to_xarray(result_highO2_organic,output_units).to_netcdf(filename,group='highO2_organic')
     convert_to_xarray(result_organic_trough,output_units).to_netcdf(filename,group='organic_trough',mode='a')

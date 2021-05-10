@@ -1,7 +1,6 @@
 from run_alquimia import get_alquimiavector,ffi,lib,check_status,init_alquimia,convert_condition_to_alquimia,convert_rateconstants
 import decomp_network
 import Manganese_network as Mn
-from matplotlib import pyplot
 import numpy
 import xarray
 
@@ -44,7 +43,7 @@ class layer:
         
         self.mineral_names=get_alquimiavector(data.meta_data.mineral_names)
         for num in range(data.meta_data.mineral_names.size):
-            self.mineral_rate_cnst[self.mineral_names[num]]=data.properties.mineral_rate_cnst.data[num]
+            self.mineral_rate_cnst[self.mineral_names[num]]=data.properties.mineral_rate_cnst.data[num] # Alquimia doesn't actually update this
             self.mineral_specific_surface_area[self.mineral_names[num]]=data.state.mineral_specific_surface_area.data[num]
             self.mineral_volume_fraction[self.mineral_names[num]]=data.state.mineral_volume_fraction.data[num]
             self.mineral_reaction_rate[self.mineral_names[num]]=data.aux_output.mineral_reaction_rate.data[num]
@@ -281,7 +280,7 @@ class layer:
             
             # data will be reset to layer contents at beginning of next call
             # Run it twice, because we cut the time step in half
-            ncuts=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+            ncuts=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants,flux_tol=flux_tol)
             # If this completes, it means that run_onestep was successful
             self.copy_from_alquimia(data)
             if ncuts>max_cuts:
@@ -289,7 +288,7 @@ class layer:
                 
             # This starts from ncuts so it doesn't have to try all the ones that failed again
             for n in range(2**(ncuts-(num_cuts+1))):
-                ncuts2=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+                ncuts2=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants,flux_tol=flux_tol)
                 self.copy_from_alquimia(data)
                 if ncuts2>max_cuts:
                     max_cuts=ncuts2
@@ -345,9 +344,9 @@ def copy_to_layers(data_xarray,layers):
                 layers[depth].mineral_volume_fraction[var[:-3]]=data_xarray[var].dropna(dim='time').isel(time=-1,depth=depth).item()
 
 leakage=5e-5
-reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=1e-4,Mn_peroxidase_Mn3_leakage=leakage,Mn3_scale=1e-13,NH4_scale=1e-2) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
+reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=1e-4,Mn_peroxidase_Mn3_leakage=leakage,Mn3_scale=1e-13,NH4_scale=1e-2,DOM_scale=1.0) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
 
-rateconstants_named={
+rateconstants={
     'DOM aerobic respiration':1e-7,
     'DOM2 aerobic respiration':0.5e-9*0,
     'Mn Peroxidase':5e-6, # Manganese Peroxidase
@@ -366,7 +365,6 @@ rateconstants_named={
 }
 
 precision=2
-rateconstants=convert_rateconstants(rateconstants_named,reaction_network,precision=precision)
 
 input_file='manganese.in'
 
@@ -390,17 +388,25 @@ with open(input_file,'r') as infile:
         if len(l)>0:
             secondary_names.append(l)
 
-def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=40,restart_state=None,do_incubation=True):
+not_T_sens = [
+    'Root uptake of Mn++',
+    'DOM1 Mn+++ abiotic reduction',
+    'DOM desorption',
+    'DOM sorption',
+]
+
+def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=40,restart_state=None,do_incubation=True,fname=None):
     chem,data,sizes,status=init_alquimia(input_file,hands_off=False)
     rateconstants_warmed=rateconstants.copy()
     for react in rateconstants_warmed:
         if react in not_T_sens:
             continue
         rateconstants_warmed[react]=rateconstants_warmed[react]*Q10**(warming/10.0)
+    rateconstants_stoich=convert_rateconstants(rateconstants_warmed,reaction_network,precision=precision)
     # Set up layers
     # Top (organic) layer should be thinner and have lower bulk density though
     # Low bulk density causes simulation to slow or crash though. Actually CEC being too low (<100 combined with BD<1) is the problem
-    layers=[layer(0.05,rateconstants=rateconstants_warmed,BD=0.425,porosity=0.5,CEC=400.0)]+[layer(0.1,rateconstants=rateconstants_warmed) for num in range(4)]
+    layers=[layer(0.05,rateconstants=rateconstants_stoich,BD=0.425,porosity=0.5,CEC=400.0)]+[layer(0.1,rateconstants=rateconstants_stoich) for num in range(4)]
 
     
     for l in layers:
@@ -421,7 +427,7 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
                                                         'Na+':'%1.2g TOTAL_AQ_PLUS_SORB'%(init_exch_cations['Na+']*1e-6*l.BD*1000/l.porosity),
                                                         'K+':'%1.2g TOTAL_AQ_PLUS_SORB'%(init_exch_cations['K+']*1e-6*l.BD*1000/l.porosity),
                                                         'Al+++':'%1.2g TOTAL_AQ_PLUS_SORB'%(init_exch_cations['Al+++']*1e-6*l.BD*1000/l.porosity),
-                                                        'O2(aq)':'1.0 G O2(g)'})
+                                                        'O2(aq)':'0.2 G O2(g)'})
 
     # initcond=decomp_network.change_site_density(initcond, '>DOM1', 1e4)
     bc=layers[0].initcond
@@ -519,7 +525,7 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
     # Flow rate cm/s = 10 L/m2/s, positive is downward
     # flow_rate=numpy.linspace(1e-7,1e-8,len(layers)) # Rate declines linearly with depth, assumes removal or accumulation in lower layers
     flow_rate=numpy.zeros(len(layers))+1e-7
-    min_dt=0.1
+    min_dt=60
     truncate_concentration=1e-20
 
 
@@ -539,6 +545,7 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
     root_biomass_top=0.3 # gC/cm3
     root_Cfrac=0.4
 
+    # Units of z and z_mid are m
     z=numpy.array([0]+[l.volume for l in layers]).cumsum()
     z_mid=(z[:-1]+z[1:])/2 
     for l in range(len(layers)):
@@ -547,7 +554,16 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
         layers[l].mineral_rate_cnst['Birnessite2']=2e-11
         # layers[l].surface_site_density['>DOM1']=1e3
         layers[l].total_immobile['Sorption_capacity']=1/12*100**3*0.01 # 1 g/cm3
-        layers[l].diffquo={'O2(aq)':0.001*0.1**(z_mid[l]*10)*(1+numpy.sin(2*numpy.pi*redox_freq/(365*24*3600/dt)*numpy.arange(nsteps)))}
+        # Sinusoid redox state
+        # layers[l].diffquo={'O2(aq)':0.001*0.1**(z_mid[l]*10)*(1+numpy.sin(2*numpy.pi*redox_freq/(365*24*3600/dt)*numpy.arange(nsteps)))}
+        # Redox state with exponential relaxation, layer-dependent relaxation rate
+        if redox_freq>0:
+            anox_length=numpy.exp(z_mid[l]*8.0)  # Length of anoxic period in days, by depth
+            t_anox=(numpy.arange(nsteps)*dt/(3600*24))%(365//redox_freq) # Time in redox cycle
+            # layers[l].diffquo={'O2(aq)':(0.001*(1-numpy.exp(-((numpy.arange(nsteps)*dt/(3600*24))%(365//redox_freq))*0.1**(z_mid[l]*10))))}
+            layers[l].diffquo={'O2(aq)':(0.001*numpy.where(t_anox<=anox_length,0.0,1.0))}
+        else:
+            layers[l].diffquo={'O2(aq)':0.001*0.1**(z_mid[l]*10)}
         layers[l].total_mobile['DOM3']=5.3
 
     # Treat top layer as O horizon with less root biomass and mineral Mn
@@ -652,11 +668,14 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
         if do_incubation:
             incubation_layer.total_mobile['NH4+'] = incubation_layer.total_mobile['NH4+']+Ndep*dt/(incubation_layer.volume*1000*incubation_layer.porosity*incubation_layer.saturation)
 
-        # Just keep HCO3- equilibrated with the atmosphere in top layer
-        # Also remove equal amount of H+ because we are tracking bicarbonate, not CO2(aq)
-        dCO2=layers[0].total_mobile['HCO3-']-initial_HCO3
-        layers[0].total_mobile['HCO3-']=layers[0].total_mobile['HCO3-']-dCO2
-        layers[0].total_immobile['H+']=layers[0].total_immobile['H+']-dCO2*1000*layers[0].porosity*layers[0].saturation
+        # Just keep HCO3- equilibrated with the atmosphere in top layer under oxic conditions
+        # Also remove equal amount of H+ because we are tracking bicarbonate, not CO2(aq). CO2(aq) + H2O = HCO3- + H+
+        # H+ gets removed from immobile pool because aqueous H+ concentration might be less than HCO3- concentration
+        for num in range(len(layers)):
+            if layers[num].diffquo['O2(aq)'][step%len(layers[num].diffquo['O2(aq)'])]>0:
+                dCO2=layers[num].total_mobile['HCO3-']-initial_HCO3
+                layers[num].total_mobile['HCO3-']=layers[num].total_mobile['HCO3-']-dCO2
+                layers[num].total_immobile['H+']=layers[num].total_immobile['H+']-dCO2*1000*layers[num].porosity*layers[num].saturation
         
         if do_incubation:
             dCO2=incubation_layer.total_mobile['HCO3-']-initial_HCO3
@@ -686,7 +705,7 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
                         else:
                             dq[spec]=0.0
                             # print('O2 before: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
-                num_cuts=l.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=l.rateconstants)
+                num_cuts=l.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=l.rateconstants,flux_tol=0.8)
                 l.copy_from_alquimia(data)
                 # Write output
                 l.write_output(step+1,dt,num_cuts)
@@ -724,7 +743,8 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
         
     import datetime
     today=datetime.datetime.today()
-    fname='/lustre/or-hydra/cades-ccsi/scratch/b0u/Mn_output/Mn_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
+    if fname is None:
+        fname='/lustre/or-hydra/cades-ccsi/scratch/b0u/Mn_output/Mn_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
     gname='pH{ph:1.1f}_Ndep{Ndep:03d}_warming{warming:d}_redox{redox:d}'.format(ph=pH,Ndep=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),warming=warming,redox=redox_freq)
     
     import os
@@ -735,34 +755,84 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
     if do_incubation:
         convert_to_xarray([incubation_layer],leaf_Mn=leaf_Mn_concs).to_netcdf(fname,mode='a',group=gname+'_incubation')
 
+    return success
+
+if __name__ == '__main__':
+
+    import time,datetime
+    import sys
+    starting_time=time.time()
 
 
-import time
-starting_time=time.time()
+    from argparse import ArgumentParser
+    
+    parser = ArgumentParser()
+    parser.add_argument('-f',dest='fname',help='Output file name',default='')
+    parser.add_argument('-n',dest='jobnum',help='Job number',default=0)
+    parser.add_argument('-N',dest='totaljobs',help='Total number of jobs',default=1)
+    options = parser.parse_args()
 
-# Whalen et al 2018: Background N dep is 8-10 kg N/ha/year
-# Treatments were +50 kg N/ha/year and +150 kgN/ha/year (as NH4NO3)
-# 1 kg N/ha/year
-Ndeps=   [0,50,150,0,0]
-warmings=[0, 0,  0,2,5] # Degrees C
-not_T_sens = [
-    '1.0e+00 Mn++  -> 1.0e+00 Tracer2  + 2.0e+00 H+',
-    '1.0e+00 DOM1  + 4.0e+00 Mn+++  <-> 1.0e+00 HCO3-  + 4.0e+00 Mn++  + 5.0e+00 H+  + 1.0e+00 Tracer',
-    '1.0e+00 DOM3  <-> 1.0e+00 DOM1',
-    '1.0e+00 DOM1  -> 1.0e+00 DOM3',
-]
-# pHs=numpy.arange(4.0,6.5,0.5)
-pHs=[4.5,6.0]
-anox_freqs=[0,1,4,12] # anoxic events per year
+    if options.fname is not '':
+        fname=options.fname
+    else:
+        today=datetime.datetime.today()
+        fname='/lustre/or-scratch/cades-ccsi/b0u/Mn_output/Mn_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
+   
+    jobnum=int(options.jobnum)
+    totaljobs=int(options.totaljobs)+1
+    # Set up for parallel jobs
+    if jobnum+1>totaljobs:
+        raise ValueError('jobnum + 1 > totaljobs')
+    if totaljobs>1:
+        fname=fname[:-3]+'_%02d.nc'%jobnum
 
-for sim in range(len(Ndeps)):
-# for Ndep in numpy.array([0,50,150])*1000/molar_mass['N']/100**2/(365*24*3600): # Converted to mol N/m2/s
-    Ndep=Ndeps[sim]*1000/molar_mass['N']/100**2/(365*24*3600)
-    warming=warmings[sim]
+    # Whalen et al 2018: Background N dep is 8-10 kg N/ha/year
+    # Treatments were +50 kg N/ha/year and +150 kgN/ha/year (as NH4NO3)
+    # 1 kg N/ha/year
+    Ndeps=   [0,50,150,0,0]
+    warmings=[0, 0,  0,2,5] # Degrees C
 
+    pHs=numpy.arange(4.0,6.5,0.5)
+    # pHs=[4.5,6.0]
+    anox_freqs=[12,8,4,1] # anoxic events per year
+
+    Ndep_sims=[]
+    pH_sims=[]
+    anox_freq_sims=[]
+    warming_sims=[]
+
+    # Build one long list of all the sim params first
+    for sim in range(len(Ndeps)):
+    # for Ndep in numpy.array([0,50,150])*1000/molar_mass['N']/100**2/(365*24*3600): # Converted to mol N/m2/s
+        Ndep=Ndeps[sim]*1000/molar_mass['N']/100**2/(365*24*3600)
+        warming=warmings[sim]
+
+        for pH in pHs:
+            for anox_freq in anox_freqs:
+                Ndep_sims.append(Ndep)
+                warming_sims.append(warming)
+                anox_freq_sims.append(anox_freq)
+                pH_sims.append(pH)
+
+    # Add some sims with redox_cycles=0 for incubations
     for pH in pHs:
-        for anox_freq in anox_freqs:
-            run_sim(Ndep,warming,pH,anox_freq,rateconstants,Q10=2.0,do_incubation=(anox_freq==0),dt=3600*24)
+        Ndep_sims.append(0)
+        warming_sims.append(0)
+        anox_freq_sims.append(0)
+        pH_sims.append(pH)
 
+    # Then just run sims for this job
+    sims=list(range(jobnum,len(pH_sims),totaljobs))
 
-print('\n\n\n Simulations finished. Total time: %1.1f minutes\n'%((time.time()-starting_time)/60))
+    print('Total number of sims: %d'%len(pH_sims))
+    print('This job: ',sims)
+    
+    for simnum in sims:
+        Ndep=Ndep_sims[simnum]
+        pH=pH_sims[simnum]
+        warming=warming_sims[simnum]
+        anox_freq=anox_freq_sims[simnum]
+        run_sim(Ndep,warming,pH,anox_freq,rateconstants,Q10=2.0,dt=3600*24,fname=fname,
+            do_incubation=(anox_freq==0) and (Ndep==0) and (warming==0))
+
+    print('\n\n\n Simulations finished. Total time: %1.1f hours\n'%((time.time()-starting_time)/3600),flush=True)

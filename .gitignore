@@ -1,6 +1,6 @@
 *.out
 *-mas.dat
-*_generated.in
+*_generated*.in
 *generated*.tec
 FT_redox.txt
 Network_comparison.png

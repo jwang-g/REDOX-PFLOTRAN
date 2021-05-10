@@ -513,11 +513,11 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     if success:
         print('''
 
-        *****************************************************
-        *           Successfully finished run %s             
-        *****************************************************
+        **********************************************************
+        *           Successfully finished run %s in %1.1f minutes            
+        **********************************************************
 
-        '''%run_name)
+        '''%(run_name,(time.time()-t0)/60))
     return c.output_DF,c.output_units
 
 

@@ -84,7 +84,7 @@ decomp_network.decomp_pool(name='Sorption_capacity',constraints={'initial':1e-20
 ]
 
 # Fraction of Mn+++ that is not recycled in Mn-Peroxidase enzyme loop
-def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,Mn3_scale=1e-5,NH4_scale=1e-2,CEC=40.0,change_rate={},DOM_sorption_k=1.0):
+def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,Mn3_scale=1e-5,NH4_scale=1e-2,DOM_scale=1.0,CEC=40.0,change_rate={},DOM_sorption_k=1.0):
     Mn_molarmass=54.94 #g/mol
     C_molarmass=12.01
     leaf_Cfrac_mass=0.4
@@ -137,7 +137,7 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
     # CH2O + H2O -> CO2 + 4H+ + 4 e-
     # O2   + 4H+ + 4 e- -> 2H2O
             decomp_network.reaction(name='DOM aerobic respiration',reactant_pools={'DOM1':1.0,'O2(aq)':1.0},product_pools={'HCO3-':1.0,'H+':1.0,'Tracer':1.0,'Mn++':leaf_Mn_frac},
-                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM1',k=1e0,threshold=1.1e-14)],
+                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM1',k=DOM_scale,threshold=1.1e-14)],
                                         rate_constant=1.0e-5,reactiontype='MICROBIAL'),
                                         
     # CH2O + H2O -> CO2 + 4H+ + 4 e-
@@ -153,7 +153,7 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
     # 4 Mn+++ + 4 e- -> 4 Mn++
     # Microbial-mediated manganese reduction, happens under anoxic conditions only
             decomp_network.reaction(name='DOM1 Mn+++ reduction',stoich='1.0 DOM1 + 4.0 Mn+++ -> 1.0 HCO3- + 4.0 Mn++ + 5.0 H+ + 1.0 Tracer',
-                                        monod_terms=[decomp_network.monod(species='DOM1',k=1e-1),decomp_network.monod(species='Mn+++',k=Mn3_scale)],
+                                        monod_terms=[decomp_network.monod(species='DOM1',k=DOM_scale/10),decomp_network.monod(species='Mn+++',k=Mn3_scale)],
                                         inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=1e-8,type='MONOD')],
                                         rate_constant=2e-10,reactiontype='MICROBIAL'),
 
