@@ -14,6 +14,8 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,CO2flux_ax=None,CH4flux
         obs_mod=pandas.DataFrame(index=obs.Incubation_Time)
         obs_mod_pts=array([abs(t-obst).argmin() for obst in obs.Incubation_Time])
         obs_mod_pts[obs_mod_pts==0]=1
+    else:
+        obs_mod=None
     if gdrywt:
         if SOC_pct is None and BD is None:
             raise TypeError('SOC_pct or BD must be a number if gdrywt is True')
@@ -461,11 +463,35 @@ if __name__ == '__main__':
     if len(sys.argv)<2:
         fname='Arctic_Fe_output/results_2021-03-31.nc'
     else:
-        fname=sys.argv[1]
+        fname=sys.argv[1:]
+
+    data_list={}
+
+    import netCDF4
+    for filename in fname:
+        with netCDF4.Dataset(filename) as d:
+            groups=list(d.groups.keys())
+
+        for g in groups:
+            print(g,flush=True)
+            
+            d=xarray.open_dataset(filename,group=g,decode_times=False)
+            if 'nperiods' in g:
+                gs=g.split('_')
+                d['ndryperiods']=int(gs[-3])
+                d['pH']=float(gs[-1])
+            
+                newdims=['pH','ndryperiods']
+                d=d.expand_dims(newdims).set_coords(newdims)
+            
+            data_list[g]=d
+
+    results_periodic=xarray.combine_by_coords(data_list[xx] for xx in data_list if 'pH' in xx)
+
 
     plot_timeseries(fname)
 
-    results_periodic=xarray.open_dataset(fname,group='periodic_sims')
+    # results_periodic=xarray.open_dataset(fname,group='periodic_sims')
 
     fig,axes=subplots(4,1,num='Periodic inundation',figsize=(6,8.4),clear=True)
     # CH4ax=axes[0].twinx()
@@ -499,12 +525,12 @@ if __name__ == '__main__':
 
 
     cm=get_cmap('plasma')
-    norm=matplotlib.colors.Normalize(min(arctic.pHs),max(arctic.pHs))
+    norm=matplotlib.colors.Normalize(min(results_periodic['pH']),max(results_periodic['pH']))
     porosity=results_periodic['Porosity'].isel(time=0).mean().item()
     fig,axs=subplots(ncols=2,nrows=1,num='Periodic by dry periods',clear=True,squeeze=False,figsize=(7,4))
-    for pH in arctic.pHs:
-        axs[0,0].plot(array([1,2,3,4]),array([results_periodic.sel(ndryperiods=n,pH=pH)['Total Tracer'].isel(time=arctic.simlength*24-1) for n in range(1,5)])*porosity/arctic.BD_layerest2_trough['Organic',False],'o',label=pH,c=cm(norm(pH)))
-        axs[0,1].plot(array([1,2,3,4]),array([results_periodic.sel(ndryperiods=n,pH=pH)['Total CH4(aq)'].isel(time=arctic.simlength*24-1) for n in range(1,5)])*porosity/arctic.BD_layerest2_trough['Organic',False],'o',label=pH,c=cm(norm(pH)))
+    for pH in results_periodic['pH'].values:
+        axs[0,0].plot(results_periodic['ndryperiods'].values[:4],array([results_periodic.sel(ndryperiods=n,pH=pH)['Total Tracer'].isel(time=arctic.simlength*24-1) for n in results_periodic['ndryperiods'].values[:4]])*porosity/arctic.BD_layerest2_trough['Organic',False],'o',label=pH,c=cm(norm(pH)))
+        axs[0,1].plot(results_periodic['ndryperiods'].values[:4],array([results_periodic.sel(ndryperiods=n,pH=pH)['Total CH4(aq)'].isel(time=arctic.simlength*24-1) for n in results_periodic['ndryperiods'].values[:4]])*porosity/arctic.BD_layerest2_trough['Organic',False],'o',label=pH,c=cm(norm(pH)))
 
     axs[0,0].set_xlabel('Number of oxic-anoxic cycles')
     axs[0,1].set_xlabel('Number of oxic-anoxic cycles')
@@ -523,10 +549,10 @@ if __name__ == '__main__':
     ndry_plotted=[3]
     fig,axs=subplots(ncols=len(ndry_plotted),nrows=5,num='Periodic comparison',clear=True,figsize=(10,8.8),squeeze=False)
 
-
+    from string import ascii_lowercase
     for nn,ndry in enumerate(ndry_plotted):
         c='k'
-        for nnn,pH in enumerate(arctic.pHs[:3]):
+        for nnn,pH in enumerate(results_periodic['pH'][:3]):
             ls=[':','-','--'][nnn]
             plot_result(results_periodic.sel(ndryperiods=ndry,pH=pH),CH4flux_ax=axs[1,nn],CO2flux_ax=axs[0,nn],gdrywt=True,
                     BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={'color':c,'ls':ls},CO2flux_args={'color':c,'ls':ls})
@@ -535,7 +561,7 @@ if __name__ == '__main__':
             axs[3,nn].plot(results_periodic['time'],results_periodic.sel(ndryperiods=ndry,pH=pH)['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c=c)
             axs[4,nn].plot(results_periodic['time'],-log10(results_periodic.sel(ndryperiods=ndry,pH=pH)['Free H+']),ls,c=c)
 
-        axs[0,0].legend(labels=arctic.pHs[:3],title='Initial pH')
+        axs[0,0].legend(labels=results_periodic['pH'][:3].values,title='Initial pH')
         axs[0,nn].set_xlim(0,arctic.simlength)
         axs[1,nn].set_xlim(0,arctic.simlength)
         axs[0,nn].set_title('CO$_2$ flux rate')
@@ -559,5 +585,13 @@ if __name__ == '__main__':
                 axs[x,nn].axvspan(arctic.simlength*arctic.oxicfrac/ndry+num*arctic.simlength/ndry,(num+1)*arctic.simlength/ndry,color='b',alpha=0.1,zorder=-1)
             axs[x,nn].set_xlim(0,arctic.simlength)
             axs[x,nn].text(0.01,1.05,'('+ascii_lowercase[x*len(ndry_plotted)+nn]+')',transform=axs[x,nn].transAxes)
+
+    def save_all_figs(dirname,format='png',**kwargs):
+        for fname in get_figlabels():
+            fname_fixed=fname.replace('/','-')
+            print(fname_fixed)
+            figure(fname_fixed).savefig('{dirname:s}/{fname:s}.{format}'.format(dirname=dirname,format=format,fname=fname_fixed),**kwargs)
+
+    save_all_figs('Arctic_Fe_output/figs')
 
     show()

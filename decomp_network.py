@@ -252,7 +252,7 @@ class PF_network_writer(PF_writer):
 
 
     def write_into_input_deck(self,templatefile_name,outputfile_name,
-            indent_spaces=2,length_days=None,log_formulation=True,truncate_concentration=1e-80,CO2name='HCO3-',database='./hanford.dat'):
+            indent_spaces=2,length_days=None,log_formulation=True,truncate_concentration=1e-80,CO2name='HCO3-',database='./hanford.dat',chem_args={}):
         base_indent=0
         with open(templatefile_name,'r') as templatefile:
             template_lines=templatefile.readlines()
@@ -404,6 +404,16 @@ class PF_network_writer(PF_writer):
                     self.add_line('TRUNCATE_CONCENTRATION {conc:{fmt}}'.format(conc=truncate_concentration,fmt=fmt[1:]))
                     
                 self.add_line('DATABASE %s'%database)
+                
+                for arg in chem_args:
+                    if isinstance(chem_args[arg],float):
+                        self.add_line('{arg:s} {val:{fmt}}'.format(arg=arg,val=chem_args[arg],fmt=fmt[1:]))
+                    elif isinstance(chem_args[arg],int):
+                        self.add_line('{arg:s} {val:d}'.format(arg=arg,val=chem_args[arg]))
+                    elif isinstance(chem_args[arg],str):
+                        self.add_line('{arg:s} {val:s}'.format(arg=arg,val=chem_args[arg]))
+                    else:
+                        raise TypeError('chem_args must be float, int, or str (arg: %s)'%arg)
             
             elif len(line.split())>=2 and line.split()[0]=='CONSTRAINT':
                 constraintname=line.split()[1]

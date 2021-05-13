@@ -176,14 +176,14 @@ rateconstants_named={
        'Fe(II) abiotic oxidation'              : 0.0,
        'Fe(II) microbial oxidation'            : rate_scale*100,
        'Hydrogen oxidation'                    : rate_scale*100,
-       'fermentation'                          : rate_scale*50,
+       'fermentation'                          : rate_scale*40,
        "DOM aerobic respiration"               : rate_scale*50,
        "Acetate aerobic respiration"           : rate_scale*50,
-       "Fe(III) reduction"                     : rate_scale*5,
+       "Fe(III) reduction"                     : rate_scale*10,
        "Acetaclastic methanogenesis"           : rate_scale*2, 
        "Hydrogenotrophic methanogenesis"       : rate_scale*2*0.415, # Scaling factor between acetaclastic and hydrogenotrophic from optimization of Kotsyurbenko et al data 
        "Aerobic decomposition"                 : rate_scale*20.0, #1.0/(365*24*3600)*1.0
-       "Hydrolysis"                            : rate_scale*20.0 #1.0/(365*24*3600)*1.0
+       "Hydrolysis"                            : rate_scale*10.0 #1.0/(365*24*3600)*1.0
 }
 
 rateconstants=run_alquimia.convert_rateconstants(rateconstants_named,reactions=reactions)
@@ -310,7 +310,6 @@ dq=0.01 # Diffusion coefficient when aerobic
 oxicfrac=0.1
 
 pH_obs=float(decomp_network.pools_list_to_dict(pools_organic_trough)['H+']['constraints']['initial'].split()[0]) 
-pHs=5.0+numpy.arange(-.5,1.1,0.5)
 
 def convert_to_xarray(df,units):
     ds=df.rename_axis(index='time').to_xarray()
@@ -320,62 +319,162 @@ def convert_to_xarray(df,units):
     return ds
 
 if __name__ == '__main__':
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+    parser.add_argument('-f',dest='fname',help='Output file name',default='')
+    parser.add_argument('-n',dest='jobnum',help='Job number',default=0)
+    parser.add_argument('-N',dest='totaljobs',help='Total number of jobs',default=1)
+    options = parser.parse_args()
+
+    jobnum=int(options.jobnum)
+    totaljobs=int(options.totaljobs)+1
+
+    import datetime
+    if options.fname is not '':
+        fname=options.fname
+    else:
+        today=datetime.datetime.today()
+        filename='Arctic_Fe_output/output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
+
+    if jobnum+1>totaljobs:
+        raise ValueError('jobnum + 1 > totaljobs')
+    if totaljobs>1:
+        filename=filename[:-3]+'_%02d.nc'%jobnum
+        deckname='Arctic_redox_generated_%02d.in'%jobnum
+    else:
+        deckname='Arctic_redox_generated.in'
+    # import os
+    # if os.path.exists(filename):
+    #     x=2
+    #     while True:
+    #         if not os.path.exists(filename[:-3]):
+    #             filename=filename[:-3]+'_%d.nc'%x
+    #             break
+    #         x+=1
+
+
     # Generate PFLOTRAN input file with correct reactions
-    decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt','Arctic_redox_generated.in',log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25)
+    decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt',deckname,log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25)
                 
     O2_const=numpy.zeros(365*24)+dq
     O2_initial=numpy.zeros(simlength*24)
     O2_initial[:int(simlength*24*initfrac)]=dq
 
-    result_highO2_organic,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='highO2_organic',initcond=pools_atmoO2_organic,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_organic,porosity=porosity_atmoO2_organic)
-    result_organic_trough,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='organic_trough',initcond=pools_organic_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_trough,porosity=porosity_organic_trough) 
-    result_organic_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='organic_nottrough',initcond=pools_organic_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_nottrough,porosity=porosity_organic_nottrough) 
-    result_mineral_trough,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='mineral_trough',initcond=pools_mineral_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_trough,porosity=porosity_mineral_trough)    
-    result_mineral_nottrough,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='mineral_nottrough',initcond=pools_mineral_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_nottrough,porosity=porosity_mineral_nottrough) 
+    incubations=[
+        'highO2_organic',
+        'organic_trough',
+        'organic_nottrough',
+        'mineral_trough',
+        'mineral_nottrough'
+    ]
+
+    simtypes=[]
+    nperiods=[]
+    pHsims=[]
+
+    for sim in incubations:
+        simtypes.append(sim)
+        nperiods.append(None)
+        pHsims.append(None)
+
+    # 5 cycles doesn't divide total time series correctly. Need to fix
+    for ndryperiods in [1,2,3,4,5]:
+        for pH in [4.5,5.0,5.5,6.0]:
+            simtypes.append('organic_trough')
+            nperiods.append(ndryperiods)
+            pHsims.append(pH)
+
+    sims_thisjob = list(range(jobnum,len(simtypes),totaljobs))
+    print('Total number of sims: %d'%len(simtypes))
+    print('This job: ',sims_thisjob)
+
+    initconds={        
+        'highO2_organic':pools_atmoO2_organic,
+        'organic_trough':pools_organic_trough,
+        'organic_nottrough':pools_organic_nottrough,
+        'mineral_trough':pools_mineral_trough,
+        'mineral_nottrough':pools_mineral_nottrough
+        }
+    CECs={        
+        'highO2_organic':CEC_atmoO2_organic,
+        'organic_trough':CEC_organic_trough,
+        'organic_nottrough':CEC_organic_nottrough,
+        'mineral_trough':CEC_mineral_trough,
+        'mineral_nottrough':CEC_mineral_nottrough
+        }
+    porosities={        
+        'highO2_organic':porosity_atmoO2_organic,
+        'organic_trough':porosity_organic_trough,
+        'organic_nottrough':porosity_organic_nottrough,
+        'mineral_trough':porosity_mineral_trough,
+        'mineral_nottrough':porosity_mineral_nottrough
+        }
+
+    for simnum in sims_thisjob:
+        initcond=initconds[simtypes[simnum]]
+        run_name=simtypes[simnum]
+        porosity=porosities[simtypes[simnum]]
+        CEC=CECs[simtypes[simnum]]
+        if nperiods[simnum] is not None:
+            run_name = run_name + '_nperiods_%d'%nperiods[simnum]
+            O2_periodic=numpy.zeros(int(simlength/nperiods[simnum])*24)
+            O2_periodic[:int(simlength/nperiods[simnum]*24*oxicfrac)]=dq
+            diffquo={'O2(aq)':O2_periodic}
+        else:
+            if simtypes[simnum].startswith('highO2'):
+                diffquo={'O2(aq)':O2_const}
+            else:
+                diffquo={'O2(aq)':O2_initial}
+        if pHsims[simnum] is not None:
+            initcond=decomp_network.change_constraint(initcond,'H+','%1.2f P'%pHsims[simnum])
+            run_name = run_name + '_pH_%1.1f'%pHsims[simnum]
+
+        result,units=run_alquimia.run_simulation(deckname,simlength,timestep,run_name=run_name,initcond=initcond,
+                        hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,
+                        diffquo=diffquo,truncate_concentration=truncate_conc,CEC=CEC,porosity=porosity) 
+
+        if simnum==sims_thisjob[0]:
+            mode='w'
+        else:
+            mode='a'
+        convert_to_xarray(result,units).to_netcdf(filename,group=run_name,mode=mode)
+
+    # result_highO2_organic,output_units=run_alquimia.run_simulation(deckname,simlength,timestep,run_name='highO2_organic',initcond=pools_atmoO2_organic,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_organic,porosity=porosity_atmoO2_organic)
+    # result_organic_trough,output_units=run_alquimia.run_simulation(deckname,simlength,timestep,run_name='organic_trough',initcond=pools_organic_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_trough,porosity=porosity_organic_trough) 
+    # result_organic_nottrough,output_units=run_alquimia.run_simulation(deckname,simlength,timestep,run_name='organic_nottrough',initcond=pools_organic_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_organic_nottrough,porosity=porosity_organic_nottrough) 
+    # result_mineral_trough,output_units=run_alquimia.run_simulation(deckname,simlength,timestep,run_name='mineral_trough',initcond=pools_mineral_trough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_trough,porosity=porosity_mineral_trough)    
+    # result_mineral_nottrough,output_units=run_alquimia.run_simulation(deckname,simlength,timestep,run_name='mineral_nottrough',initcond=pools_mineral_nottrough,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc,CEC=CEC_mineral_nottrough,porosity=porosity_mineral_nottrough) 
 
     
-    nperiodic=3
 
-    periodic_out={}
+    # periodic_out={}
     
-    for ndryperiods in range(1,5):
-        periodic_out[ndryperiods]={}
-        for pH in pHs:
+    # for ndryperiods in range(1,5):
+    #     periodic_out[ndryperiods]={}
+    #     for pH in pHs:
 
-            O2_periodic=numpy.zeros(int(simlength/ndryperiods)*24)
-            O2_periodic[:int(simlength/ndryperiods*24*oxicfrac)]=dq
-            result_periodicO2,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='Periodic cycles=%d, pH=%1.1f'%(ndryperiods,pH),
-                initcond=decomp_network.change_constraint(pools_organic_trough,'H+','%1.2f P'%pH),bc=pools_atmoO2_organic,
-                diffquo={'O2(aq)':O2_periodic},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_organic_trough)
-            periodic_out[ndryperiods][pH]=result_periodicO2
-
-    import datetime
-    today=datetime.datetime.today()
-    filename='Arctic_Fe_output/results_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
-    import os
-    if os.path.exists(filename):
-        x=2
-        while True:
-            if not os.path.exists(filename[:-3]):
-                filename=filename[:-3]+'_%d.nc'%x
-                break
-            x+=1
+    #         O2_periodic=numpy.zeros(int(simlength/ndryperiods)*24)
+    #         O2_periodic[:int(simlength/ndryperiods*24*oxicfrac)]=dq
+    #         result_periodicO2,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,run_name='Periodic cycles=%d, pH=%1.1f'%(ndryperiods,pH),
+    #             initcond=decomp_network.change_constraint(pools_organic_trough,'H+','%1.2f P'%pH),bc=pools_atmoO2_organic,
+    #             diffquo={'O2(aq)':O2_periodic},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_organic_trough)
+    #         periodic_out[ndryperiods][pH]=result_periodicO2
 
 
+    # convert_to_xarray(result_highO2_organic,output_units).to_netcdf(filename,group='highO2_organic')
+    # convert_to_xarray(result_organic_trough,output_units).to_netcdf(filename,group='organic_trough',mode='a')
+    # convert_to_xarray(result_organic_nottrough,output_units).to_netcdf(filename,group='organic_nottrough',mode='a')
+    # convert_to_xarray(result_mineral_trough,output_units).to_netcdf(filename,group='mineral_trough',mode='a')
+    # convert_to_xarray(result_mineral_nottrough,output_units).to_netcdf(filename,group='mineral_nottrough',mode='a')
 
-    convert_to_xarray(result_highO2_organic,output_units).to_netcdf(filename,group='highO2_organic')
-    convert_to_xarray(result_organic_trough,output_units).to_netcdf(filename,group='organic_trough',mode='a')
-    convert_to_xarray(result_organic_nottrough,output_units).to_netcdf(filename,group='organic_nottrough',mode='a')
-    convert_to_xarray(result_mineral_trough,output_units).to_netcdf(filename,group='mineral_trough',mode='a')
-    convert_to_xarray(result_mineral_nottrough,output_units).to_netcdf(filename,group='mineral_nottrough',mode='a')
+    # import xarray
+    # periodic_x=xarray.Dataset()
+    # for ndryperiods in periodic_out.keys():
+    #     pH_sims=xarray.concat([convert_to_xarray(periodic_out[ndryperiods][pH],output_units) for pH in pHs],dim='pH',join='outer')
+    #     periodic_x=xarray.concat([periodic_x,pH_sims],dim='ndryperiods')
 
-    import xarray
-    periodic_x=xarray.Dataset()
-    for ndryperiods in periodic_out.keys():
-        pH_sims=xarray.concat([convert_to_xarray(periodic_out[ndryperiods][pH],output_units) for pH in pHs],dim='pH',join='outer')
-        periodic_x=xarray.concat([periodic_x,pH_sims],dim='ndryperiods')
+    # periodic_x['pH']=pHs
+    # periodic_x['ndryperiods']=periodic_x['ndryperiods']+1
 
-    periodic_x['pH']=pHs
-    periodic_x['ndryperiods']=periodic_x['ndryperiods']+1
-
-    periodic_x.to_netcdf(filename,group='periodic_sims',mode='a')
+    # periodic_x.to_netcdf(filename,group='periodic_sims',mode='a')
