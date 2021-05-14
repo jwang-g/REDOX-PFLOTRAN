@@ -366,27 +366,12 @@ rateconstants={
 
 precision=2
 
-input_file='manganese.in'
-
-decomp_network.PF_network_writer(reaction_network,precision=precision).write_into_input_deck('SOMdecomp_template.txt',input_file,log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25)
-
 incubation_length=5 # Years of litter decomp
 
 molar_mass={'Mg++':24.305,'Al+++':26.982,'K+':39.098,'Ca++':40.078,'Mn':54.938,'Na+':22.99,'N':14.007}
 init_exch_cations={'Mg++':1.5,'Al+++':7.0,'K+':1.3,'Ca++':5.0,'Na+':0.2,'Mn++':0.3} # mmol/kg. From Jin et al 2010 Table 3
 
-# Read secondary complex names from input file since Alquimia does not provide them
-with open(input_file,'r') as infile:
-    secondary_names=[]
-    for line in infile:
-        if 'SECONDARY_SPECIES' in line.split('#')[0]:
-            break
-    for line in infile:
-        l=line.strip().split('#')[0]
-        if l.startswith('END') or l.startswith('/'):
-            break
-        if len(l)>0:
-            secondary_names.append(l)
+
 
 not_T_sens = [
     'Root uptake of Mn++',
@@ -395,7 +380,8 @@ not_T_sens = [
     'DOM sorption',
 ]
 
-def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=40,restart_state=None,do_incubation=True,fname=None):
+def run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*12,nyears=40,restart_state=None,do_incubation=True,
+            fname=None,anox_lenscale=1.0,anox_depthscale=0.125):
     chem,data,sizes,status=init_alquimia(input_file,hands_off=False)
     rateconstants_warmed=rateconstants.copy()
     for react in rateconstants_warmed:
@@ -408,6 +394,18 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
     # Low bulk density causes simulation to slow or crash though. Actually CEC being too low (<100 combined with BD<1) is the problem
     layers=[layer(0.05,rateconstants=rateconstants_stoich,BD=0.425,porosity=0.5,CEC=400.0)]+[layer(0.1,rateconstants=rateconstants_stoich) for num in range(4)]
 
+    # Read secondary complex names from input file since Alquimia does not provide them
+    with open(input_file,'r') as infile:
+        secondary_names=[]
+        for line in infile:
+            if 'SECONDARY_SPECIES' in line.split('#')[0]:
+                break
+        for line in infile:
+            l=line.strip().split('#')[0]
+            if l.startswith('END') or l.startswith('/'):
+                break
+            if len(l)>0:
+                secondary_names.append(l)
     
     for l in layers:
         l.secondary_names=secondary_names
@@ -511,11 +509,11 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
     
     
         *************************************
-        * Starting simulation with pH = %1.1f, Ndep = %03d, Warming = %d, redox_freq = %d *
+        * Starting simulation with pH = %1.1f, Ndep = %03d, Warming = %d, anox_freq = %d , anox_len = %1.1f *
         *************************************
         
         
-        '''%(pH,int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),warming,redox_freq))
+        '''%(pH,int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),warming,anox_freq,anox_lenscale))
 
 
     
@@ -555,12 +553,12 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
         # layers[l].surface_site_density['>DOM1']=1e3
         layers[l].total_immobile['Sorption_capacity']=1/12*100**3*0.01 # 1 g/cm3
         # Sinusoid redox state
-        # layers[l].diffquo={'O2(aq)':0.001*0.1**(z_mid[l]*10)*(1+numpy.sin(2*numpy.pi*redox_freq/(365*24*3600/dt)*numpy.arange(nsteps)))}
+        # layers[l].diffquo={'O2(aq)':0.001*0.1**(z_mid[l]*10)*(1+numpy.sin(2*numpy.pi*anox_freq/(365*24*3600/dt)*numpy.arange(nsteps)))}
         # Redox state with exponential relaxation, layer-dependent relaxation rate
-        if redox_freq>0:
-            anox_length=numpy.exp(z_mid[l]*8.0)  # Length of anoxic period in days, by depth
-            t_anox=(numpy.arange(nsteps)*dt/(3600*24))%(365//redox_freq) # Time in redox cycle
-            # layers[l].diffquo={'O2(aq)':(0.001*(1-numpy.exp(-((numpy.arange(nsteps)*dt/(3600*24))%(365//redox_freq))*0.1**(z_mid[l]*10))))}
+        if anox_freq>0:
+            anox_length=anox_lenscale*numpy.exp(z_mid[l]/anox_depthscale)  # Length of anoxic period in days, by depth
+            t_anox=(numpy.arange(nsteps)*dt/(3600*24))%(365//anox_freq) # Time in redox cycle
+            # layers[l].diffquo={'O2(aq)':(0.001*(1-numpy.exp(-((numpy.arange(nsteps)*dt/(3600*24))%(365//anox_freq))*0.1**(z_mid[l]*10))))}
             layers[l].diffquo={'O2(aq)':(0.001*numpy.where(t_anox<=anox_length,0.0,1.0))}
         else:
             layers[l].diffquo={'O2(aq)':0.001*0.1**(z_mid[l]*10)}
@@ -745,8 +743,17 @@ def run_sim(Ndep,warming,pH,redox_freq,rateconstants,Q10=2.0,dt=3600*12,nyears=4
     today=datetime.datetime.today()
     if fname is None:
         fname='/lustre/or-hydra/cades-ccsi/scratch/b0u/Mn_output/Mn_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
-    gname='pH{ph:1.1f}_Ndep{Ndep:03d}_warming{warming:d}_redox{redox:d}'.format(ph=pH,Ndep=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),warming=warming,redox=redox_freq)
+    gname='pH{ph:1.1f}_Ndep{Ndep:03d}_warming{warming:d}_anox_freq{redox:d}_anox_len{anoxlen:1.1f}'.format(ph=pH,Ndep=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),warming=warming,redox=anox_freq,anoxlen=anox_lenscale)
     
+    newdims=['soil_pH','Ndep','warming','redox_cycles','anox_lenscales']
+    output['soil_pH']=pH
+    output['Ndep']=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600)))
+    output['warming']=warming
+    output['redox_cycles']=anox_freq 
+    output['anox_lenscales']=anox_lenscale 
+    output['warming']=warming
+    output=output.expand_dims(newdims).set_coords(newdims)
+
     import os
     if not os.path.exists(fname):
         output.to_netcdf(fname,mode='w',group=gname)
@@ -786,6 +793,12 @@ if __name__ == '__main__':
     if totaljobs>1:
         fname=fname[:-3]+'_%02d.nc'%jobnum
 
+    input_file='/lustre/or-scratch/cades-ccsi/b0u/Mn_output/manganese_%02d.in'%jobnum
+
+    decomp_network.PF_network_writer(reaction_network,precision=precision).write_into_input_deck('SOMdecomp_template.txt',input_file,log_formulation=True,
+            CO2name='Tracer',truncate_concentration=1e-25,database='/home/b0u/models/PFLOTRAN/REDOX-PFLOTRAN/hanford.dat')
+
+
     # Whalen et al 2018: Background N dep is 8-10 kg N/ha/year
     # Treatments were +50 kg N/ha/year and +150 kgN/ha/year (as NH4NO3)
     # 1 kg N/ha/year
@@ -794,11 +807,14 @@ if __name__ == '__main__':
 
     pHs=numpy.arange(4.0,6.5,0.5)
     # pHs=[4.5,6.0]
-    anox_freqs=[12,8,4,1] # anoxic events per year
+    # anox_freqs=[12,8,4,1] # anoxic events per year
+    anox_freqs=[50] # ~ weekly anoxic periods
+    anox_lengths=[0.1,0.25,0.5,1,2]
 
     Ndep_sims=[]
     pH_sims=[]
     anox_freq_sims=[]
+    anox_len_sims=[]
     warming_sims=[]
 
     # Build one long list of all the sim params first
@@ -809,16 +825,19 @@ if __name__ == '__main__':
 
         for pH in pHs:
             for anox_freq in anox_freqs:
-                Ndep_sims.append(Ndep)
-                warming_sims.append(warming)
-                anox_freq_sims.append(anox_freq)
-                pH_sims.append(pH)
+                for anox_len in anox_lengths:
+                    Ndep_sims.append(Ndep)
+                    warming_sims.append(warming)
+                    anox_freq_sims.append(anox_freq)
+                    anox_len_sims.append(anox_len)
+                    pH_sims.append(pH)
 
     # Add some sims with redox_cycles=0 for incubations
     for pH in pHs:
         Ndep_sims.append(0)
         warming_sims.append(0)
         anox_freq_sims.append(0)
+        anox_len_sims.append(0)
         pH_sims.append(pH)
 
     # Then just run sims for this job
@@ -832,7 +851,8 @@ if __name__ == '__main__':
         pH=pH_sims[simnum]
         warming=warming_sims[simnum]
         anox_freq=anox_freq_sims[simnum]
-        run_sim(Ndep,warming,pH,anox_freq,rateconstants,Q10=2.0,dt=3600*24,fname=fname,
+        anox_len=anox_len_sims[simnum]
+        run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*6,fname=fname,anox_lenscale=anox_len,
             do_incubation=(anox_freq==0) and (Ndep==0) and (warming==0))
 
     print('\n\n\n Simulations finished. Total time: %1.1f hours\n'%((time.time()-starting_time)/3600),flush=True)
