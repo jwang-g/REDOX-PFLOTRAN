@@ -137,14 +137,14 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
     # CH2O + H2O -> CO2 + 4H+ + 4 e-
     # O2   + 4H+ + 4 e- -> 2H2O
             decomp_network.reaction(name='DOM aerobic respiration',reactant_pools={'DOM1':1.0,'O2(aq)':1.0},product_pools={'HCO3-':1.0,'H+':1.0,'Tracer':1.0,'Mn++':leaf_Mn_frac},
-                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM1',k=DOM_scale,threshold=1.1e-14)],
+                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-4,threshold=1.1e-12),decomp_network.monod(species='DOM1',k=DOM_scale,threshold=1.1e-14)],
                                         rate_constant=1.0e-5,reactiontype='MICROBIAL'),
                                         
     # CH2O + H2O -> CO2 + 4H+ + 4 e-
     # O2   + 4H+ + 4 e- -> 2H2O
     # Aerobic respiration of DOM2, to allow some lignin decomposition in absence of Mn. Assume it is very slow
             decomp_network.reaction(name='DOM2 aerobic respiration',reactant_pools={'DOM2':1.0,'O2(aq)':1.0},product_pools={'HCO3-':1.0,'H+':1.0,'Tracer':1.0,'Mn++':leaf_Mn_frac},
-                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-5,threshold=1.1e-12),decomp_network.monod(species='DOM2',k=1e0,threshold=1.1e-14)],
+                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=1e-4,threshold=1.1e-12),decomp_network.monod(species='DOM2',k=1e0,threshold=1.1e-14)],
                                             inhibition_terms=[decomp_network.inhibition(species='Mn++',type='MONOD',k=Mn2_scale)],
                                         rate_constant=1.0e-5,reactiontype='MICROBIAL'),
 
@@ -189,7 +189,7 @@ def make_network(Mn_peroxidase_Mn3_leakage=1e-5,leaf_Mn_mgkg=25.0,change_constra
                                     rate_constant=1.0e-5,reactiontype='MICROBIAL'),
             
             # Cation exchange
-            decomp_network.ion_exchange(name='Cation exchange',cations={'Mn++':20.0,'Mn+++':0.6,'Al+++':100.0,'Mg++':1.1,'Ca++':1.0,'Na+':0.5,'K+':0.1,'H+':1.1},CEC=CEC,mineral=None),
+            decomp_network.ion_exchange(name='Cation exchange',cations={'Mn++':5.0,'Mn+++':0.6,'Al+++':10.0,'Mg++':1.1,'Ca++':1.0,'Na+':0.5,'K+':0.1,'H+':1.1},CEC=CEC,mineral=None),
             
             # sorption rate is microbial DOM1 -> DOM3 (d/dt = V1*sorption_capacity*DOM1/(DOM1+k))
             # Desorption rate is general DOM3 -> DOM1 (d/dt = V2*DOM3)
