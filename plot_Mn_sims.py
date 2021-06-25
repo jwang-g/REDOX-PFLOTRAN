@@ -28,81 +28,87 @@ leafC_mass_conv=1.0 # For simulations after I started applying the C to dry mass
 molar_volume_birnessite = 251.1700 # Divide by 7 below because birnessite is defined in database as 7 mols of Mn
 Mn_molarmass=54.94        #g/mol
 
-data_list=[]
-incubation_list=[]
-
-
-allfilenames=[]
-groupnames=[]
 
 def getval_from_str(s,subs,valtype=float):
     return valtype(s[s.index(subs)+len(subs):].partition('_')[0])
 
-for filename in sorted(filenames):
-    print('Reading file %s'%filename)
-    with netCDF4.Dataset(filename) as d:
-        groups=list(d.groups.keys())
+def load_data(filenames):
+    data_list=[]
+    incubation_list=[]
+
+    allfilenames=[]
+    groupnames=[]
+
+    for filename in sorted(filenames):
+        print('Reading file %s'%filename)
+        with netCDF4.Dataset(filename) as d:
+            groups=list(d.groups.keys())
 
 
-    for g in groups:
-        print(g,flush=True)
+        for g in groups:
+            print(g,flush=True)
 
-        d=xarray.open_dataset(filename,group=g,chunks={'time':3650},decode_times=False)
-        if 'soil_pH' not in d:
-            d['soil_pH']=getval_from_str(g,'pH')
-            d['Ndep']=getval_from_str(g,'Ndep',int)
-            d['warming']=getval_from_str(g,'warming')
-            d['redox_cycles']=getval_from_str(g,'anox_freq',int)
-            d['anox_lenscales']=getval_from_str(g,'anox_len')
-            newdims=['soil_pH','Ndep','warming','redox_cycles']
-            d=d.expand_dims(newdims).set_coords(newdims)
-        if 'incubation' in g:
-            incubation_list.append(d)
-        else:
-            data_list.append(d)
-            allfilenames.append(filename)
-            groupnames.append(g)
-
-pH_sims=array([d['soil_pH'].item() for d in data_list])
-Ndep_sims=array([d['Ndep'].item() for d in data_list])
-warming_sims=array([d['warming'].item() for d in data_list])
-anox_freq_sims=array([d['redox_cycles'].item() for d in data_list])
-anox_len_sims=array([d['anox_lenscales'].item() for d in data_list])
-allsims=pandas.DataFrame({'Ndep':Ndep_sims,'warming':warming_sims,'anox_freq':anox_freq_sims,'anox_len':anox_len_sims,'pH':pH_sims})
-
-from Manganese_profile import setup_sims
-expected_sims=setup_sims()
-expected_sims['simnum']=expected_sims.index
-comp=allsims.merge(expected_sims,how='outer',indicator=True)
-missing=comp[comp['_merge']!='both']
-if len(missing)>0:
-    print('Warning: Not all expected sims were found:')
-    print(missing)
-    print('Generating all nan data for missing simulations.')
-    for num in missing.index:
-        d=(data_list[0]*nan).assign_coords(
-            soil_pH=atleast_1d(missing.loc[num]['pH']),
-            Ndep=atleast_1d(missing.loc[num]['Ndep']),
-            warming=atleast_1d(missing.loc[num]['warming']),
-            redox_cycles=atleast_1d(missing.loc[num]['anox_freq']),
-            anox_lenscales=atleast_1d(missing.loc[num]['anox_len']))
-        data_list.append(d)
+            d=xarray.open_dataset(filename,group=g,chunks={'time':3650},decode_times=False)
+            if 'soil_pH' not in d:
+                d['soil_pH']=getval_from_str(g,'pH')
+                d['Ndep']=getval_from_str(g,'Ndep',int)
+                d['warming']=getval_from_str(g,'warming')
+                d['redox_cycles']=getval_from_str(g,'anox_freq',int)
+                d['anox_lenscales']=getval_from_str(g,'anox_len')
+                newdims=['soil_pH','Ndep','warming','redox_cycles']
+                d=d.expand_dims(newdims).set_coords(newdims)
+            if 'incubation' in g:
+                incubation_list.append(d)
+            else:
+                data_list.append(d)
+                allfilenames.append(filename)
+                groupnames.append(g)
 
     pH_sims=array([d['soil_pH'].item() for d in data_list])
     Ndep_sims=array([d['Ndep'].item() for d in data_list])
     warming_sims=array([d['warming'].item() for d in data_list])
     anox_freq_sims=array([d['redox_cycles'].item() for d in data_list])
     anox_len_sims=array([d['anox_lenscales'].item() for d in data_list])
+    allsims=pandas.DataFrame({'Ndep':Ndep_sims,'warming':warming_sims,'anox_freq':anox_freq_sims,'anox_len':anox_len_sims,'pH':pH_sims})
+
+    from Manganese_profile import setup_sims
+    expected_sims=setup_sims()
+    expected_sims['simnum']=expected_sims.index
+    comp=allsims.merge(expected_sims,how='outer',indicator=True)
+    missing=comp[comp['_merge']!='both']
+    if len(missing)>0:
+        print('Warning: Not all expected sims were found:')
+        print(missing)
+        print('Generating all nan data for missing simulations.')
+        for num in missing.index:
+            d=(data_list[0]*nan).assign_coords(
+                soil_pH=atleast_1d(missing.loc[num]['pH']),
+                Ndep=atleast_1d(missing.loc[num]['Ndep']),
+                warming=atleast_1d(missing.loc[num]['warming']),
+                redox_cycles=atleast_1d(missing.loc[num]['anox_freq']),
+                anox_lenscales=atleast_1d(missing.loc[num]['anox_len']))
+            data_list.append(d)
+
+        pH_sims=array([d['soil_pH'].item() for d in data_list])
+        Ndep_sims=array([d['Ndep'].item() for d in data_list])
+        warming_sims=array([d['warming'].item() for d in data_list])
+        anox_freq_sims=array([d['redox_cycles'].item() for d in data_list])
+        anox_len_sims=array([d['anox_lenscales'].item() for d in data_list])
 
 
-x=(anox_freq_sims>0)&(anox_len_sims>0)
-if len(pH_sims[x])%len(unique(pH_sims)) != 0:
-    raise ValueError("Simulations don't appear to divide evenly by pH and anox_freq!")
+    x=(anox_freq_sims>0)&(anox_len_sims>0)
+    if len(pH_sims[x])%len(unique(pH_sims)) != 0:
+        raise ValueError("Simulations don't appear to divide evenly by pH and anox_freq!")
 
-alldata=xarray.combine_by_coords(data_list[xx] for xx in nonzero(x)[0])
+    alldata=xarray.combine_by_coords(data_list[xx] for xx in nonzero(x)[0])
+    
+
+    print('Finished combining data',flush=True)
+    return alldata,incubation_list
+
+if len(filenames)>0:
+    alldata,incubation_list=load_data(filenames)
 controldata=alldata.isel(Ndep=0,warming=0)
-
-print('Finished combining data',flush=True)
 
 def getdata(soil_pH,Ndep,warming,redox_cycles=50,anox_lenscale=0.5):
     # return data_list[flatnonzero((pH_sims==soil_pH)&(Ndep_sims==Ndep)&(warming_sims==warming)&(anox_freq_sims==redox_cycles)&(anox_len_sims==anox_lenscale))[0]].squeeze()
@@ -114,11 +120,14 @@ def save_one_fig(f,dirname=figdir,format='png',**kwargs):
     print(savename)
     f.savefig(savename,**kwargs)
 
-def letter_label(ax,label=None,x=0.03,y=1.03,**kwargs):
+def letter_label(ax,label=None,x=0.03,y=1.03,title=True,**kwargs):
     from string import ascii_lowercase
     if isinstance(label,int):
         label='('+ascii_lowercase[label]+')'
-    return ax.text(x,y,label,transform=ax.transAxes,**kwargs)
+    if title:
+        return ax.set_title(label,loc='left')
+    else:
+        return ax.text(x,y,label,transform=ax.transAxes,**kwargs)
 
 dt=(controldata['time'][1]-controldata['time'][0]).item()
 oneyr=int(365/dt)
@@ -150,15 +159,9 @@ total_SOC=(((results_byredox['Total DOM3']+results_byredox['Total DOM1']+results
                 *12e-3/1000*100**3*(results_byredox.z_bottom-results_byredox.z_top)/100).sum(dim='depth')
 
 
-results_byMnAvail=results_byredox.stack(MnAvail=('soil_pH','anox_lenscales'))
-# Units of ug/g soil
-birnessite=results_byMnAvail['Birnessite2 VF'].coarsen(time=oneyr,boundary='trim').mean()*7/molar_volume_birnessite*1e6*Mn_molarmass/results_byMnAvail.BD
-totalMn=((results_byMnAvail['Total Mn++']+results_byMnAvail['Total Mn+++'])/1000*results_byMnAvail.Porosity.mean()*results_byMnAvail.saturation + \
-                    (results_byMnAvail['Birnessite2 VF']*7/molar_volume_birnessite) + \
-                    results_byMnAvail['Total Sorbed Mn++']/100**3).coarsen(time=oneyr,boundary='trim').mean()*Mn_molarmass/results_byMnAvail.BD*1e6
 
 total_litter=((results_byredox['Total Sorbed Cellulose']+results_byredox['Total Sorbed Lignin']).load().coarsen(time=oneyr,boundary='trim').mean()*12e-3*(results_byredox.z_bottom-results_byredox.z_top)/100).sum(dim='depth').load()
-Figure3,axs=subplots(nrows=3,num='Figure 3',clear=True,figsize=(4,10))
+Figure3,axs=subplots(nrows=3,num='Figure 3',clear=True,figsize=(3,8))
 for t in [9,19,29,39]:
     axs[0].plot(results_byredox['soil_pH'],total_litter.isel(time=t,anox_lenscales=anox_baseline_i),'o-',label='Year %d'%(t+1),c='%1.1f'%(1-t/39))
     axs[1].plot(results_byredox['soil_pH'],total_MAOM.isel(time=t,anox_lenscales=anox_baseline_i),'o-',label='Year %d'%(t+1),c='%1.1f'%(1-t/39))
@@ -166,9 +169,9 @@ for t in [9,19,29,39]:
 
 print('litter stock max = %1.2f, min = %1.2f'%(total_litter.isel(time=t,anox_lenscales=anox_baseline_i).max(),total_litter.isel(time=t,anox_lenscales=anox_baseline_i).min()))
 
-axs[0].set(title='Litter C stock',xlabel='pH',ylabel='C stock (kg C m$^{-2}$)')
-axs[1].set(title='MAOM C stock',xlabel='pH',ylabel='C stock (kg C m$^{-2}$)')
-axs[2].set(title='Total soil and litter C stock',xlabel='pH',ylabel='C stock (kg C m$^{-2}$)')
+axs[0].set(title='Litter C',xlabel='pH',ylabel='C stock (kg C m$^{-2}$)',xticks=linspace(4,6,5))
+axs[1].set(title='Mineral-associated Organic C',xlabel='pH',ylabel='C stock (kg C m$^{-2}$)',xticks=linspace(4,6,5))
+axs[2].set(title='Total C (litter + soil)',xlabel='pH',ylabel='C stock (kg C m$^{-2}$)',xticks=linspace(4,6,5))
 axs[0].legend()
 
 for num in range(len(axs)):
@@ -176,7 +179,7 @@ for num in range(len(axs)):
 
 save_one_fig(Figure3)
 
-Figure3_expanded,axs=subplots(nrows=3,ncols=4,num='Figure S2 C stocks in all scenarios',clear=True,figsize=(12,10),sharey='row')
+Figure3_expanded,axs=subplots(nrows=3,ncols=4,num='Figure S5 C stocks in all scenarios',clear=True,figsize=(12,10),sharey='row')
 d=alldata.isel(warming=0,Ndep=0)
 # MAOM_control=((d['Total DOM3'].coarsen(time=oneyr,boundary='trim').mean()*d.saturation*d.Porosity.mean())*12e-3/1000*100**3*(d.z_bottom-d.z_top)/100).sum(dim='depth')
 # totC_control=(d['Total Sorbed Cellulose'].coarsen(time=oneyr,boundary='trim').mean()*12e-3*(d.z_bottom-d.z_top)/100).sum(dim='depth')+\
@@ -207,6 +210,9 @@ for num in range(4):
     axs[0,num].set(title='Warming = %d, Ndep = %d\nLitter C stock'%(d['warming'].item(),d['Ndep'].item()),xlabel='pH',ylabel='C stock (kg C m$^{-2}$)')
     axs[1,num].set(title='MAOM C stock',xlabel='pH',ylabel='C stock (kg C m$^{-2}$)')
     axs[2,num].set(title='Total soil and litter C stock',xlabel='pH',ylabel='C stock (kg C m$^{-2}$)')
+    axs[0,num].tick_params(labelleft=True)
+    axs[1,num].tick_params(labelleft=True)
+    axs[2,num].tick_params(labelleft=True)
     axs[0,num].legend()
 
 for num in range(axs.size):
@@ -221,52 +227,56 @@ totalMn=((results_byredox['Total Mn++']+results_byredox['Total Mn+++'])/1000*res
             results_byredox['Total Sorbed Mn++']/100**3).load().coarsen(time=oneyr,boundary='trim').mean()*100**2*(results_byredox.z_bottom-results_byredox.z_top)
 birnessite=results_byredox['Birnessite2 VF'].load().coarsen(time=oneyr,boundary='trim').mean()*7/molar_volume_birnessite*100**2*(results_byredox.z_bottom-results_byredox.z_top)
 
-f,axs=subplots(nrows=len(controldata['soil_pH']),ncols=len(controldata['anox_lenscales']),clear=True,num='Figure S4 Mn bioavailability',figsize=(10,10),sharex=True,sharey=True)
+f,axs=subplots(nrows=len(controldata['soil_pH']),ncols=len(controldata['anox_lenscales']),clear=True,num='Figure S4 Mn bioavailability',figsize=(12,10),sharex=True,sharey=True)
 maxval=1.0
 minval=1e-5
 for ph in range(len(controldata['soil_pH'])):
     for anox in range(len(controldata['anox_lenscales'])):
         # Total Mn in mol/m2
-        h=axs[ph,anox].pcolormesh(totalMn['time']/365,
+        row=4-anox
+        h=axs[row,ph].pcolormesh(totalMn['time']/365,
                 -results_byredox['z_middle'].isel(soil_pH=0,anox_lenscales=0),1-birnessite.isel(soil_pH=ph,anox_lenscales=anox)/totalMn.isel(soil_pH=ph,anox_lenscales=anox),
                 shading='auto',cmap=get_cmap('viridis'),norm=matplotlib.colors.LogNorm(vmin=minval,vmax=maxval))
-        axs[ph,anox].set_xlabel('Time (years)')
+        axs[row,ph].set_xlabel('Time (years)')
+        if (row)==0:
+            axs[row,ph].set_title('pH = %1.1f'%controldata['soil_pH'][ph].load().item(),pad=10,fontsize='large',fontweight='bold')
         if ph==0:
-            axs[ph,anox].set_title('Drainage time\nscale = %1.1f days'%controldata['anox_lenscales'][anox].load().item(),pad=10)
-        if anox==0:
-            axs[ph,0].set_ylabel('pH = %1.1f\nDepth (cm)'%controldata['soil_pH'][ph].load().item())
-        else:
-            axs[ph,anox].set_ylabel('Depth (cm)')
+            axs[row,ph].text(-0.6,0.5,f'Drainage time\nscale = {controldata["anox_lenscales"][anox].load().item()} days',
+            rotation=90,va='center',transform=axs[row,ph].transAxes,fontsize='large',fontweight='bold')
 
+        axs[row,ph].set_ylabel('Depth (cm)')
+        axs[row,ph].tick_params(labelleft=True,labelbottom=True)
             
 cb=f.colorbar(h,ax=axs)
-cb.set_label('Bioavailable fraction of Mn')
+cb.set_label('Bioavailable fraction of Mn',fontsize='large')
 
 for num in range(axs.size):
     letter_label(axs.ravel()[num],num,x=-0.1)
 
 save_one_fig(f)
 
-f,axs=subplots(nrows=len(controldata['soil_pH']),ncols=len(controldata['anox_lenscales']),clear=True,num='Figure S3 Mn redistribution',figsize=(10,10),sharex=True,sharey=True)
+f,axs=subplots(nrows=len(controldata['soil_pH']),ncols=len(controldata['anox_lenscales']),clear=True,num='Figure S3 Mn redistribution',figsize=(12,10),sharex=True,sharey=True)
 maxval=(totalMn-totalMn.isel(time=0)).max().compute()
 minval=(totalMn-totalMn.isel(time=0)).min().compute()
 for ph in range(len(controldata['soil_pH'])):
     for anox in range(len(controldata['anox_lenscales'])):
+        row=4-anox
         # Total Mn in mol/m2
-        h=axs[ph,anox].pcolormesh(totalMn['time']/365,
+        h=axs[row,ph].pcolormesh(totalMn['time']/365,
                 -results_byredox['z_middle'].isel(soil_pH=0,anox_lenscales=0),totalMn.isel(soil_pH=ph,anox_lenscales=anox)-totalMn.isel(soil_pH=ph,anox_lenscales=anox,time=0),
-                shading='auto',vmin=minval,vmax=maxval,cmap=get_cmap('RdBu_r'))
-        axs[ph,anox].set_xlabel('Time (years)')
+                shading='auto',vmin=min(minval,-maxval),vmax=max(maxval,-minval),cmap=get_cmap('RdBu_r'))
+        axs[row,ph].set_xlabel('Time (years)')
+        if row==0:
+            axs[row,ph].set_title('pH = %1.1f'%controldata['soil_pH'][ph].load().item(),pad=10,fontsize='large',fontweight='bold')
         if ph==0:
-            axs[ph,anox].set_title('Anox len scale = %1.1f'%controldata['anox_lenscales'][anox].load().item(),pad=10)
-        if anox==0:
-            axs[ph,0].set_ylabel('pH = %1.1f\nDepth (cm)'%controldata['soil_pH'][ph].load().item())
-        else:
-            axs[ph,anox].set_ylabel('Depth (cm)')
+            axs[row,ph].text(-0.6,0.5,f'Drainage time\nscale = {controldata["anox_lenscales"][anox].load().item()} days',
+                rotation=90,va='center',transform=axs[row,ph].transAxes,fontsize='large',fontweight='bold')
 
+        axs[row,ph].set_ylabel('Depth (cm)')
+        axs[row,ph].tick_params(labelleft=True,labelbottom=True)
             
 cb=f.colorbar(h,ax=axs)
-cb.set_label('Mn stock (mol m$^{-2}$)')
+cb.set_label('Change in Mn stock (mol m$^{-2}$)',fontsize='large')
 
 for num in range(axs.size):
     letter_label(axs.ravel()[num],num,x=-0.1)
@@ -358,12 +368,12 @@ warmings=data_warmings['warming'].to_masked_array()
 f,axs=subplots(nrows=1,ncols=3,num='Figure 4 Warming time series',clear=True,sharey='row',figsize=(12,4))
 litter=total_litter_all.sel(Ndep=0).squeeze()
 
-h=axs[0].plot(litter.time/365,litter.isel(warming=0,soil_pH=0,anox_lenscales=anox_baseline_i),'b-',label='pH = %1.1f, Warming = %d$^\circ$C'%(data_warmings['soil_pH'][0],warmings[0]))
-h=axs[0].plot(litter.time/365,litter.isel(warming=0,soil_pH=-1,anox_lenscales=anox_baseline_i),'b--',label='pH = %1.1f, Warming = %d$^\circ$C'%(data_warmings['soil_pH'][-1],warmings[0]))
-h=axs[0].plot(litter.time/365,litter.isel(warming=1,soil_pH=0,anox_lenscales=anox_baseline_i),'y-',label='pH = %1.1f, Warming = %d$^\circ$C'%(data_warmings['soil_pH'][0],warmings[1]))
-h=axs[0].plot(litter.time/365,litter.isel(warming=1,soil_pH=-1,anox_lenscales=anox_baseline_i),'y--',label='pH = %1.1f, Warming = %d$^\circ$C'%(data_warmings['soil_pH'][-1],warmings[1]))
-h=axs[0].plot(litter.time/365,litter.isel(warming=2,soil_pH=0,anox_lenscales=anox_baseline_i),'r-',label='pH = %1.1f, Warming = %d$^\circ$C'%(data_warmings['soil_pH'][0],warmings[2]))
-h=axs[0].plot(litter.time/365,litter.isel(warming=2,soil_pH=-1,anox_lenscales=anox_baseline_i),'r--',label='pH = %1.1f, Warming = %d$^\circ$C'%(data_warmings['soil_pH'][-1],warmings[2]))
+h=axs[0].plot(litter.time/365,litter.isel(warming=0,soil_pH=0,anox_lenscales=anox_baseline_i),'b-',label='pH = %1.1f, Warming = %d\u00B0C'%(data_warmings['soil_pH'][0],warmings[0]))
+h=axs[0].plot(litter.time/365,litter.isel(warming=0,soil_pH=-1,anox_lenscales=anox_baseline_i),'b--',label='pH = %1.1f, Warming = %d\u00B0C'%(data_warmings['soil_pH'][-1],warmings[0]))
+h=axs[0].plot(litter.time/365,litter.isel(warming=1,soil_pH=0,anox_lenscales=anox_baseline_i),'y-',label='pH = %1.1f, Warming = %d\u00B0C'%(data_warmings['soil_pH'][0],warmings[1]))
+h=axs[0].plot(litter.time/365,litter.isel(warming=1,soil_pH=-1,anox_lenscales=anox_baseline_i),'y--',label='pH = %1.1f, Warming = %d\u00B0C'%(data_warmings['soil_pH'][-1],warmings[1]))
+h=axs[0].plot(litter.time/365,litter.isel(warming=2,soil_pH=0,anox_lenscales=anox_baseline_i),'r-',label='pH = %1.1f, Warming = %d\u00B0C'%(data_warmings['soil_pH'][0],warmings[2]))
+h=axs[0].plot(litter.time/365,litter.isel(warming=2,soil_pH=-1,anox_lenscales=anox_baseline_i),'r--',label='pH = %1.1f, Warming = %d\u00B0C'%(data_warmings['soil_pH'][-1],warmings[2]))
 
 litter=total_litter_all.isel(Ndep=1).squeeze()
 
@@ -384,18 +394,21 @@ h=axs[2].plot(litter.time/365,litter.isel(warming=1,soil_pH=-1,anox_lenscales=an
 h=axs[2].plot(litter.time/365,litter.isel(warming=2,soil_pH=0,anox_lenscales=anox_baseline_i),'r-',label='pH = %1.1f, Warming = %d'%(data_warmings['soil_pH'][0],warmings[2]))
 h=axs[2].plot(litter.time/365,litter.isel(warming=2,soil_pH=-1,anox_lenscales=anox_baseline_i),'r--',label='pH = %1.1f, Warming = %d'%(data_warmings['soil_pH'][-1],warmings[2]))
 
-axs[2].set_ylabel('Total litter C \n(kg C m$^{-2}$)')
+axs[2].set_ylabel('Total litter C (kg C m$^{-2}$)')
 axs[2].set_xlabel('Year')
 axs[2].set_title('N dep = 150 kg N ha$^{-1}$ year$^{-1}$')
+axs[2].tick_params(labelleft=True)
 
-axs[1].set_ylabel('Total litter C \n(kg C m$^{-2}$)')
+axs[1].set_ylabel('Total litter C (kg C m$^{-2}$)')
 axs[1].set_xlabel('Year')
 axs[1].set_title('N dep = 50 kg N ha$^{-1}$ year$^{-1}$')
+axs[1].tick_params(labelleft=True)
 
-axs[0].set_ylabel('Total litter C \n(kg C m$^{-2}$)')
+axs[0].set_ylabel('Total litter C (kg C m$^{-2}$)')
 axs[0].set_xlabel('Year')
 axs[0].set_title('N dep = 0 kg N ha$^{-1}$ year$^{-1}$')
 axs[0].legend(ncol=2)
+axs[0].tick_params(labelleft=True)
 
 for num in range(axs.size):
     letter_label(axs.ravel()[num],num)
@@ -408,38 +421,47 @@ h=axs[0,0].contourf(total_litter['soil_pH'],satfrac.mean(dim='depth'),total_litt
 print('Litter min = %1.2f, max = %1.2f'%(total_litter.isel(warming=0,time=39).min(),total_litter.isel(warming=0,time=39).max()))
 h1=axs[0,1].contourf(total_litter['soil_pH'],satfrac.mean(dim='depth'),
         (total_litter.isel(warming=1,time=39).T-total_litter.isel(warming=0,time=39).T)/total_litter.isel(warming=0,time=39).T*100,
-        levels=linspace(-50,50,21),cmap='RdBu')
+        levels=linspace(-50,50,21),cmap='RdBu_r')
 h2=axs[0,2].contourf(total_litter['soil_pH'],satfrac.mean(dim='depth'),
         (total_litter.isel(warming=2,time=39).T-total_litter.isel(warming=0,time=39).T)/total_litter.isel(warming=0,time=39).T*100,
-        levels=linspace(-50,50,21),cmap='RdBu')
+        levels=linspace(-50,50,21),cmap='RdBu_r')
 
 cb=Figure2.colorbar(h,ax=axs[0,0])
 cb.set_label('Total litter C (kg C m$^{-2}$)')
+cb.set_ticks([0.3,0.5,0.7,0.9,1.1])
 cb=Figure2.colorbar(h2,ax=axs[0,2])
-cb.set_label('Total litter C diff. (%)')
+cb.set_label('Total litter C (% diff.)')
 
 h=axs[1,0].contourf(total_litter['soil_pH'],satfrac.mean(dim='depth'),data_warmings['litter_Mn'].isel(warming=0,litter_year=39).T,levels=linspace(0,120.0,11))
 h1=axs[1,1].contourf(total_litter['soil_pH'],satfrac.mean(dim='depth'),
            ( data_warmings['litter_Mn'].isel(warming=1,litter_year=39).T-data_warmings['litter_Mn'].isel(warming=0,litter_year=39).T)/data_warmings['litter_Mn'].isel(warming=0,litter_year=39).T*100,
-            levels=linspace(-95,95,31),cmap='RdBu')
+            levels=linspace(-95,95,31),cmap='RdBu_r')
 h2=axs[1,2].contourf(total_litter['soil_pH'],satfrac.mean(dim='depth'),
            ( data_warmings['litter_Mn'].isel(warming=2,litter_year=39).T-data_warmings['litter_Mn'].isel(warming=0,litter_year=39).T)/data_warmings['litter_Mn'].isel(warming=0,litter_year=39).T*100,
-            levels=linspace(-95,95,31),cmap='RdBu')
+            levels=linspace(-95,95,31),cmap='RdBu_r')
 
 cb=Figure2.colorbar(h,ax=axs[1,0])
-cb.set_label('Leaf Mn concentration (mmol kg$^{-1}$)')
+cb.set_label('Leaf Mn (mmol kg$^{-1}$)')
 cb=Figure2.colorbar(h2,ax=axs[1,2])
-cb.set_label('Leaf Mn concentration diff. (%)')
-axs[0,0].set(title='(Warming = 0 $^\circ$C)\nLitter C stock',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
-axs[0,1].set(title='(Warming = 2 $^\circ$C)\nLitter C stock % difference',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
-axs[0,2].set(title='(Warming = 5 $^\circ$C)\nLitter C stock % difference',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
+cb.set_label('Leaf Mn (% diff.)')
+cb.set_ticks([-75,-50,-25,0,25,50,75])
 
-axs[1,0].set(title='Leaf Mn concentration',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
-axs[1,1].set(title='Leaf Mn concentration % difference',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
-axs[1,2].set(title='Leaf Mn concentration % difference',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
+axs[0,0].set(title='Litter C stock (+0\u00B0C)',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
+axs[0,1].set(title='Change in litter C stock  (+2\u00B0C)',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
+axs[0,2].set(title='Change in litter C stock  (+5\u00B0C)',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
+
+axs[1,0].set(title='Leaf Mn concentration (+0\u00B0C)',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
+axs[1,1].set(title='Change in leaf Mn  (+2\u00B0C)',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
+axs[1,2].set(title='Change in leaf Mn  (+5\u00B0C)',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
 
 for num in range(axs.size):
-    letter_label(axs.ravel()[num],num,x=0)
+    letter_label(axs.ravel()[num],num,x=0,title=True)
+
+axs[0,0].text(0,1.2,'No Warming',fontsize='large',fontweight='bold',transform=axs[0,0].transAxes)
+axs[0,0].text(-0.25,0.5,'Litter C Stock',fontsize='large',fontweight='bold',transform=axs[0,0].transAxes,rotation=90,va='center')
+axs[0,1].text(0,1.2,'Warming = (+2\u00B0C)',fontsize='large',fontweight='bold',transform=axs[0,1].transAxes)
+axs[0,2].text(0,1.2,'Warming = (+5\u00B0C)',fontsize='large',fontweight='bold',transform=axs[0,2].transAxes)
+axs[1,0].text(-0.25,0.5,'Leaf Mn',fontsize='large',fontweight='bold',transform=axs[1,0].transAxes,rotation=90,va='center')
 
 save_one_fig(Figure2)
 
@@ -448,7 +470,7 @@ total_litter=total_litter_all.squeeze()
 
 f,axs=subplots(nrows=2,ncols=3,num='Figure 5 Ndep contours',clear=True,figsize=(12,5))
 levs=linspace(0,1,21)
-cm=get_cmap('Blues')
+cm=get_cmap('Reds')
 # h=axs[0,0].contourf(total_litter['soil_pH'],satfrac.mean(dim='depth'),total_litter.isel(warming=0,Ndep=1,time=39).T,levels=linspace(0,2.0,21))
 h=axs[0,0].contourf(total_litter['soil_pH'],satfrac.mean(dim='depth'),
         (total_litter.isel(warming=0,Ndep=1,time=39).T-total_litter.isel(warming=0,Ndep=0,time=39).T),
@@ -476,12 +498,18 @@ h2=axs[1,2].contourf(total_litter['soil_pH'],satfrac.mean(dim='depth'),
         levels=levs,cmap=cm)
 
 
-axs[0,0].set(title='(Warming = 0 $^\circ$C)\nLitter C stock difference',xlabel='Soil pH',ylabel='Ndep = 50 kg N ha$^{-1}$ year$^{-1}$\nMean saturated soil fraction')
-axs[0,1].set(title='(Warming = 2 $^\circ$C)\nLitter C stock difference',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
-axs[0,2].set(title='(Warming = 5 $^\circ$C)\nLitter C stock difference',xlabel='Soil pH',ylabel='Mean saturated soil fraction')
-axs[1,0].set(xlabel='Soil pH',ylabel='Ndep = 150 kg N ha$^{-1}$ year$^{-1}$\nMean saturated soil fraction')
-axs[1,1].set(xlabel='Soil pH',ylabel='Mean saturated soil fraction')
-axs[1,2].set(xlabel='Soil pH',ylabel='Mean saturated soil fraction')
+axs[0,0].set(title='Change in litter C stock  (+0\u00B0C)',xlabel='Soil pH',ylabel='Mean saturated soil fraction',xticks=linspace(4,6,5))
+axs[0,1].set(title='Change in litter C stock  (+2\u00B0C)',xlabel='Soil pH',ylabel='Mean saturated soil fraction',xticks=linspace(4,6,5))
+axs[0,2].set(title='Change in litter C stock  (+5\u00B0C)',xlabel='Soil pH',ylabel='Mean saturated soil fraction',xticks=linspace(4,6,5))
+axs[1,0].set(xlabel='Soil pH',ylabel='Mean saturated soil fraction',xticks=linspace(4,6,5))
+axs[1,1].set(xlabel='Soil pH',ylabel='Mean saturated soil fraction',xticks=linspace(4,6,5))
+axs[1,2].set(xlabel='Soil pH',ylabel='Mean saturated soil fraction',xticks=linspace(4,6,5))
+
+axs[0,0].text(0,1.2,'No Warming',fontsize='large',fontweight='bold',transform=axs[0,0].transAxes)
+axs[0,0].text(-0.25,0.5,'Low N deposition',fontsize='large',fontweight='bold',transform=axs[0,0].transAxes,rotation=90,va='center')
+axs[0,1].text(0,1.2,'Warming = (+2 \u00B0C)',fontsize='large',fontweight='bold',transform=axs[0,1].transAxes)
+axs[0,2].text(0,1.2,'Warming = (+5 \u00B0C)',fontsize='large',fontweight='bold',transform=axs[0,2].transAxes)
+axs[1,0].text(-0.25,0.5,'High N deposition',fontsize='large',fontweight='bold',transform=axs[1,0].transAxes,rotation=90,va='center')
 
 for num in range(axs.size):
     letter_label(axs.ravel()[num],num)
