@@ -7,7 +7,7 @@ def pHdep(phs,monod_k,inhib_k,norm=False):
     out=H_concs/(H_concs+10**(-monod_k))*10**(-inhib_k)/(H_concs+10**-inhib_k)
     # Function looks symmetrical around two k values based on some optimizations
     if norm:
-        out=out/pHdep(0.5*(monod_k+inhib_k),monod_k,inhib_k)
+        out=out/pHdep(0.5*(monod_k+inhib_k),monod_k,inhib_k,norm=False)
     return out
 
 # Data from Kotsyurbenko et al 2007 at 15 C (they also have other temperature points)
@@ -24,11 +24,13 @@ def lsqerr(x):
     hydro=pHdep(kotsy_ph,x[2],x[3],norm=True)*x[4]
     frac=acet/(acet+hydro)
 
-    return ((frac-kotsy_acetfrac)**2).sum()
-    # return (concatenate([acet-kotsy_acet,acet+hydro-kotsy_total,frac-kotsy_acetfrac])**2).sum()
+    # return ((frac-kotsy_acetfrac)**2).sum()
+    # return ((acet+hydro-kotsy_total/kotsy_total.max())**2).sum()
+    return (concatenate([acet+hydro-kotsy_total/kotsy_total.max(),frac-kotsy_acetfrac])**2).sum()
 
 from scipy.optimize import fmin
-x=fmin(lsqerr,[4.5,7,4.0,7,0.5])
+x=fmin(lsqerr,[5,5,5.0,5.0,0.5])
+print(x)
 
 f,axs=subplots(nrows=2,num='pH effects',clear=True)
 acetaclastic=pHdep(phs,x[0],x[1],norm=True)
@@ -36,9 +38,17 @@ hydrogenotrophic=pHdep(phs,x[2],x[3],norm=True)*x[4]
 axs[0].plot(phs,acetaclastic,label='Acetaclastic')
 axs[0].plot(phs,hydrogenotrophic,label='Hydrogenotrophic')
 axs[0].plot(phs,hydrogenotrophic+acetaclastic,label='Total')
-axs[0].errorbar(kotsy_ph,kotsy_acet/kotsy_acet.max(),yerr=kotsy_acet_err/kotsy_acet.max(),c='C0',ls='None',marker='o')
-axs[0].errorbar(kotsy_ph,kotsy_total/kotsy_acet.max(),yerr=kotsy_total_err/kotsy_acet.max(),c='C2',ls='None',marker='o')
+axs[0].errorbar(kotsy_ph,kotsy_acet/kotsy_total.max(),yerr=kotsy_acet_err/kotsy_total.max(),c='C0',ls='None',marker='o')
+axs[0].errorbar(kotsy_ph,kotsy_total/kotsy_total.max(),yerr=kotsy_total_err/kotsy_total.max(),c='C2',ls='None',marker='o')
 axs[0].legend()
 
 axs[1].plot(phs,acetaclastic/(acetaclastic+hydrogenotrophic))
 axs[1].errorbar(kotsy_ph,kotsy_acetfrac,yerr=kotsy_acetfrac_err,c='C0',ls='None',marker='o')
+axs[0].set(ylabel='Relative methanogenesis rate',title='Relative methanogenesis rate',xlabel='pH')
+axs[1].set(ylabel='Acetaclastic fraction',title='Acetaclastic fraction of total methanogenesis',xlabel='pH')
+
+axs[0].set_title('(a)',loc='left')
+axs[1].set_title('(b)',loc='left')
+
+
+show()

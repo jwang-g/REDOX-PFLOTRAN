@@ -484,7 +484,7 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
             c.write_output(step,dt,num_cuts)
             # print('O2 after: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
         except RuntimeError as err:
-            print('ERROR on timestep %d, layer %d: %s'%(step,n,err))
+            print('ERROR on timestep %d: %s'%(step,err))
             print('Returning output so far')
             c.write_output(step,dt,num_cuts)
             success=False
@@ -776,6 +776,14 @@ class cell:
         else:
 
             if actual_dt/2<min_dt:
+                print('Mobile: ')
+                print(self.total_mobile)
+                print('Free:')
+                print(self.free_mobile)
+                print('Immobile:')
+                print(self.total_immobile)
+                print('Mineral VF:')
+                print(self.mineral_volume_fraction)
                 if cut_for_flux:
                     raise RuntimeError('Pflotran failed to converge (because of boundary fluxes) after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
                 else:
