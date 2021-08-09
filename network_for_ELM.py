@@ -98,11 +98,11 @@ decomp_network_ad=make_network()
 decomp_network_notad=make_network(adfactor_soil3=1.0,adfactor_soil4=1.0)
 # Write out input deck
 decomp_network.PF_network_writer(decomp_network_ad,precision=4).write_into_input_deck('SOMdecomp_template.txt','CTC_alquimia_forELM_adspinup.in',
-        CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,
+        CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',
         chem_args={'MAX_RESIDUAL_TOLERANCE':1e-15,'MAX_RELATIVE_CHANGE_TOLERANCE':1e-15}
         )
 
 decomp_network.PF_network_writer(decomp_network_notad,precision=4).write_into_input_deck('SOMdecomp_template.txt','CTC_alquimia_forELM.in',
-        CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,
+        CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',
         chem_args={'MAX_RESIDUAL_TOLERANCE':1e-15,'MAX_RELATIVE_CHANGE_TOLERANCE':1e-15}
         )

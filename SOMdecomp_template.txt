@@ -107,7 +107,7 @@ ALPHA 1.9401d-4
 
 #=========================== output options ===================================
 OUTPUT
-  PERIODIC_OBSERVATION TIME 1.0 h
+  PERIODIC_OBSERVATION TIME 1.0 d
   #SCREEN PERIODIC 10
   #PERIODIC TIMESTEP 1
   #FORMAT HDF5

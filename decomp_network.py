@@ -203,7 +203,7 @@ class PF_writer:
         raise NotImplementedError('Must use subclass of PF_reaction_writer to write out reactions')
         
 class PF_network_writer(PF_writer):
-    def write_all_reactions(self,base_indent=0,indent_spaces=2,CO2name='HCO3-',SOMdecomp_Q10=None):
+    def write_all_reactions(self,base_indent=0,indent_spaces=2,CO2name='HCO3-',SOMdecomp_Q10=None,moisturefunc=None):
         self.indent_spaces=indent_spaces
         self.base_indent=base_indent
 
@@ -233,6 +233,20 @@ class PF_network_writer(PF_writer):
                 else:
                     self.add_line(pool.ljust(20)+'# Variable C:N pool')
             self.decrease_level()
+
+            # Note: Universal abiotic factors must come earlier in input deck than reactions for them to propagate properly
+            if SOMdecomp_Q10 is not None or moisturefunc is not None:
+                self.increase_level('Abiotic_Factors')
+                if SOMdecomp_Q10 is not None:
+                    self.increase_level('TEMPERATURE_RESPONSE_FUNCTION')
+                    self.add_line(f'Q10 {SOMdecomp_Q10:1.{self.precision}f}')
+                    self.decrease_level()
+
+                if moisturefunc is not None:
+                    self.increase_level('MOISTURE_RESPONSE_FUNCTION')
+                    self.add_line(moisturefunc)
+                    self.decrease_level()
+                self.decrease_level()
         
             # Write out all the reactions
             already_done=[]
@@ -247,12 +261,6 @@ class PF_network_writer(PF_writer):
             if 'O2(aq)' in self.network.nodes:
                 self.add_line('O2_SPECIES_NAME O2(aq)')
 
-            if SOMdecomp_Q10 is not None:
-                self.increase_level('Abiotic_Factors')
-                self.increase_level('TEMPERATURE_RESPONSE_FUNCTION')
-                self.add_line(f'Q10 {SOMdecomp_Q10:1.{self.precision}f}')
-                self.decrease_level()
-                self.decrease_level()
             
         for lev in range(len(self.level)):
             self.decrease_level()
