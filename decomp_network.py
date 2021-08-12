@@ -553,7 +553,7 @@ class PF_sandbox_reaction_writer(PF_writer):
             if isinstance(val,str):
                 self.add_line(param.ljust(20)+val)
             elif isinstance(val,float):
-                self.add_line(param.ljust(20)+' {val:{fmt}}'.format(val=val),fmt=fmt)
+                self.add_line(param.ljust(20)+f' {val:{fmt}}')
             else:
                 raise ValueError('Parameter {param:s} was not a str or float'.format(param=param))
         self.decrease_level()

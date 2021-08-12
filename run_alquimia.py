@@ -98,7 +98,7 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flu
     for spec in diffquo.keys():
         pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
         if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
-            # print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
+            print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
             for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
                 if '->' in reactname and spec in reactname.split('->')[0].split():  # reactants
                     
@@ -690,8 +690,9 @@ class cell:
         for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
             data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
         
-        for spec in diffquo.keys():
-            pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+        names=get_alquimiavector(data.meta_data.primary_names)
+        for spec in names:
+            pos=names.index(spec)
             if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
                 # print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
                 for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
