@@ -331,6 +331,8 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     t0=time.time()
     nsteps=int(simlength_days/(dt/(3600*24)))
 
+    print('Starting initialization: %s'%run_name)
+
     engine_name='pflotran'
     status=ffi.new('AlquimiaEngineStatus *') 
     lib.AllocateAlquimiaEngineStatus(status)
@@ -370,6 +372,12 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
             
 
     # Set up initial condition
+    if porosity <= 0:
+        raise ValueError('Porosity must be > 0')
+    if water_density <= 0:
+        raise ValueError('Water density must be > 0')
+    if pressure <= 0:
+        raise ValueError('pressure must be > 0')
 
     # Initialize state data
     data.properties.volume=volume

@@ -503,7 +503,8 @@ if __name__ == '__main__':
     results_periodic_mineral=xarray.combine_by_coords(data_list[xx] for xx in data_list if 'pH' in xx and xx.startswith('mineral'))
 
 
-    plot_timeseries(fname)
+    plot_timeseries(fname,'_BD_Bockheim')
+    plot_timeseries(fname,'_BD_porosity')
 
     # results_periodic=xarray.open_dataset(fname,group='periodic_sims')
 

@@ -92,6 +92,7 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
                                             # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='THRESHOLD 1.0d20')]),
                                         monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=1.1e-9)]),
     
+    # From Dave Graham: SOM-C + H2O -> DOM-C
     decomp_network.reaction(name='Hydrolysis',stoich='1.0 cellulose -> 1.0 DOM1',reactiontype='SOMDECOMP',
                                             rate_constant=1e-1,rate_units='y', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                         inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=conc_scales['DOM1']),
@@ -101,15 +102,16 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
     
     # Calculating these as per unit carbon, so dividing by the 6 carbons in a glucose
     # C6H12O6 + 4 H2O -> 2 CH3COO- + 2 HCO3- + 4 H+ + 4 H2
+    # Dave Graham: DOM-C + 0.67 H2O -> 0.33 CH3COO- + 0.33 HCO3- + 0.67 H+ + 0.67 H2
     # Should it be inhibited by H2?
-    decomp_network.reaction(name='fermentation',reactant_pools={'DOM1':6/6},product_pools={'Acetate-':2/6,'HCO3-':2/6,'H+':4/6,'H2(aq)':4*2/6,'Tracer':2/6}, # balancing pH of FeIII release requires an extra 5.5 H+ to be released here
+    decomp_network.reaction(name='fermentation',reactant_pools={'DOM1':1/6,'H2O':2/3},product_pools={'Acetate-':1/3,'HCO3-':1/3,'H+':2/3,'H2(aq)':2/3,'Tracer':1/3}, # balancing pH of FeIII release requires an extra 5.5 H+ to be released here
                                             rate_constant=1e-10,reactiontype='MICROBIAL', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                         inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=anox_inhib_conc,type='MONOD'),decomp_network.inhibition(species='Acetate-',k=conc_scales['Acetate-'],type='MONOD')],
                                         monod_terms=[decomp_network.monod(species='DOM1',k=conc_scales['DOM1'],threshold=1.1e-15)]),
 
     # CH2O + H2O -> CO2 + 4H+ + 4 e-
     # O2   + 4H+ + 4 e- -> 2H2O
-    decomp_network.reaction(name='DOM aerobic respiration',stoich='1.0 DOM1 + 1.0 O2(aq) -> 1.0 HCO3- + 1.0 H+ + 1.0 Tracer',
+    decomp_network.reaction(name='DOM aerobic respiration',stoich='1.0 DOM1 + 1.0 O2(aq) + 1.0 H2O -> 1.0 HCO3- + 1.0 H+ + 1.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=0.0),decomp_network.monod(species='DOM1',k=conc_scales['DOM1'],threshold=1.1e-16)],
                                         rate_constant=1.0e-9,reactiontype='MICROBIAL'),
 
@@ -122,7 +124,7 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
 
     # C2H3O2- + 2 H2O -> 2 CO2 + 7 H+ + 8 e-
     # 8 Fe+++ + 8 e- -> 8 Fe++ 
-    decomp_network.reaction(name='Fe(III) reduction',stoich='1.0 Acetate- + 8.0 Fe+++ -> 2.0 HCO3- + 8.0 Fe++ + 9.0 H+ + 2.0 Tracer',
+    decomp_network.reaction(name='Fe(III) reduction',stoich='1.0 Acetate- + 8.0 Fe+++ + 4.0 H2O -> 2.0 HCO3- + 8.0 Fe++ + 9.0 H+ + 2.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='Acetate-',k=conc_scales['Acetate-'],threshold=1.1e-15),decomp_network.monod(species='Fe+++',k=conc_scales['Fe+++'],threshold=1.1e-15)],
                                             inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=anox_inhib_conc,type='MONOD')],
                                             rate_constant=2e-10,reactiontype='MICROBIAL'),
@@ -141,7 +143,7 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
     # pH dependence: Dunfield et al 1992 has some bell curves. Kotsyurbenko et al 2007 has info on different pathways at different pH. Le Mer and Roger 2001 is a big review with a bit on pH thresholds
     # See methane_ph.py: Optimization against Kotsyurbenko data yields K_M=5.54 and K_I=5.54 for acetaclastic, and k_M=6.75 for hydrogenotrophic
     #                    Also gives rate constant of hydro = 0.415 that of acetaclastic
-    decomp_network.reaction(name='Acetaclastic methanogenesis',stoich='1.0 Acetate- -> 1.0 CH4(aq) + 1.0 HCO3- + 1.0 Tracer',
+    decomp_network.reaction(name='Acetaclastic methanogenesis',stoich='1.0 Acetate- + H2O -> 1.0 CH4(aq) + 1.0 HCO3- + 1.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='Acetate-',k=conc_scales['Acetate-'],threshold=1.1e-15),
                                                          ],
                                             inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=anox_inhib_conc,type='MONOD'),
@@ -216,6 +218,10 @@ BD_layerest=BD_SOM_fit.intercept + BD_SOM_fit.slope*SOC_layermean/0.6 # Guessing
 # BD_layerest2=numpy.exp((8.2432-SOC_layermean)/9.7872)
 BD_layerest2_trough=numpy.exp((8.2432-SOC_layer_microtopo_mean)/9.7872)
 
+BD_porosity_fit = linregress(corephysdata[['Porosity','Dry_Bulk_Density']].dropna())
+BD_porosity_fit_organic = linregress(corephysdata[['Dry_Bulk_Density','Porosity']][corephysdata['Organic_Matter_Content']>20].dropna())
+BD_porosity_fit_mineral = linregress(corephysdata[['Dry_Bulk_Density','Porosity']][corephysdata['Organic_Matter_Content']<=20].dropna())
+
 waterchemistry=pandas.read_csv(datadir+'/Barrow_porewater_chem/BGC_BarrowWaterChemistry_2013_2014_v1.csv',header=8,skiprows=[9,10],na_values=-9999)
 waterchemistry_units=pandas.read_csv(datadir+'/Barrow_porewater_chem/BGC_BarrowWaterChemistry_2013_2014_v1.csv',header=8,na_values=-9999).iloc[0]
 
@@ -233,7 +239,7 @@ def get_layer(Core_ID,layer,minT=4.0):
 
 
 # CEC numbers estimated from http://www.soilquality.org.au/factsheets/cation-exchange-capacity
-def make_initcond(Core_ID,layer,cellulosefrac=0.05,porosity=None,minT=4.0,FeII_FeVF_factor=1.5,CEC_OM=200,CEC_mineral=25,oxic=False,Fe_SSA=1e2,carboxylate_conc=0.1,BD_factor=1.0,otherconstraints={}):
+def make_initcond(Core_ID,layer,cellulosefrac=0.05,porosity=None,minT=4.0,FeII_FeVF_factor=1.5,CEC_OM=200,CEC_mineral=25,oxic=False,Fe_SSA=1e2,carboxylate_conc=0.1,BD_factor=1.0,otherconstraints={},BD_method='Bockheim'):
     if isinstance(Core_ID,int):
         Core_ID='NGADG%04d'%Core_ID
     data_layer=Barrow_synthesis_data[(Barrow_synthesis_data['Soil_layer'].str.capitalize()==layer.capitalize())&(Barrow_synthesis_data['Core_ID']==Core_ID)&(Barrow_synthesis_data['Incubation_Temperature']>minT)]
@@ -243,12 +249,28 @@ def make_initcond(Core_ID,layer,cellulosefrac=0.05,porosity=None,minT=4.0,FeII_F
     SOC_layer=data_layer['SOC'].mean()/100 # In fraction, not percent
     
     # Based on Bockheim et al 2003 fit. Units are g/cm3
-    BD_layer=numpy.exp((8.2432-SOC_layer*100)/9.7872)*BD_factor
+    # From eyeballing the graph in that paper, spread seems to be around +/- 50%
+    # And BD seems to be understimated at OC>30%
+    if BD_method == 'Bockheim' or oxic:
+        BD_layer=max(numpy.exp((8.2432-SOC_layer*100)/9.7872),0.125)
+    elif BD_method =='porosity':
+        # Alternate method: From corephysdata, relationship between porosity and BD is almost linear. So if we can estimate porosity from water content, we can infer BD
+        if layer=='Mineral':
+            BD_layer = BD_porosity_fit_mineral.intercept/100/(data_layer['Moisture'].max() - BD_porosity_fit_mineral.slope/100)
+        elif layer=='Organic':
+            BD_layer = BD_porosity_fit_organic.intercept/100/(data_layer['Moisture'].max() - BD_porosity_fit_organic.slope/100)
+        else:
+            BD_layer = BD_porosity_fit.intercept/100/(data_layer['Moisture'].max() - BD_porosity_fit.slope/100)
+    else:
+        raise ValueError('BD_method must be "Bockheim" or "porosity"')
+
+    BD_layer = BD_layer*BD_factor
     
     if porosity is None:
         if oxic:
             raise ValueError('Cannot calculate porosity for oxic incubation')
-        porosity=1.0-data_layer['Moisture'].max()*BD_layer
+        porosity=data_layer['Moisture'].max()*BD_layer
+
     
     # Set initial iron concentration based on maximum dissolved Fe(II), multiplied by a correction factor to account for Fe(II) sorption and/or incomplete Fe(III) reduction by end of incubation
     Fe_VF=(data_layer['Fe_II'].max()-data_layer['Fe_II'].min())*FeII_FeVF_factor*1e-6*BD_layer*molar_volume_FeOH3
@@ -298,17 +320,18 @@ good_cores_center_anoxic=[17,3]
 good_cores_oxic=3 # Note, Core 3 is oxic in organic horizon and anoxic in mineral. No crossover.
 
 
-
-pools_atmoO2_organic,BD_atmoO2_organic,SOC_atmoO2_organic,CEC_atmoO2_organic,porosity_atmoO2_organic=make_initcond(3,'Organic',cellulosefrac=.05,oxic=True,porosity=porosity)
-pools_organic_trough,BD_organic_trough,SOC_organic_trough,CEC_organic_trough,porosity_organic_trough=make_initcond(9,'Organic')   
-pools_organic_nottrough,BD_organic_nottrough,SOC_organic_nottrough,CEC_organic_nottrough,porosity_organic_nottrough=make_initcond(5,'Organic',BD_factor=2.0)   
+# To do: Move these into loop so we can test BD uncertainty range
+BD_factor = 1.0
+pools_atmoO2_organic,BD_atmoO2_organic,SOC_atmoO2_organic,CEC_atmoO2_organic,porosity_atmoO2_organic=make_initcond(3,'Organic',cellulosefrac=.05,oxic=True,porosity=porosity,BD_factor=BD_factor)
+pools_organic_trough,BD_organic_trough,SOC_organic_trough,CEC_organic_trough,porosity_organic_trough=make_initcond(9,'Organic',BD_factor=BD_factor)   
+pools_organic_nottrough,BD_organic_nottrough,SOC_organic_nottrough,CEC_organic_nottrough,porosity_organic_nottrough=make_initcond(5,'Organic',BD_factor=BD_factor)   
 # result_lowFe_organic,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,initcond=pools_lowFe_organic,hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,diffquo={'O2(aq)':O2_initial},truncate_concentration=truncate_conc)
 
 # No oxic mineral horizon
 # pools_atmoO2_mineral,BD_atmoO2_mineral,SOC_atmoO2_mineral,CEC_atmoO2_mineral=make_initcond(3,'Mineral',cellulosefrac=.05*.04,oxic=True)
 # result_highO2_mineral,output_units=run_alquimia.run_simulation('Arctic_redox_generated.in',simlength,timestep,initcond=pools_atmoO2_mineral,bc=pools_atmoO2_mineral,diffquo={'O2(aq)':O2_const},hands_off=False,rateconstants=rateconstants,truncate_concentration=truncate_conc,CEC=CEC_atmoO2_mineral)
-pools_mineral_trough,BD_mineral_trough,SOC_mineral_trough,CEC_mineral_trough,porosity_mineral_trough=make_initcond(9,'Mineral')
-pools_mineral_nottrough,BD_mineral_nottrough,SOC_mineral_nottrough,CEC_mineral_nottrough,porosity_mineral_nottrough=make_initcond(5,'Mineral',BD_factor=2.0)   
+pools_mineral_trough,BD_mineral_trough,SOC_mineral_trough,CEC_mineral_trough,porosity_mineral_trough=make_initcond(9,'Mineral',BD_factor=BD_factor)
+pools_mineral_nottrough,BD_mineral_nottrough,SOC_mineral_nottrough,CEC_mineral_nottrough,porosity_mineral_nottrough=make_initcond(5,'Mineral',BD_factor=BD_factor)   
 
 simlength=150
 initfrac=0.0
@@ -330,12 +353,12 @@ if __name__ == '__main__':
 
     parser = ArgumentParser()
     parser.add_argument('-f',dest='fname',help='Output file name',default='')
-    parser.add_argument('-n',dest='jobnum',help='Job number',default=0)
+    parser.add_argument('-n',dest='jobnum',help='Job number',default=1)
     parser.add_argument('-N',dest='totaljobs',help='Total number of jobs',default=1)
     options = parser.parse_args()
 
-    jobnum=int(options.jobnum)
-    totaljobs=int(options.totaljobs)+1
+    jobnum=int(options.jobnum)-1
+    totaljobs=int(options.totaljobs)
 
     import datetime
     if options.fname != '':
@@ -379,62 +402,60 @@ if __name__ == '__main__':
     simtypes=[]
     nperiods=[]
     pHsims=[]
+    BDsims=[]
 
+    # For comparison with data
     for sim in incubations:
-        simtypes.append(sim)
-        nperiods.append(None)
-        pHsims.append(None)
+        for BD_method in ['Bockheim','porosity']:
+            simtypes.append(sim)
+            nperiods.append(None)
+            pHsims.append(None)
+            BDsims.append(BD_method)
 
-    # 5 cycles doesn't divide total time series correctly. Need to fix
+    # Organic horizon oxic-anoxic
     for ndryperiods in [1,2,3,4,5]:
         for pH in [4.5,5.0,5.5,6.0]:
             simtypes.append('organic_trough')
             nperiods.append(ndryperiods)
             pHsims.append(pH)
+            BDsims.append('Bockheim')
 
+    # Mineral horizon oxic-anoxic
     for ndryperiods in [1,2,3,4,5]:
         for pH in [4.5,5.0,5.5,6.0]:
             simtypes.append('mineral_trough')
             nperiods.append(ndryperiods)
             pHsims.append(pH)
+            BDsims.append('Bockheim')
 
     sims_thisjob = list(range(jobnum,len(simtypes),totaljobs))
     print('Total number of sims: %d'%len(simtypes))
     print('This job: ',sims_thisjob)
 
-    initconds={        
-        'highO2_organic':pools_atmoO2_organic,
-        'organic_trough':pools_organic_trough,
-        'organic_nottrough':pools_organic_nottrough,
-        'mineral_trough':pools_mineral_trough,
-        'mineral_nottrough':pools_mineral_nottrough
-        }
-    CECs={        
-        'highO2_organic':CEC_atmoO2_organic,
-        'organic_trough':CEC_organic_trough,
-        'organic_nottrough':CEC_organic_nottrough,
-        'mineral_trough':CEC_mineral_trough,
-        'mineral_nottrough':CEC_mineral_nottrough
-        }
-    porosities={        
-        'highO2_organic':porosity_atmoO2_organic,
-        'organic_trough':porosity_organic_trough,
-        'organic_nottrough':porosity_organic_nottrough,
-        'mineral_trough':porosity_mineral_trough,
-        'mineral_nottrough':porosity_mineral_nottrough
-        }
 
     for simnum in sims_thisjob:
-        initcond=initconds[simtypes[simnum]]
+        BD_method=BDsims[simnum]
+        if simtypes[simnum] == 'highO2_organic':
+            initcond,BD,SOC,CEC,porosity=make_initcond(3,'Organic',cellulosefrac=.05,oxic=True,porosity=0.6,BD_method=BD_method)
+        elif simtypes[simnum] == 'organic_trough':
+            initcond,BD,SOC,CEC,porosity=make_initcond(9,'Organic',BD_method=BD_method)   
+        elif simtypes[simnum] == 'organic_nottrough':
+            initcond,BD,SOC,CEC,porosity=make_initcond(5,'Organic',BD_method=BD_method)   
+        elif simtypes[simnum] == 'mineral_trough':
+            initcond,BD,SOC,CEC,porosity=make_initcond(9,'Mineral',BD_method=BD_method)
+        elif simtypes[simnum] == 'mineral_nottrough':
+            initcond,BD,SOC,CEC,porosity=make_initcond(5,'Mineral',BD_method=BD_method)   
+        else:
+            raise ValueError(f'Unknown simulation type: {simtypes[simnum]}')
+
         run_name=simtypes[simnum]
-        porosity=porosities[simtypes[simnum]]
-        CEC=CECs[simtypes[simnum]]
         if nperiods[simnum] is not None:
             run_name = run_name + '_nperiods_%d'%nperiods[simnum]
             O2_periodic=numpy.zeros(int(simlength/nperiods[simnum]*24))
             O2_periodic[:int(simlength/nperiods[simnum]*24*oxicfrac)]=dq
             diffquo={'O2(aq)':O2_periodic}
         else:
+            run_name = run_name + '_BD_%s'%BD_method
             if simtypes[simnum].startswith('highO2'):
                 diffquo={'O2(aq)':O2_const}
             else:

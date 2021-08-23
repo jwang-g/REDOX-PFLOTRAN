@@ -12,7 +12,7 @@
 
 # Run an array of jobs with numbers 0-4 that will be set in SLURM_ARRAY_TASK_ID
 # To limit number of simultaneous jobs use %N, e.g. 0-32%8 for max 8 jobs to run at once
-#SBATCH --array=0-7
+#SBATCH --array=1-8
 ## SBATCH --ntasks-per-node=2
 
 # Nodes appear to have 32 or 36 CPUs and it looks like it will schedule up to that many on a single node from the array
