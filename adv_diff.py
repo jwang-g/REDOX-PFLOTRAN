@@ -12,6 +12,8 @@ def adv_diff(conc_trcr,zsoi,dtime,diffus=1e-50,adv_flux=0.0,source=0.0):
     # Set statement functions
     def aaa(pe):
         # A function from Patankar, Table 5.2, pg 95
+        # This essentially determines the relative influence of the two adjacent points on the central point which depends on flow and diffusion rates and direction
+        # When Pe is large, flow dominates in a particular direction. When Pe is small, diffusion dominates and the influence is more symmetrical
         return  max (0., (1. - 0.1 * abs(pe))**5)  
 
     nlayers=len(zsoi)
@@ -28,13 +30,18 @@ def adv_diff(conc_trcr,zsoi,dtime,diffus=1e-50,adv_flux=0.0,source=0.0):
     zisoi[1:-1]=(zsoi[:-1]+zsoi[1:])*0.5
     zisoi[-1]=zisoi[-2]+dz_node[-1]
 
-    d_m1_zm1 = numpy.zeros(nlayers)
-    d_p1_zp1 = numpy.zeros(nlayers)
-    f_m1     = numpy.zeros(nlayers)
-    f_p1 =     numpy.zeros(nlayers)
-    pe_m1 =    numpy.zeros(nlayers)
-    pe_p1 =    numpy.zeros(nlayers)
+    # d: diffusivity
+    # m: layer above
+    # p: layer below
+    # pe: Peclet number (ratio of convection to diffusion)
+    d_m1_zm1 = numpy.zeros(nlayers) # Diffusivity in layer above divided by layer above thickness
+    d_p1_zp1 = numpy.zeros(nlayers) # Diffusivity in layer below divided by layer below thickness
+    f_m1     = numpy.zeros(nlayers) # Flow out of above layer
+    f_p1 =     numpy.zeros(nlayers) # Flow out of below layer
+    pe_m1 =    numpy.zeros(nlayers) # Peclet number of above layer
+    pe_p1 =    numpy.zeros(nlayers) # Peclet number of below layer
 
+    # Coefficients of tridiagonal problem: a_i*x_(i-1) + b_i*(x_i) + c_i*x_(i+1) = r_i
     a_tri = numpy.zeros(nlayers+2)
     b_tri = numpy.zeros(nlayers+2)
     c_tri = numpy.zeros(nlayers+2)
@@ -52,7 +59,7 @@ def adv_diff(conc_trcr,zsoi,dtime,diffus=1e-50,adv_flux=0.0,source=0.0):
 
 
     # Set Pe (Peclet #) and D/dz throughout column
-
+    # This is setting weights and coefficients that will be used for calculating mass balance equation in the tridiagonal step
     for j in range(nlayers):
 
         # dz_tracer below is the difference between gridcell edges  (dzsoi_decomp)
@@ -111,6 +118,15 @@ def adv_diff(conc_trcr,zsoi,dtime,diffus=1e-50,adv_flux=0.0,source=0.0):
 
 
     # Calculate the tridiagonal coefficients
+    # Coefficients of tridiagonal problem: a_i*x_(i-1) + b_i*(x_i) + c_i*x_(i+1) = r_i
+    # Here, this is equivalent to Patankar equation 5.56 and 5.57 (but in one dimension):
+    # a_P*phi_P = a_E*phi_E + a_W*phi_W + b [phi is concentration, = x in tridiagonal]. Converting East/West to above/below
+    # -> -a_E*phi_E + a_P*phi_P - a_W+phi_W = b
+    # -a_tri = a_above = D_above*A(Pe)+max(-F_above,0); D_above=diffus_above/dz
+    # b_tri = a_above+a_below+(F_above-F_below)+rho*dz/dt-source_var*dz
+    # -c_tri = D_below*A(Pe)+max(F_below,0); D_below = diffus_below/dz
+    # r_tri = b = source_const*dz + conc*rho*dz/dt
+
     # top layer (atmosphere)
     a_tri[0] = 0.
     b_tri[0] = 1.
@@ -140,7 +156,7 @@ def adv_diff(conc_trcr,zsoi,dtime,diffus=1e-50,adv_flux=0.0,source=0.0):
             r_tri[j+1] = 0.
 
     # Solve for concentration profile
-    conc_after = solve_banded((1,1),numpy.row_stack((c_tri,b_tri,a_tri)),r_tri)
+    conc_after = solve_banded((1,1),numpy.row_stack((a_tri,b_tri,c_tri)),r_tri)
 
     return conc_after
 
@@ -159,7 +175,9 @@ if __name__ == '__main__':
     #    1.29253206e+01, 2.13264694e+01, 3.51776199e+01])
     nlayers=len(z)
     conc=numpy.linspace(0.1,0,nlayers)**2
+    conc=numpy.zeros(nlayers)
     conc[3]=0.2
+    conc[-4]=0.2
     
     # conc[-1]=0.0
     # conc[10]=1.0
@@ -168,7 +186,7 @@ if __name__ == '__main__':
     dz=numpy.append(dz,dz[-1])
 
     dt=3600
-    adv=5e-5
+    adv=-5e-5 # Negative means downward velocity
     diffco=5e-5
 
     f,a=plt.subplots(2,3,num='Result',clear=True)
