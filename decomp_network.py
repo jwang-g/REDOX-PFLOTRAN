@@ -269,7 +269,7 @@ class PF_network_writer(PF_writer):
 
 
     def write_into_input_deck(self,templatefile_name,outputfile_name,
-            indent_spaces=2,length_days=None,log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',chem_args={},**kwargs):
+            indent_spaces=2,length_days=None,log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',chem_args={},verbose=True,**kwargs):
         base_indent=0
         with open(templatefile_name,'r') as templatefile:
             template_lines=templatefile.readlines()
@@ -479,6 +479,10 @@ class PF_network_writer(PF_writer):
                 
             elif 'FINAL_TIME' in line and length_days is not None:
                 self.add_line( 'FINAL_TIME {ndays:1.{prec}e} d\n'.format(ndays=length_days,prec=self.precision))
+            elif len(line.strip())>0 and line.strip().split()[0]=='OUTPUT':
+                self.output = self.output + line
+                if not verbose:
+                    self.add_line('SCREEN OFF')
             else:
                 if not line.isspace():
                     base_indent=len(line)-len(line.lstrip())

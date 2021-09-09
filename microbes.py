@@ -3,11 +3,11 @@ import copy
 
 
 pools = [
-decomp_network.decomp_pool(name='SOM',CN=50,constraints={'initial':1e1},kind='immobile'),
+decomp_network.decomp_pool(name='SOM',initCN=25,constraints={'initial':1e1},kind='immobile'),
 # decomp_network.decomp_pool(name='Lignin',CN=50,constraints={'initial':1e2},kind='immobile'),
 decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immobile'),
 
-decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-15},kind='primary'),
+decomp_network.decomp_pool(name='DOM1',CN=25,constraints={'initial':1e-15},kind='primary'),
 # decomp_network.decomp_pool(name='DOM2',CN=50,constraints={'initial':1e-30},kind='primary'),
 decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'6.0 P'}),
 decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':'0.2 G O2(g)'}),
@@ -16,7 +16,7 @@ decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'4
 # decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}),
 decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'.37e-10 M Fe(OH)3'}),
 decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-15'}),
-decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
+decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-5}), # SOMDecomp sandbox requires this
 decomp_network.decomp_pool(name='NO3-',kind='primary',constraints={'initial':1e-5}), 
 decomp_network.decomp_pool(name='SO4--',kind='primary',constraints={'initial':1e-5}), 
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
@@ -109,7 +109,7 @@ reactions = [
     #                                     monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh)]),
                                         
                                         
-    decomp_network.reaction(name='Hydrolysis',stoich='1.0 SOM -> 1.0 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
+    decomp_network.reaction(name='Hydrolysis',stoich='1.0 SOM -> 0.9 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
                                             rate_constant=rate_scale,rate_units='1/sec', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                         inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=conc_scales['DOM1']),
                                                           # decomp_network.inhibition(species='O2(aq)',type='MONOD',k=1e-11),
@@ -231,12 +231,20 @@ class microbe:
         else:
             raise ValueError('Products must include HCO3- or DOM1 to substract C from')
         # Not taking DOM C:N into account currently
+        # This needs to check if the reaction is SOMDECOMP in which case representation of microbial products will be different
         microbe_yield = yield_calculation(reaction['reactant_pools'],reaction['product_pools'])
-        reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content
-        reaction['product_pools']['NH4+']=reaction['product_pools'].get('NH4+',0)+microbe_yield/self.CN
-        reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
-        reaction['biomass']=self.name
-        reaction['biomass_yield']=microbe_yield
+        if react['reactiontype'] == 'MICROBIAL':
+            reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content
+            reaction['product_pools']['NH4+']=reaction['product_pools'].get('NH4+',0)+microbe_yield/self.CN
+            # reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
+            reaction['biomass']=self.name
+            reaction['biomass_yield']=microbe_yield
+        elif react['reactiontype'] == 'SOMDECOMP':
+            reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content
+            reaction['product_pools'][self.name]=microbe_yield
+            # reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
+        else:
+            raise ValueError('Microbe genes only defined for microbial reactions currently')
         reaction['name']=reaction['name']+f' ({self.name})'
 
         return reaction
@@ -251,11 +259,18 @@ microbes=[
     microbe(genes=[reactions[5],reactions[4]],size=2.0,CN=12.0,name='microbe3')
 ]
 
-
+initial_biomass=1e-3
 microbe_reactions=[]
 for m in microbes:
     for r in m.genes:
         microbe_reactions.append(m.make_reaction(r))
+    # Microbial biomass pools need to be included in immobile pools
+    pools.append(decomp_network.decomp_pool(name=m.name,CN=m.CN,constraints={'initial':initial_biomass},kind='immobile'))
+    # Add microbial biomass decay
+    microbe_reactions.append( decomp_network.reaction(name=f'{m.name} turnover',stoich=f'1.0 {m.name} -> 0.5 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
+            rate_constant=1e-6,rate_units='1/sec',
+            monod_terms=[decomp_network.monod(species=m.name,type='MONOD',k=1e-8)], # Monod dependence on biomass prevents it from exponentially decaying without limit
+                                                          ))
 
 network=decomp_network.decomp_network(pools,microbe_reactions)
 
@@ -275,6 +290,6 @@ drawn,pos=decomp_network.draw_network_with_reactions(network,
                      'Hydrogenotrophic methanogenesis':'Hydrogenotrophic\nmethanogenesis','Acetoclastic methanogenesis':'Acetoclastic\nmethanogenesis',
                      'SOMdecomp Reaction':'SOM Reaction','General Reaction':'Abiotic Reaction','fermentation':'Fermentation','Primary aqueous':'Dissolved ion','Gas':'Dissolved gas'},connectionstyle='arc3, rad=0.2')
 
-decomp_network.PF_network_writer(network).write_into_input_deck('SOMdecomp_template.txt','microbial_test_network.in',log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25,database='/home/b0u/models/PFLOTRAN/REDOX-PFLOTRAN/hanford.dat')
+decomp_network.PF_network_writer(network).write_into_input_deck('SOMdecomp_template.txt','microbial_test_network.in',log_formulation=True,CO2name='HCO3-',truncate_concentration=1e-25,database='/home/b0u/models/PFLOTRAN/REDOX-PFLOTRAN/hanford.dat',verbose=True)
 
 pyplot.show()
