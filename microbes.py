@@ -290,6 +290,11 @@ drawn,pos=decomp_network.draw_network_with_reactions(network,
                      'Hydrogenotrophic methanogenesis':'Hydrogenotrophic\nmethanogenesis','Acetoclastic methanogenesis':'Acetoclastic\nmethanogenesis',
                      'SOMdecomp Reaction':'SOM Reaction','General Reaction':'Abiotic Reaction','fermentation':'Fermentation','Primary aqueous':'Dissolved ion','Gas':'Dissolved gas'},connectionstyle='arc3, rad=0.2')
 
-decomp_network.PF_network_writer(network).write_into_input_deck('SOMdecomp_template.txt','microbial_test_network.in',log_formulation=True,CO2name='HCO3-',truncate_concentration=1e-25,database='/home/b0u/models/PFLOTRAN/REDOX-PFLOTRAN/hanford.dat',verbose=True)
+decomp_network.PF_network_writer(network).write_into_input_deck('SOMdecomp_template.txt','microbial_test_network.in',log_formulation=True,CO2name='HCO3-',truncate_concentration=1e-25,
+                    database='/home/b0u/models/PFLOTRAN/REDOX-PFLOTRAN/hanford.dat',verbose=True,length_days=100)
+
+import run_alquimia
+result_alquimia,units_alq=run_alquimia.run_simulation('microbial_test_network.in',hands_off=True,simlength_days=10,dt=3600,initcond=pools,rateconstants={},truncate_concentration=0.0)
+
 
 pyplot.show()
