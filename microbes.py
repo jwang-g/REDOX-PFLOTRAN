@@ -1,14 +1,13 @@
-import run_alquimia
 import decomp_network
 import copy
 
 
 pools = [
-decomp_network.decomp_pool(name='SOM',CN=50,constraints={'initial':1e1},kind='immobile'),
+decomp_network.decomp_pool(name='SOM',initCN=25,constraints={'initial':1e1},kind='immobile'),
 # decomp_network.decomp_pool(name='Lignin',CN=50,constraints={'initial':1e2},kind='immobile'),
 decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immobile'),
 
-decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-15},kind='primary'),
+decomp_network.decomp_pool(name='DOM1',CN=25,constraints={'initial':1e-15},kind='primary'),
 # decomp_network.decomp_pool(name='DOM2',CN=50,constraints={'initial':1e-30},kind='primary'),
 decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'6.0 P'}),
 decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':'0.2 G O2(g)'}),
@@ -17,9 +16,9 @@ decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'4
 # decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}),
 decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'.37e-10 M Fe(OH)3'}),
 decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-15'}),
-decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
-decomp_network.decomp_pool(name='NO3-',kind='primary',constraints={'initial':1e-5}),
-decomp_network.decomp_pool(name='SO4--',kind='primary',constraints={'initial':1e-5}),
+decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-5}), # SOMDecomp sandbox requires this
+decomp_network.decomp_pool(name='NO3-',kind='primary',constraints={'initial':1e-5}), 
+decomp_network.decomp_pool(name='SO4--',kind='primary',constraints={'initial':1e-5}), 
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
 decomp_network.decomp_pool(name='CH4(aq)',kind='primary',constraints={'initial':1e-15}),
 decomp_network.decomp_pool(name='H2S(aq)',kind='secondary',constraints={'initial':1e-15}),
@@ -103,21 +102,19 @@ conc_scales={
 
 rate_scale=10e-8
 thresh=0.0
-truncate_conc=1e-25
-
 reactions = [
     # decomp_network.reaction(name='Aerobic decomposition',reactant_pools={'SOM':1.0},product_pools={'HCO3-':1.0},reactiontype='SOMDECOMP',
-    #                                         rate_constant=1e-8,rate_units='1/sec',turnover_name='RATE_CONSTANT',
+    #                                         rate_constant=1e-8,rate_units='1/sec',turnover_name='RATE_CONSTANT', 
     #                                         # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='THRESHOLD 1.0d20')]),
     #                                     monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh)]),
-
-
-    decomp_network.reaction(name='Hydrolysis',stoich='1.0 SOM -> 1.0 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
+                                        
+                                        
+    decomp_network.reaction(name='Hydrolysis',stoich='1.0 SOM -> 0.9 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
                                             rate_constant=rate_scale,rate_units='1/sec', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                         inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=conc_scales['DOM1']),
                                                           # decomp_network.inhibition(species='O2(aq)',type='MONOD',k=1e-11),
                                                           ]),
-
+    
     # Calculating these as per unit carbon, so dividing by the 6 carbons in a glucose
     # C6H12O6 + 4 H2O -> 2 CH3COO- + 2 HCO3- + 4 H+ + 4 H2
     # Should it be inhibited by H2?
@@ -140,12 +137,12 @@ reactions = [
 
 
     # C2H3O2- + 2 H2O -> 2 CO2 + 7 H+ + 8 e-
-    # 8 Fe+++ + 8 e- -> 8 Fe++
+    # 8 Fe+++ + 8 e- -> 8 Fe++ 
     decomp_network.reaction(name='Fe(III) reduction',stoich='1.0 Acetate- + 8.0 Fe+++ -> 2.0 HCO3- + 8.0 Fe++ + 9.0 H+ + 2.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='Acetate-',k=conc_scales['Acetate-'],threshold=thresh),decomp_network.monod(species='Fe+++',k=conc_scales['Fe+++'],threshold=thresh)],
                                             inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD'),decomp_network.inhibition(species='NO3-',k=conc_scales['NO3-'],type='MONOD')],
                                             rate_constant=rate_scale*0.5,reactiontype='MICROBIAL'),
-
+                                            
     # Oxidation of Fe++
     # Currently assuming backward reaction rate is zero
     # decomp_network.reaction(name='Fe(II) oxidation',stoich='1.0 Fe++ + 0.25 O2(aq) + 1.0 H+ <-> 1.0 Fe+++ + 0.5 H2O',
@@ -160,7 +157,7 @@ reactions = [
                                             decomp_network.inhibition(species='NO3-',k=conc_scales['NO3-'],type='MONOD'),
                                             decomp_network.inhibition(species='SO4--',k=conc_scales['SO4--'],type='MONOD')],
                                             rate_constant=rate_scale*0.1,reactiontype='MICROBIAL'),
-
+                                            
     # Hydrogenotrophic methanogenesis
     decomp_network.reaction(name='Hydrogenotrophic methanogenesis',stoich='4.0 H2(aq) + 1.0 HCO3- + 1.0 H+ -> 1.0 CH4(aq) + 3.0 H2O',
                                             monod_terms=[decomp_network.monod(species='H2(aq)',k=conc_scales['H2(aq)'],threshold=thresh),decomp_network.monod(species='HCO3-',k=conc_scales['HCO3-'],threshold=thresh)],
@@ -170,44 +167,44 @@ reactions = [
                                             decomp_network.inhibition(species='NO3-',k=conc_scales['NO3-'],type='MONOD'),
                                             decomp_network.inhibition(species='SO4--',k=conc_scales['SO4--'],type='MONOD')],
                                             rate_constant=rate_scale*0.1,reactiontype='MICROBIAL'),
-
+    
     # H2 oxidation if oxygen available
 
     # Nitrification
     decomp_network.reaction(name='Nitrification',stoich='2.0 NH4+ + 4.0 O2(aq) -> 2.0 NO3- + 2.0 H2O + 4.0 H+',
                         monod_terms=[decomp_network.monod(species='NH4+',k=conc_scales['NH4+'],threshold=thresh),decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh)],
                         rate_constant=rate_scale,reactiontype='MICROBIAL'),
-
+                        
     # Denitrification C2H3O2- + 2 NO3- + H+ -> 2 HCO3- + N2 + 2 H2O
     decomp_network.reaction(name='Denitrification',stoich='1.0 Acetate- + 2.0 NO3- + 1.0 H+ -> 2.0 HCO3- + 1.0 N2(aq) + 0.0 N2O(aq) + 2.0 H2O + 2.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='Acetate-',k=conc_scales['Acetate-'],threshold=thresh),decomp_network.monod(species='NO3-',k=conc_scales['NO3-'],threshold=thresh)],
                                             inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD')],
                                             rate_constant=rate_scale*0.8,reactiontype='MICROBIAL'),
-
+                                            
     # Sulfate reduction C2H3O2- + SO4--  -> 2 HCO3- + HS-
-    decomp_network.reaction(name='Sulfate reduction',stoich='1.0 Acetate- + 1.0 SO4--  -> 2.0 HCO3- + 1.0 HS- +  2.0 Tracer',
+    decomp_network.reaction(name='Sulfate reduction',stoich='1.0 Acetate- + 1.0 SO4--  -> 2.0 HCO3- + 2.0 HS- +  2.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='Acetate-',k=conc_scales['Acetate-'],threshold=thresh),decomp_network.monod(species='SO4--',k=conc_scales['SO4--'],threshold=thresh)],
                                             inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD'),
                                                                 decomp_network.inhibition(species='NO3-',k=conc_scales['NO3-'],type='MONOD'),
                                                                 decomp_network.inhibition(species='Fe+++',k=conc_scales['Fe+++'],type='MONOD')],
                                             rate_constant=rate_scale*0.3,reactiontype='MICROBIAL'),
-
-
+                                            
+                                            
     # Methane oxidation (O2)
     decomp_network.reaction(name='Methane oxidation (O2)',stoich='1.0 CH4(aq)  + 1.0 O2(aq)  -> 1.0 HCO3-  + 1.0 H+ + 1.0 H2O + 1.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh),decomp_network.monod(species='CH4(aq)',k=conc_scales['CH4(aq)'],threshold=thresh)],
                                         rate_constant=rate_scale,reactiontype='MICROBIAL'),
-
+    
     # Methane oxidation (NO3)
     decomp_network.reaction(name='Methane oxidation (NO3)',stoich='1.0 CH4(aq)  + 1.0 NO3-  -> 1.0 HCO3-  + 1.0 NH4+ + 1.0 Tracer ',
                                             monod_terms=[decomp_network.monod(species='NO3-',k=conc_scales['NO3-'],threshold=thresh),decomp_network.monod(species='CH4(aq)',k=conc_scales['CH4(aq)'],threshold=thresh)],
                                         rate_constant=rate_scale,reactiontype='MICROBIAL'),
-
+    
     # Methane oxidation (SO4)
     decomp_network.reaction(name='Methane oxidation (SO4)',stoich='1.0 CH4(aq)  + 1.0 SO4-- -> 1.0 HCO3-  + 1.0 HS- + 1.0 H2O + 1.0 Tracer ',
                                             monod_terms=[decomp_network.monod(species='SO4--',k=conc_scales['SO4--'],threshold=thresh),decomp_network.monod(species='CH4(aq)',k=conc_scales['CH4(aq)'],threshold=thresh)],
                                         rate_constant=rate_scale,reactiontype='MICROBIAL'),
-
+    
     # Methane oxidation (Fe)
     decomp_network.reaction(name='Methane oxidation (Fe)',stoich='1.0 CH4(aq)  + 8.0 Fe+++ + 3.0 H2O -> 1.0 HCO3-  + 8.0 Fe++ + 9.0 H+ + 1.0 Tracer ',
                                             monod_terms=[decomp_network.monod(species='Fe+++',k=conc_scales['Fe+++'],threshold=thresh),decomp_network.monod(species='CH4(aq)',k=conc_scales['CH4(aq)'],threshold=thresh)],
@@ -278,37 +275,46 @@ class microbe:
         else:
             raise ValueError('Products must include HCO3- or DOM1 to substract C from')
         # Not taking DOM C:N into account currently
-        microbe_yield = yield_calculation(reaction['name'],reaction['reactant_pools'],reaction['product_pools'],Gib_std)
-        reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content
-        #print(reaction['name'])
-        reaction['product_pools']['NH4+']=reaction['product_pools'].get('NH4+',0)+microbe_yield/self.CN
-        reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
-        reaction['biomass']=self.name
-        reaction['biomass_yield']=microbe_yield
+        # This needs to check if the reaction is SOMDECOMP in which case representation of microbial products will be different
+        microbe_yield = yield_calculation(reaction['reactant_pools'],reaction['product_pools'])
+        if react['reactiontype'] == 'MICROBIAL':
+            reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content
+            reaction['product_pools']['NH4+']=reaction['product_pools'].get('NH4+',0)+microbe_yield/self.CN
+            # reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
+            reaction['biomass']=self.name
+            reaction['biomass_yield']=microbe_yield
+        elif react['reactiontype'] == 'SOMDECOMP':
+            reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content
+            reaction['product_pools'][self.name]=microbe_yield
+            # reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
+        else:
+            raise ValueError('Microbe genes only defined for microbial reactions currently')
         reaction['name']=reaction['name']+f' ({self.name})'
 
         return reaction
 
+
+
+
 # See Smeaton, Christina M., and Philippe Van Cappellen. 2018. “Gibbs Energy Dynamic Yield Method (GEDYM): Predicting Microbial Growth Yields under Energy-Limiting Conditions.” Geochimica et Cosmochimica Acta 241 (November): 1–16. https://doi.org/10.1016/j.gca.2018.08.023.
-# microbial biomass is in C-unit. C content per cell is related to cell size.
 microbes=[
-    microbe(genes=[reactions[0],reactions[1]],size=3.0,CN=8.0,name='microbe1'),      #size in micron; bacteria; ref. Luan et al., 2020: Organism body size structures the soil micorbial and nematode community assembly at a continental and global scale
-    microbe(genes=[reactions[1],reactions[2]],size=15.0,CN=8.0,name='microbe2'),      #size in micron; fungi
-    microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=8.0,name='microbe3')        #size in micron; Protists
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3')
+    microbe(genes=[reactions[0],reactions[1]],size=1.0,CN=10.0,name='microbe1'),
+    microbe(genes=[reactions[1],reactions[2]],size=2.0,CN=12.0,name='microbe2'),
+    microbe(genes=[reactions[5],reactions[4]],size=2.0,CN=12.0,name='microbe3')
 ]
 
-
+initial_biomass=1e-3
 microbe_reactions=[]
 for m in microbes:
     for r in m.genes:
         microbe_reactions.append(m.make_reaction(r))
+    # Microbial biomass pools need to be included in immobile pools
+    pools.append(decomp_network.decomp_pool(name=m.name,CN=m.CN,constraints={'initial':initial_biomass},kind='immobile'))
+    # Add microbial biomass decay
+    microbe_reactions.append( decomp_network.reaction(name=f'{m.name} turnover',stoich=f'1.0 {m.name} -> 0.5 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
+            rate_constant=1e-6,rate_units='1/sec',
+            monod_terms=[decomp_network.monod(species=m.name,type='MONOD',k=1e-8)], # Monod dependence on biomass prevents it from exponentially decaying without limit
+                                                          ))
 
 network=decomp_network.decomp_network(pools,microbe_reactions)
 
