@@ -5,7 +5,8 @@ def make_network(
         tinyval = 1.0e-30,
         natomw  = 14.0067,
         catomw  = 12.0110,
-        N_imm_lim=1e-2,
+        N_imm_lim=5e-3, # Model crashes on too many time step cuts if this is too low
+        N_uptake_lim=1e-4, # Plants don't take up enough N if this is too high
         thresh=0.0,
         adfactor_soil4=100.0,
         adfactor_soil3=10.0,
@@ -21,7 +22,7 @@ def make_network(
         decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR2',constraints={'initial':tinyval/catomw},initCN=20*natomw/catomw ,kind='immobile')    )
         decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='LITR3',constraints={'initial':tinyval/catomw},initCN=20*natomw/catomw ,kind='immobile'))
         decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CWD',constraints={'initial':tinyval/catomw},initCN=20*natomw/catomw ,kind='immobile'))
-        decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CO2(aq)',kind='primary'))
+        decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CO2(aq)',kind='primary',constraints={'initial':'400e-6 G CO2(g)*'}))
         decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='NH4+',constraints={'initial':1e-10},kind='primary'))
         decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='NO3-',constraints={'initial':1e-10},kind='primary'))
         decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='HRimm',constraints={'initial':tinyval},kind='immobile'))
@@ -36,6 +37,8 @@ def make_network(
         decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='Tracer',constraints={'initial':tinyval},kind='primary'))
         decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='Tracer2',constraints={'initial':tinyval},kind='primary'))
 
+        decomp_network_CTC.add_pool(decomp_network.decomp_pool(name='CO2(g)*',kind='gas'))
+
         # CWD decomposition to  litter
         decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'CWD':1.0},product_pools={'LITR2':0.76,'LITR3':0.24},
                                 rate_constant=0.00010,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',reactiontype='SOMDECOMP',
@@ -44,16 +47,17 @@ def make_network(
         # Litter decomposition
         # Monod dependence on NO3 and NH4 allows N limitation of immobilization to work without crashing ELM
         # Although this would limit decomposition if NH4 is high but NO3 is low?
-
+        monods=[decomp_network.monod(species='NH4+',k=N_imm_lim,threshold=thresh) ,
+                [decomp_network.monod(species='NO3-',k=N_imm_lim,threshold=thresh) ]
         decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'LITR1':1.0},product_pools={'SOIL1':0.61,'CO2(aq)':1-0.61},
                         rate_constant=1.204,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR1 decomposition',reactiontype='SOMDECOMP',
-                        monod_terms=[decomp_network.monod(species='NH4+',k=N_imm_lim,threshold=thresh),decomp_network.monod(species='NO3-',k=N_imm_lim,threshold=thresh)]))
+                        monod_terms=monods))
         decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'LITR2':1.0},product_pools={'SOIL2':0.45,'CO2(aq)':1-0.45},
                         rate_constant=0.0726,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR2 decomposition',reactiontype='SOMDECOMP',
-                        monod_terms=[decomp_network.monod(species='NH4+',k=N_imm_lim,threshold=thresh),decomp_network.monod(species='NO3-',k=N_imm_lim,threshold=thresh)]))
+                        monod_terms=monods))
         decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'LITR3':1.0},product_pools={'SOIL3':0.71,'CO2(aq)':1-0.71},
                         rate_constant=0.0141,rate_units='1/d',turnover_name='RATE_DECOMPOSITION',name='LITR3 decomposition',reactiontype='SOMDECOMP',
-                        monod_terms=[decomp_network.monod(species='NH4+',k=N_imm_lim,threshold=thresh),decomp_network.monod(species='NO3-',k=N_imm_lim,threshold=thresh)]))
+                        monod_terms=monods))
 
         # SOM decomposition
         decomp_network_CTC.add_reaction(decomp_network.reaction(reactant_pools={'SOIL1':1.0},product_pools={'SOIL2':0.72,'CO2(aq)':1-0.72},
@@ -73,10 +77,10 @@ def make_network(
         # Current approach is modifying rate constant in ELM/EMI for each reaction by relative amount of NO3 and NH4 so combined max rate is plant demand
         # Alternate way would be using inhibition here, or leaking excess N back out. Might allow more flexibility in how N uptake is defined
         decomp_network_CTC.add_reaction(decomp_network.reaction(stoich='1.0 NH4+ -> 1.0 Tracer2',reactiontype='MICROBIAL',
-                name='Plant NH4 uptake',monod_terms=[decomp_network.monod(species='NH4+',k=N_imm_lim,threshold=thresh)],
+                name='Plant NH4 uptake',monod_terms=[decomp_network.monod(species='NH4+',k=N_uptake_lim,threshold=thresh)],
                 rate_constant=1.0,biomass='Plant_NH4_demand',threshold=thresh))
         decomp_network_CTC.add_reaction(decomp_network.reaction(stoich='1.0 NO3- -> 1.0 Tracer',reactiontype='MICROBIAL',
-                name='Plant NO3 uptake',monod_terms=[decomp_network.monod(species='NO3-',k=N_imm_lim,threshold=thresh)],
+                name='Plant NO3 uptake',monod_terms=[decomp_network.monod(species='NO3-',k=N_uptake_lim,threshold=thresh)],
                 rate_constant=1.0,biomass='Plant_NO3_demand',threshold=thresh))
 
         # Nitrification. Simple version for CN reaction network without oxygen, H+, etc

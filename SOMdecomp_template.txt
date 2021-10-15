@@ -50,10 +50,11 @@ END
 
 #=========================== solver options ===================================
 NUMERICAL_METHODS TRANSPORT
+! For single point sim, SOLVER DIRECT and other options commented out seems to work the best 
 LINEAR_SOLVER
-  !SOLVER DIRECT
+  SOLVER DIRECT
   !SOLVER ITERATIVE     ! default: ITERATIVE or KRYLOV: KSP_TYPE of BCGS and PC_TYPE of BJACOBI, if not modified below
-  PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
+  !PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
   !KSP_TYPE fgmres      ! default: BCGS. NOT much difference 
 END
 
