@@ -4,26 +4,27 @@ import copy
 
 
 pools = [
-decomp_network.decomp_pool(name='SOM',CN=50,constraints={'initial':1e1},kind='immobile'),
+decomp_network.decomp_pool(name='SOM',initCN=25,constraints={'initial':1e-2},kind='immobile'),
 # decomp_network.decomp_pool(name='Lignin',CN=50,constraints={'initial':1e2},kind='immobile'),
 decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immobile'),
 
-decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-15},kind='primary'),
+decomp_network.decomp_pool(name='DOM1',CN=25,constraints={'initial':1e-3},kind='primary'),
 # decomp_network.decomp_pool(name='DOM2',CN=50,constraints={'initial':1e-30},kind='primary'),
 decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'6.0 P'}),
 decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':'0.2 G O2(g)'}),
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
 # decomp_network.decomp_pool(name='Mn+++',kind='primary',constraints={'initial':'1.0e-30 M Manganite'}),
 # decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}),
-decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'.37e-10 M Fe(OH)3'}),
+#decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'.37e-10 M Fe(OH)3'}),
+decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'0.37e-1'}),
 decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-15'}),
-decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
+decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-5}), # SOMDecomp sandbox requires this
 decomp_network.decomp_pool(name='NO3-',kind='primary',constraints={'initial':1e-5}), 
-decomp_network.decomp_pool(name='SO4--',kind='primary',constraints={'initial':1e-5}), 
+decomp_network.decomp_pool(name='SO4--',kind='primary',constraints={'initial':1e-3}), 
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
 decomp_network.decomp_pool(name='CH4(aq)',kind='primary',constraints={'initial':1e-15}),
 decomp_network.decomp_pool(name='H2S(aq)',kind='secondary',constraints={'initial':1e-15}),
-decomp_network.decomp_pool(name='Acetate-',kind='primary',constraints={'initial':1e-15}),
+decomp_network.decomp_pool(name='Acetate-',kind='primary',constraints={'initial':1e-1}),
 decomp_network.decomp_pool(name='H2(aq)',kind='primary',constraints={'initial':1e-15}),
 decomp_network.decomp_pool(name='N2(aq)',kind='primary',constraints={'initial':1e-15}),
 
@@ -90,29 +91,28 @@ decomp_network.decomp_pool(name='H2O',kind='implicit'),
 
 conc_scales={
     'DOM1':1e-1,
-    'Acetate-':1e-1,
-    'Fe+++':1e-10,
+    'Acetate-':1e-2,
+    'Fe+++':1e-10, #1e-10 (artic Ks)
+    'Fe++':1e-1,  #
     'NH4+':1e-6,
     'HCO3-':1e-6,
     'NO3-':1e-6,
     'SO4--':1e-6,
     'CH4(aq)':1e-6,
     'H2(aq)':1e-6,
-    'O2(aq)':1e-4,
+    'H+':1e-6,
+    'O2(aq)':1e-2,#1e-4,
 }
 
-rate_scale=10e-8
+rate_scale=1e-6
 thresh=0.0
-truncate_conc=1e-25
-
 reactions = [
     # decomp_network.reaction(name='Aerobic decomposition',reactant_pools={'SOM':1.0},product_pools={'HCO3-':1.0},reactiontype='SOMDECOMP',
     #                                         rate_constant=1e-8,rate_units='1/sec',turnover_name='RATE_CONSTANT', 
     #                                         # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='THRESHOLD 1.0d20')]),
-    #                                     monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh)]),
+    #                                     monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh)]),                                        
                                         
-                                        
-    decomp_network.reaction(name='Hydrolysis',stoich='1.0 SOM -> 1.0 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
+    decomp_network.reaction(name='Hydrolysis',stoich='1.0 SOM -> 0.9 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
                                             rate_constant=rate_scale,rate_units='1/sec', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                         inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=conc_scales['DOM1']),
                                                           # decomp_network.inhibition(species='O2(aq)',type='MONOD',k=1e-11),
@@ -185,7 +185,7 @@ reactions = [
                                             rate_constant=rate_scale*0.8,reactiontype='MICROBIAL'),
                                             
     # Sulfate reduction C2H3O2- + SO4--  -> 2 HCO3- + HS-
-    decomp_network.reaction(name='Sulfate reduction',stoich='1.0 Acetate- + 1.0 SO4--  -> 2.0 HCO3- + 1.0 HS- +  2.0 Tracer',
+    decomp_network.reaction(name='Sulfate reduction',stoich='1.0 Acetate- + 1.0 SO4--  -> 2.0 HCO3- + 2.0 HS- +  2.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='Acetate-',k=conc_scales['Acetate-'],threshold=thresh),decomp_network.monod(species='SO4--',k=conc_scales['SO4--'],threshold=thresh)],
                                             inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD'),
                                                                 decomp_network.inhibition(species='NO3-',k=conc_scales['NO3-'],type='MONOD'),
@@ -218,7 +218,7 @@ reactions = [
 #define standard gibbs free energy per kj
 Gib_std={
     'Hydrolysis':-223.42142,
-    'fermentation':22.38376,    ##need to add enzyme here, because gibbs free energy is positive
+    'fermentation':-223.42142,#22.38376,    ##need to add enzyme here, because gibbs free energy is positive
     'DOM oxidation (O2)':-2705.61289,
     'Acetate oxidation (O2)':-837.64517,
     'Fe(III) reduction':-449.96056,
@@ -249,18 +249,85 @@ edonor={
     'Methane oxidation (SO4)':1,
     'Methane oxidation (Fe)':1,    
 }
+##gene cost benefit for growth by having that gene or pathway
+gnpnlty={
+    'Hydrolysis':0.2,
+    'fermentation':0.1,    #
+    'DOM oxidation (O2)':0.2,
+    'Acetate oxidation (O2)':0.6,
+    'Fe(III) reduction':0.3,
+    'Acetoclastic methanogenesis':0.02,
+    'Hydrogenotrophic methanogenesis':0.01,
+    'Nitrification':0.1,
+    'Denitrification':0.07,
+    'Sulfate reduction':0.3,
+    'Methane oxidation (O2)':0.4,
+    'Methane oxidation (NO3)':0.3,
+    'Methane oxidation (SO4)':0.2,
+    'Methane oxidation (Fe)':0.35,    
+}
+rate={
+    'Hydrolysis':rate_scale,
+    'fermentation':rate_scale,    #
+    'DOM oxidation (O2)':rate_scale,
+    'Acetate oxidation (O2)':rate_scale,
+    'Fe(III) reduction':rate_scale,
+    'Acetoclastic methanogenesis':rate_scale,
+    'Hydrogenotrophic methanogenesis':rate_scale,
+    'Nitrification':rate_scale,
+    'Denitrification':rate_scale,
+    'Sulfate reduction':rate_scale,
+    'Methane oxidation (O2)':rate_scale,
+    'Methane oxidation (NO3)':rate_scale,
+    'Methane oxidation (SO4)':rate_scale,
+    'Methane oxidation (Fe)':rate_scale,  
+}
 
 def yield_calculation(rxname,substrates,products,Gibbs):
+    mcell=24.6            #C5H9O2.5N (CH1.8N0.5N0.2) biomass formula gives a corresponding molecular weight of 24.6 g(C-mol biomass)-1
     #asum=RT*lnQ         
     asum=0                #assumption 1 here is RT*lnQ is zero, which means reactions happen at standard condition(1 atm, at room temperature of 25 degree C)
     gama_e=list(substrates.values())[0]
     #gama_e=estoich[rxname]
     G0=Gibbs[rxname]                #need to find G0 for each reaction (R package)
-    print(gama_e)
+    #print(gama_e)
     Ge=(G0+asum)/gama_e         #gama_e is the the stoicheomitry of electron donor in reaction, G0 is the standard Gibbs free energy of formation (kj) at appropriate temperature and pressure
-    Y=2.08-0.0211*Ge     #Y:Biomass production, grams of cells (mole e- donor)-1; Ge: the energy yield of the reaction per mole of electron donor(kj/ mole of e donor);
+    Y=(2.08-0.0211*Ge)/mcell     #Y:Biomass production, grams of cells (mole e- donor)-1; Ge: the energy yield of the reaction per mole of electron donor(kj/ mole of e donor); convert gram biomass to C-mole-biomass for yield() microbe_yield/24.6 )
     return Y
     #return 0.1
+def growth_rate(microbe):   ##compute maximum growth rate with gene penalities/complexities
+    m=microbe
+    m_vol=0.52*m.size*(m.size/2)**2    # prolate spheroid volume PSV=pi/6*L*B^2, L,B are diameters of the ellipsoid with micron unit
+    #m_vol=4.188*(m.size/2)**3     #sphere volume
+    Vm=(2+m.size**0.4)/86400      #maximum growth rate, unit is per second, be further limited by substrates conc/availability
+    #mdeath=0.16/86400     #unit is per second, death rate
+    #mcdeath=0.64/86400  #community density dependent death - e.g. grazing
+    ## penelties for each function/gene
+    #meth_grw=0.14*m_vol**0.27     # basic metabolism for each gene contributing to growth, allometric growth, 
+    #DOM_grw=0.14*m_vol**0.27      # here only consider the electron donor
+    #SOM_grw=0.14*m_vol**0.27      #
+    #NH4_grw=0.07*m_vol**0.27
+    #NO3_grw=0.14*m_vol**0.27
+    unit_scale=1e-6   ## convert from mmol/m3 to mol/L
+    gnks={
+    'DOM1':200*m_vol**0.27*unit_scale,
+    'Acetate-':100*m_vol**0.27*unit_scale, 
+    'Fe+++':0.14*m_vol**0.27*unit_scale, 
+    'Fe++':0.14*m_vol**0.27*unit_scale, 
+    'NH4+':0.07*m_vol**0.27*unit_scale, 
+    'HCO3-':0.14*m_vol**0.27*unit_scale, 
+    'NO3-':0.07*m_vol**0.27*unit_scale, 
+    'HS-':0.07*m_vol**0.27*unit_scale,
+    'SO4--':8*m_vol**0.27*unit_scale, 
+    'CH4(aq)':0.14*m_vol**0.27*unit_scale, 
+    'H2(aq)':0.14*m_vol**0.27*unit_scale, 
+    'H+':0.14*m_vol**0.27*unit_scale, 
+    'O2(aq)':14*m_vol**0.27*unit_scale, 
+    }
+    growth=Vm
+    #for idx in range(len(m.genes)):
+    #    growth=growth*gnks[m.genes[idx]['name']]  ##final growth rate with all genes contribution
+    return growth,gnks
 
 class microbe:
     def __init__(self,genes,size,CN,name):
@@ -275,40 +342,63 @@ class microbe:
             C_out='HCO3-'
         elif 'DOM1' in reaction['product_pools']:
             C_out='DOM1'
+        elif 'CH4(aq)' in reaction['product_pools']:
+            C_out='CH4(aq)'        
         else:
             raise ValueError('Products must include HCO3- or DOM1 to substract C from')
         # Not taking DOM C:N into account currently
+        # This needs to check if the reaction is SOMDECOMP in which case representation of microbial products will be different
         microbe_yield = yield_calculation(reaction['name'],reaction['reactant_pools'],reaction['product_pools'],Gib_std)
-        reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content
-        #print(reaction['name'])
-        reaction['product_pools']['NH4+']=reaction['product_pools'].get('NH4+',0)+microbe_yield/self.CN
-        reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
-        reaction['biomass']=self.name
-        reaction['biomass_yield']=microbe_yield
-        reaction['name']=reaction['name']+f' ({self.name})'
+        if react['reactiontype'] == 'MICROBIAL':
+            if 'DOM1' in reaction['reactant_pools']:
+                for i in range(len(pools)):
+                    if 'DOM1' == pools[i]['name']:
+                        DOM_CN=pools[i]['CN']
+                        dNH4=reaction['reactant_pools']['DOM1']/DOM_CN-microbe_yield/self.CN 
+                        #reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content; 
+                        #partition NH4+ to biomass
+                        if dNH4 > 0:        ##NH4 surplus to be mineralized
+                            reaction['product_pools']['NH4+']=reaction['product_pools'].get('NH4+',0)+dNH4  
+                        elif dNH4 < 0:
+                            reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+abs(dNH4)
+            elif 'Acetate-' in reaction['reactant_pools']:
+                reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+microbe_yield/self.CN
+            ##partition carbon out of reactants
+            reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content; 
+            #reaction['product_pools']['NH4+']=reaction['product_pools'].get('NH4+',0)+microbe_yield/self.CN    ## why add NH4+ into product pools? It should be in the reactant pools or N_out; microbe_yield/self.CN  (microbe_yield is in gram of cells/mol of electron donor and it needs to be congverted to grams of C/electron donor)
+            #print(reaction['product_pools']['NH4+'],self.CN,reaction['product_pools'].get('NH4+',0),microbe_yield/self.CN)
+            #reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
+            reaction['biomass']=self.name
+            reaction['biomass_yield']=microbe_yield
+        elif react['reactiontype'] == 'SOMDECOMP':
+            reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content
+            reaction['product_pools'][self.name]=microbe_yield
+            #reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
+        else:
+            raise ValueError('Microbe genes only defined for microbial reactions currently')
+        reaction['name']=reaction['name']+f' ({self.name})'     #cjw comment out the microbial name
 
         return reaction
 
 # See Smeaton, Christina M., and Philippe Van Cappellen. 2018. “Gibbs Energy Dynamic Yield Method (GEDYM): Predicting Microbial Growth Yields under Energy-Limiting Conditions.” Geochimica et Cosmochimica Acta 241 (November): 1–16. https://doi.org/10.1016/j.gca.2018.08.023.
-# microbial biomass is in C-unit. C content per cell is related to cell size.
 microbes=[
-    microbe(genes=[reactions[0],reactions[1]],size=3.0,CN=8.0,name='microbe1'),      #size in micron; bacteria; ref. Luan et al., 2020: Organism body size structures the soil micorbial and nematode community assembly at a continental and global scale
-    microbe(genes=[reactions[1],reactions[2]],size=15.0,CN=8.0,name='microbe2'),      #size in micron; fungi
-    microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=8.0,name='microbe3')        #size in micron; Protists
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3'),
-    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=5.0,name='microbe3')
+    microbe(genes=[reactions[0],reactions[1]],size=5.0,CN=1.0,name='microbe1'),
+    microbe(genes=[reactions[1],reactions[2]],size=10.0,CN=15.0,name='microbe2'),
+    microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=25.0,name='microbe3')
 ]
 
-
+initial_biomass=1e-3
 microbe_reactions=[]
 for m in microbes:
     for r in m.genes:
         microbe_reactions.append(m.make_reaction(r))
+    # Microbial biomass pools need to be included in immobile pools
+    pools.append(decomp_network.decomp_pool(name=m.name,CN=m.CN,constraints={'initial':initial_biomass},kind='immobile'))
+    # Add microbial biomass decay
+    microbe_reactions.append( decomp_network.reaction(name=f'{m.name} turnover',stoich=f'1.0 {m.name} -> 0.5 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
+            rate_constant=1e-6,rate_units='1/sec',
+            monod_terms=[decomp_network.monod(species=m.name,type='MONOD',k=1e-8)], # Monod dependence on biomass prevents it from exponentially decaying without limit
+                                                          ))
 
 network=decomp_network.decomp_network(pools,microbe_reactions)
 
@@ -328,63 +418,53 @@ drawn,pos=decomp_network.draw_network_with_reactions(network,
                      'Hydrogenotrophic methanogenesis':'Hydrogenotrophic\nmethanogenesis','Acetoclastic methanogenesis':'Acetoclastic\nmethanogenesis',
                      'SOMdecomp Reaction':'SOM Reaction','General Reaction':'Abiotic Reaction','fermentation':'Fermentation','Primary aqueous':'Dissolved ion','Gas':'Dissolved gas'},connectionstyle='arc3, rad=0.2')
 
-decomp_network.PF_network_writer(network).write_into_input_deck('SOMdecomp_template.txt','microbial_test_network.in',log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25,database='/home/46w/wetland/REDOX-PFLOTRAN/hanford.dat')
-##model run length
-simlength=30
-
-rateconstants={
-'1.00e+00 DOM1  -> 3.33e-01 Acetate-  + 3.33e-01 HCO3-  + 6.67e-01 H+  + 1.33e+00 H2(aq)  + 3.33e-01 Tracer':rate_scale,
-'1.00e+00 DOM1  + 1.00e+00 O2(aq)  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 Tracer':rate_scale,
-'4.00e+00 H2(aq)  + 1.00e+00 HCO3-  + 1.00e+00 H+  -> 1.00e+00 CH4(aq)  + 3.00e+00 H2O':rate_scale*0.1,
-'1.00e+00 Acetate-  + 2.00e+00 NO3-  + 1.00e+00 H+  -> 2.00e+00 HCO3-  + 1.00e+00 N2(aq)  + 0.00e+00 N2O(aq)  + 2.00e+00 H2O  + 2.00e+00 Tracer':rate_scale*0.8,
-'1.00e+00 Acetate-  + 2.00e+00 O2(aq)  -> 2.00e+00 HCO3-  + 2.00e+00 H+  + 2.00e+00 Tracer':rate_scale,
-'1.00e+00 CH4(aq)  + 1.00e+00 O2(aq)  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 H2O  + 1.00e+00 Tracer':rate_scale,
-'2.00e+00 NH4+  + 4.00e+00 O2(aq)  -> 2.00e+00 NO3-  + 2.00e+00 H2O  + 4.00e+00 H+':rate_scale,
-'1.00e+00 Acetate-  + 8.00e+00 Fe+++  -> 2.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 2.00e+00 Tracer':rate_scale*0.5,
-'1.00e+00 CH4(aq)  + 8.00e+00 Fe+++  + 3.00e+00 H2O  -> 1.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 1.00e+00 Tracer':rate_scale,
-'1.00e+00 CH4(aq)  + 1.00e+00 NO3-  -> 1.00e+00 HCO3-  + 1.00e+00 NH4+  + 1.00e+00 Tracer':rate_scale,
-'1.00e+00 Acetate-  + 1.00e+00 SO4--  -> 2.00e+00 HCO3-  + 2.00e+00 HS-  + 2.00e+00 Tracer':rate_scale*0.3,
-'1.00e+00 CH4(aq)  + 1.00e+00 SO4--  -> 1.00e+00 HCO3-  + 1.00e+00 HS-  + 1.00e+00 H2O  + 1.00e+00 Tracer':rate_scale,
-'1.00e+00 Acetate-  -> 1.00e+00 CH4(aq)  + 1.00e+00 HCO3-  + 1.00e+00 Tracer':rate_scale*0.1,
-'SOM decay to CO2 (SOMDEC sandbox)': 1e-6,
-'SOM decay to DOM1 (SOMDEC sandbox)':1e-7,
-}
-
+#decomp_network.PF_network_writer(network).write_into_input_deck('SOMdecomp_template.txt','microbial_test_network.in',log_formulation=True,CO2name='HCO3-',truncate_concentration=1e-25,
+#                    database='/home/46w/wetland/REDOX-PFLOTRAN/hanford.dat',verbose=True,length_days=100)
 ##compute maximum growth rate (per time) and basic metabolisms for each microbes
+pyplot.savefig('microbes_network.pdf')
+#for idx in range(len(m.genes)):
+#    growth=growth*gngrowth[m.genes[idx]['name']]  ##final growth rate with all genes contribution
+#print('before',microbe_reactions)
+
 for m in microbes:
-    m_vol=0.52*m.size*(m.size/2)**2
-    Vm=5+m.size**0.4      #maximum growth rate, unit is per second, be further limited by substrates conc/availability
-    mdeath=0.16/86400     #unit is per second, death rate
-    #mcdeath=0.64/86400  #community density dependent death - e.g. grazing
-    ## penelties for each function/gene
-    #meth_grw=0.14*m_vol**0.27     # basic metabolism for each gene contributing to growth, allometric growth, 
-    #DOM_grw=0.14*m_vol**0.27      # here only consider the electron donor
-    #SOM_grw=0.14*m_vol**0.27      #
-    #NH4_grw=0.07*m_vol**0.27
-    #NO3_grw=0.14*m_vol**0.27
-    ##gene cost benefit for growth by having that gene or pathway
-    gngrowth={
-    'Hydrolysis':0.14*m_vol**0.27,
-    'fermentation':0.14*m_vol**0.27,    #
-    'DOM oxidation (O2)':0.14*m_vol**0.27,
-    'Acetate oxidation (O2)':0.14*m_vol**0.27,
-    'Fe(III) reduction':0.14*m_vol**0.27,
-    'Acetoclastic methanogenesis':0.14*m_vol**0.27,
-    'Hydrogenotrophic methanogenesis':0.14*m_vol**0.27,
-    'Nitrification':0.14*m_vol**0.27,
-    'Denitrification':0.07*m_vol**0.27,
-    'Sulfate reduction':0.14*m_vol**0.27,
-    'Methane oxidation (O2)':0.14*m_vol**0.27,
-    'Methane oxidation (NO3)':0.14*m_vol**0.27,
-    'Methane oxidation (SO4)':0.14*m_vol**0.27,
-    'Methane oxidation (Fe)':0.14*m_vol**0.27,    
-    }
-    print(gngrowth[m.genes[0]['name']])
+    mxgrow,gnk=growth_rate(m)
+    for idx in range(len(m.genes)):
+        if 'inhibition_terms' in m.genes[idx].keys():
+            inhterm=m.genes[idx]['inhibition_terms']      # a list of dictionary of inhibition informariton
+            for inh in range(len(inhterm)):
+                inhspec=inhterm[inh]['species']
+                if inhspec in gnk.keys():
+                    inhterm[inh]['k']=gnk[inhspec]
+        if 'monod_terms' in m.genes[idx].keys():
+            modterm=m.genes[idx]['monod_terms'] 
+            for mod in range(len(modterm)):
+                modspec=modterm[mod]['species']
+                if modspec in gnk.keys():
+                    modterm[mod]['k']=gnk[modspec]
+        #print(m.genes[idx].keys())
+    #print('after name',f'({m.name})')
+    #print(mxgrow)
+    #print(gnk)
+    #' ({m.name})'
     
+    #for idx in range(len(m.genes)):
+    
+    #print(gngrowth[m.genes[0]['name']])
+    #print(growth)
+##cjw biology growing: compute the growth of biomass for each microbes
+    #B_old=m.biomass
+    #primarynames=cell.primary_names
+    #for spec in primarynames:
+    #    Bgrow=growth*B_old*(cell.total_mobile[spec]/(cell.total_mobile[spec]+conc_scales[spec]))
+    #    B_new=Bgrow*dt+B_old
+    #    rate_tmp=growth*B_old/m.microbe_yield
+    #Bgrow=growth*B_old*(S/(S+Ks))
+    #B_new=Bgrow*dt+B_old
+    #rate_tmp=growth*B_old/Yield    ##final rate constant is the sum of all microbes growth on the reaction
+    #rate_tmp=(growth/Yield)*biomass
 
-#result_alquimia,units_alq=run_alquimia.run_simulation('microbial_test_network.in',hands_off=False,simlength_days=simlength,dt=3600,initcond=pools,rateconstants=rateconstants,truncate_concentration=truncate_conc)
-
-
+#import run_alquimia
+#result_alquimia,units_alq=run_alquimia.run_simulation('microbial_test_network.in',hands_off=True,simlength_days=10,dt=3600,initcond=pools,rateconstants={},truncate_concentration=0.0)
 
 
 pyplot.show()
