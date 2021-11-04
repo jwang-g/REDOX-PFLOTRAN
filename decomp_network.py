@@ -543,6 +543,8 @@ class PF_sandbox_reaction_writer(PF_writer):
                 self.add_line('HALF_SATURATION_CONSTANT'+' {const:{fmt}}'.format(const=monod['k'],fmt=fmt))
                 if 'threshold' in monod:
                     self.add_line('THRESHOLD_CONCENTRATION {const:{fmt}}'.format(const=monod['threshold'],fmt=fmt))
+                if monod.get('pool_normalized',False):
+                    self.add_line('POOL_NORMALIZED')
                 self.decrease_level()
         for inhib in reaction_data.pop('inhibition_terms',[]):
                 self.increase_level('INHIBITION')
