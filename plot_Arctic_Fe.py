@@ -4,6 +4,7 @@ import decomp_network
 import xarray
 import sys
 import pandas
+from string import ascii_lowercase
 
 
 def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,CO2flux_ax=None,CH4flux_ax=None,porewater_ax=None,cation_ax=None,
@@ -209,7 +210,7 @@ def plot_result(result,SOM_ax=None,pH_ax=None,Fe_ax=None,CO2flux_ax=None,CH4flux
             porewater_ax.legend(fontsize='small')
             
     if cation_ax is not None:
-        for n,cation in enumerate(decomp_network.pools_list_to_dict(arctic.reactions)['Cation exchange']['cations'].keys() ):
+        for n,cation in enumerate(decomp_network.pools_list_to_dict(arctic.make_reactions())['Cation exchange']['cations'].keys() ):
             if cation == 'H+':
                 continue
             cation_ax.plot(t,result['Total Sorbed '+cation]/(BD*1e-3*100**3)*1000,c='C'+str(n),label=cation,**cation_args)
@@ -372,9 +373,9 @@ def plot_timeseries(fname,group_suffix=''):
     for ax in axs[4,:]:
         ax.set_ylim(bottom=1e-5)
 
-    leg=axs[2,4].legend(loc=(0.03,0.45),ncol=2,edgecolor='k')
+    leg=axs[2,4].legend(loc='upper right',ncol=2,edgecolor='k')
     cation_axes[0].legend()
-    axes[4].legend()
+    axes[4].legend(loc='upper right')
 
     return 
 
@@ -458,9 +459,33 @@ def save_all_figs(dirname,format='png',**kwargs):
 
 
 if __name__ == '__main__':
-
+    pos={'Fe(OH)3': (212.0, 348.0),
+        'Fe+++': (212.0, 306.0),
+        'cellulose': (1303.0, 594.0),
+        'DOM1': (1230.0, 450.0),
+        'O2(aq)': (909.0, 306.0),
+        'HCO3-': (1009.0, 162.0),
+        'Fe++': (216.0, 162.0),
+        'CH4(aq)': (726.0, 18.0),
+        'Acetate-': (689.0, 306.0),
+        'H2(aq)': (1275.0, 306.0),
+        'Mg++': (106.0, 18.0),
+        'Ca++': (190.0, 18.0),
+        'Na+': (266.0, 18.0),
+        'K+': (27.0, 18.0),
+        'Aerobic decomposition': (1377.0, 450.0),
+        'Hydrolysis': (1265.0, 522.0),
+        'fermentation': (1220.0, 378.0),
+        'DOM aerobic respiration': (1211.0, 234.0),
+        'Fe(II) microbial oxidation': (339.0, 90.0),
+        'Cation exchange': (148.0, 90.0),
+        'Hydrogenotrophic methanogenesis': (1009.0, 90.0),
+        'Acetate aerobic respiration': (807.0, 234.0),
+        'Hydrogen oxidation': (1012.0, 234.0),
+        'Fe(III) reduction': (333.0, 234.0),
+        'Acetaclastic methanogenesis': (571.0, 234.0)}
     networkfig2=figure('Reaction network (with reactions)',clear=True,figsize=(9.4,6.6))
-    drawn=decomp_network.draw_network_with_reactions(arctic.reaction_network,node_size=1200,arrowstyle='->',arrowsize=8.5,#edge_color='gray',
+    drawn=decomp_network.draw_network_with_reactions(decomp_network.decomp_network(pools=arctic.pools,reactions=arctic.make_reactions()),node_size=1200,arrowstyle='->',arrowsize=8.5,#edge_color='gray',
                 omit=['NH4+','Rock(s)','gas','surf_complex','secondary','H+','implicit','Fe(II) abiotic oxidation','Fe(OH)2','Calcite'],
                 namechanges={'cellulose':'Cellulose','DOM1':'DOM','O2(aq)':'O$_2$','CH4(aq)':'CH$_4$','HCO3-':'CO$_2$',
                             'Fe(OH)2':'Fe(OH)$_2$','Fe(OH)3':'Fe(OH)$_3$','Fe++':r'Fe$^\mathrm{+\!\!+}$','Fe+++':r'Fe$^\mathrm{+\!\!+\!\!\!+}$',
@@ -469,7 +494,7 @@ if __name__ == '__main__':
                             'Acetaclastic methanogenesis':'Acetaclastic\nmethanogenesis','Acetate aerobic respiration':'Acetate\naerobic respiration',
                             'Hydrogenotrophic methanogenesis':'Hydrogenotrophic\nmethanogenesis','Gas':'Dissolved gas','Primary aqueous':'Dissolved ion',
                             'Unknown':'Cation exchange','Fe(III) reduction':r'Fe$^\mathrm{+\!\!+\!\!\!+}$'+'\nreduction','H2(aq)':'H$_2$'
-                            },markers={'mineral':'8'})
+                            },markers={'mineral':'8'},pos=pos)
 
     colors={'Anaerobic':'C1','Periodic':'C2','Low Fe':'C3','Aerobic':'C0'}
 
@@ -479,6 +504,7 @@ if __name__ == '__main__':
         fname=sys.argv[1:]
 
     data_list={}
+    data_list_noinhib={}
 
     import netCDF4
     for filename in fname:
@@ -491,26 +517,91 @@ if __name__ == '__main__':
             d=xarray.open_dataset(filename,group=g,decode_times=False)
             if 'nperiods' in g:
                 gs=g.split('_')
-                d['ndryperiods']=int(gs[-3])
-                d['pH']=float(gs[-1])
+                d['ndryperiods']=int(gs[gs.index('nperiods')+1])
+                d['pH']=float(gs[gs.index('pH')+1])
             
                 newdims=['pH','ndryperiods']
                 d=d.expand_dims(newdims).set_coords(newdims)
             
-            data_list[g]=d
+            if 'noFeCH4Inhibition' in g:
+                data_list_noinhib[g]=d
+            else:
+                data_list[g]=d
 
     results_periodic=xarray.combine_by_coords(data_list[xx] for xx in data_list if 'pH' in xx and xx.startswith('organic'))
     results_periodic_mineral=xarray.combine_by_coords(data_list[xx] for xx in data_list if 'pH' in xx and xx.startswith('mineral'))
+    results_periodic_noinhib=xarray.combine_by_coords(data_list_noinhib[xx] for xx in data_list_noinhib if 'pH' in xx and xx.startswith('organic'))
+    results_periodic_noinhib_mineral=xarray.combine_by_coords(data_list_noinhib[xx] for xx in data_list_noinhib if 'pH' in xx and xx.startswith('mineral'))
 
 
     plot_timeseries(fname,'_BD_Bockheim')
     plot_timeseries(fname,'_BD_porosity')
+    plot_timeseries(fname,'_BD_Bockheim_noFeCH4Inhibition')
+
+    obs_mods=mod_obs_comp(fname,'_BD_Bockheim')
+    obs_mods_noinhib=mod_obs_comp(fname,'_BD_Bockheim_noFeCH4Inhibition')
+
+    simnames={
+       'organic_trough':'Trough organic',
+       'organic_nottrough':'Rim organic',
+       'mineral_trough':'Trough mineral',
+       'mineral_nottrough':'Trough organic',
+       'highO2_organic':'Oxic organic',
+    }
+    markers=['o','s','^','+','<','x']
+    norm=matplotlib.colors.Normalize(0,100)
+
+    f,axs=subplots(1,6,clear=True,num='1-1 plots',figsize=(15.5,3))
+    f2,axs2=subplots(1,6,clear=True,num='1-1 plots no inhib',figsize=(15.5,3))
+    for num,sim in enumerate(obs_mods.keys()):
+        axs[0].scatter(obs_mods[sim]['CO2flux_obs'],obs_mods[sim]['CO2flux_mod'],marker=markers[num],s=10,c=obs_mods[sim].index,label=simnames[sim],norm=norm)
+        axs[1].scatter(obs_mods[sim]['CH4flux_obs'],obs_mods[sim]['CH4flux_mod'],marker=markers[num],s=10,c=obs_mods[sim].index,label=simnames[sim],norm=norm)
+        axs[2].scatter(obs_mods[sim]['DOM_obs'],obs_mods[sim]['DOM_mod'],        marker=markers[num],s=10,c=obs_mods[sim].index,label=simnames[sim],norm=norm)
+        axs[3].scatter(obs_mods[sim]['Acetate_obs'],obs_mods[sim]['Acetate_mod'],marker=markers[num],s=10,c=obs_mods[sim].index,label=simnames[sim],norm=norm)
+        axs[4].scatter(obs_mods[sim]['Fe_II_obs'],obs_mods[sim]['Fe_II_mod'],    marker=markers[num],s=10,c=obs_mods[sim].index,label=simnames[sim],norm=norm)
+        axs[5].scatter(obs_mods[sim]['pH_obs'],obs_mods[sim]['pH_mod'],          marker=markers[num],s=10,c=obs_mods[sim].index,label=simnames[sim],norm=norm)
+
+        axs2[0].scatter(obs_mods_noinhib[sim]['CO2flux_obs'],obs_mods_noinhib[sim]['CO2flux_mod'],marker=markers[num],s=10,c=obs_mods_noinhib[sim].index,label=simnames[sim],norm=norm)
+        axs2[1].scatter(obs_mods_noinhib[sim]['CH4flux_obs'],obs_mods_noinhib[sim]['CH4flux_mod'],marker=markers[num],s=10,c=obs_mods_noinhib[sim].index,label=simnames[sim],norm=norm)
+        axs2[2].scatter(obs_mods_noinhib[sim]['DOM_obs'],obs_mods_noinhib[sim]['DOM_mod'],        marker=markers[num],s=10,c=obs_mods_noinhib[sim].index,label=simnames[sim],norm=norm)
+        axs2[3].scatter(obs_mods_noinhib[sim]['Acetate_obs'],obs_mods_noinhib[sim]['Acetate_mod'],marker=markers[num],s=10,c=obs_mods_noinhib[sim].index,label=simnames[sim],norm=norm)
+        axs2[4].scatter(obs_mods_noinhib[sim]['Fe_II_obs'],obs_mods_noinhib[sim]['Fe_II_mod'],    marker=markers[num],s=10,c=obs_mods_noinhib[sim].index,label=simnames[sim],norm=norm)
+        axs2[5].scatter(obs_mods_noinhib[sim]['pH_obs'],obs_mods_noinhib[sim]['pH_mod'],          marker=markers[num],s=10,c=obs_mods_noinhib[sim].index,label=simnames[sim],norm=norm)
+
+
+    axs[0].set(title='CO$_2$ flux',xlabel='Obs CO$_2$ flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)',ylabel='Mod CO$_2$ flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
+    axs[1].set(title='CH$_4$ flux',xlabel='Obs CH$_4$ flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)',ylabel='Mod CH$_4$ flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
+    axs[2].set(title='DOM concentration',xlabel='Obs DOM (mol L$^{-1}$)',ylabel='Mod DOM (mol L$^{-1}$)')
+    axs[3].set(title='Acetate concentration',xlabel='Obs organic acids (mol L$^{-1}$)',ylabel='Mod acetate (mol L$^{-1}$)')
+    axs[4].set(title='Fe(II) concentration',xlabel='Obs Fe(II) ($\mu$mol g dwt$^{-1}$)',ylabel='Mod DOM ($\mu$mol g dwt$^{-1}$)')
+    axs[5].set(title='pH',xlabel='Obs pH',ylabel='Mod pH')
+    axs[5].legend()
+    cb=colorbar(ax=axs[5],mappable=axs[5].collections[0])
+    cb.set_label('Incubation day')
+    for num,ax in enumerate(axs):
+        ax.axline((mean(ax.get_xlim()),mean(ax.get_xlim())),slope=1.0,c='k',lw=0.4,ls='--')
+        ax.set_title('('+ascii_lowercase[num]+')',loc='left')
+
+    axs2[0].set(title='CO$_2$ flux',xlabel='Obs CO$_2$ flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)',ylabel='Mod CO$_2$ flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
+    axs2[1].set(title='CH$_4$ flux',xlabel='Obs CH$_4$ flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)',ylabel='Mod CH$_4$ flux rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
+    axs2[2].set(title='DOM concentration',xlabel='Obs DOM (mol L$^{-1}$)',ylabel='Mod DOM (mol L$^{-1}$)')
+    axs2[3].set(title='Acetate concentration',xlabel='Obs organic acids (mol L$^{-1}$)',ylabel='Mod acetate (mol L$^{-1}$)')
+    axs2[4].set(title='Fe(II) concentration',xlabel='Obs Fe(II) ($\mu$mol g dwt$^{-1}$)',ylabel='Mod DOM ($\mu$mol g dwt$^{-1}$)')
+    axs2[5].set(title='pH',xlabel='Obs pH',ylabel='Mod pH')
+    axs2[5].legend()
+    cb=colorbar(ax=axs2[5],mappable=axs2[5].collections[0])
+    cb.set_label('Incubation day')
+    for num,ax in enumerate(axs2):
+        ax.axline((mean(ax.get_xlim()),mean(ax.get_xlim())),slope=1.0,c='k',lw=0.4,ls='--')
+        ax.set_title('('+ascii_lowercase[num]+')',loc='left')
 
     # results_periodic=xarray.open_dataset(fname,group='periodic_sims')
 
     fig,axes=subplots(4,1,num='Periodic inundation',figsize=(6,8.4),clear=True)
     # CH4ax=axes[0].twinx()
     plot_result(results_periodic.isel(ndryperiods=1,pH=2),Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],#porewater_ax=axes[3],
+            gdrywt=True,SOC_pct=arctic.SOC_layermean['Organic'],cellulose_SOC_frac=arctic.cellulosefrac,BD=arctic.BD_layerest2_trough['Organic',False])
+    plot_result(results_periodic_noinhib.isel(ndryperiods=1,pH=2),Fe_ax=axes[2],CO2flux_ax=axes[0],CH4flux_ax=axes[1],pH_ax=axes[3],#porewater_ax=axes[3],
             gdrywt=True,SOC_pct=arctic.SOC_layermean['Organic'],cellulose_SOC_frac=arctic.cellulosefrac,BD=arctic.BD_layerest2_trough['Organic',False])
     # axes[0].set_ylim(bottom=-0.01)
     axes[2].legend(labels=['Fe(OH)$_3$','Fe$^{3\!\!+}$','Fe$^{2\!\!+}$','Sorbed Fe'],loc=(0.83,0.2),fontsize='small')
@@ -524,15 +615,11 @@ if __name__ == '__main__':
     t=fig.axes[2].set_title('(c)',loc='left')  
     t=fig.axes[3].set_title('(d)',loc='left')  
 
-
+    cmap_O2=matplotlib.colors.LinearSegmentedColormap.from_list('cmap_O2',['blue','white'])
     xmax=axes[0].get_xlim()[1]
-    O2_periodic=zeros(arctic.simlength*24)
-    O2_periodic[:int(arctic.simlength*24*arctic.oxicfrac)]=arctic.dq
     for ax in axes:
-        for num in range(3):
-            ax.axvspan(num*arctic.simlength+nonzero(diff(O2_periodic))[0]/24,(num+1)*arctic.simlength,color='b',alpha=0.1)
+        ax.pcolormesh(results_periodic['time'],ax.get_ylim(),results_periodic.isel(ndryperiods=1,pH=2)['Total O2(aq)'].to_masked_array()[:-1,None].T,cmap=cmap_O2,zorder=-1,shading='flat',alpha=0.15)
         ax.set_xlim(right=xmax,left=0)
-
 
 
 
@@ -542,134 +629,175 @@ if __name__ == '__main__':
     cm=get_cmap('plasma')
     norm=matplotlib.colors.Normalize(min(results_periodic['pH']),max(results_periodic['pH']))
     porosity=results_periodic['Porosity'].isel(time=0).mean().item()
-    fig,axs=subplots(ncols=2,nrows=1,num='Periodic by dry periods',clear=True,squeeze=False,figsize=(7,4))
+    fig,axs=subplots(ncols=3,nrows=1,num='Periodic by dry periods',clear=True,squeeze=False,figsize=(7,4))
     for pH in results_periodic['pH'].values:
         axs[0,0].plot(results_periodic['ndryperiods'].values[:],array([results_periodic.sel(ndryperiods=n,pH=pH)['Total Tracer'].isel(time=arctic.simlength*24-1) for n in results_periodic['ndryperiods'].values[:]])*porosity/arctic.BD_layerest2_trough['Organic',False],'o-',label=pH,c=cm(norm(pH)))
         axs[0,1].plot(results_periodic['ndryperiods'].values[:],array([results_periodic.sel(ndryperiods=n,pH=pH)['Total CH4(aq)'].isel(time=arctic.simlength*24-1) for n in results_periodic['ndryperiods'].values[:]])*porosity/arctic.BD_layerest2_trough['Organic',False],'o-',label=pH,c=cm(norm(pH)))
         axs[0,0].plot(results_periodic_mineral['ndryperiods'].values[:],array([results_periodic_mineral.sel(ndryperiods=n,pH=pH)['Total Tracer'].isel(time=arctic.simlength*24-1) for n in results_periodic_mineral['ndryperiods'].values[:]])*porosity/arctic.BD_layerest2_trough['Organic',False],'+--',c=cm(norm(pH)))
         axs[0,1].plot(results_periodic_mineral['ndryperiods'].values[:],array([results_periodic_mineral.sel(ndryperiods=n,pH=pH)['Total CH4(aq)'].isel(time=arctic.simlength*24-1) for n in results_periodic_mineral['ndryperiods'].values[:]])*porosity/arctic.BD_layerest2_trough['Organic',False],'+--',c=cm(norm(pH)))
+        
+        axs[0,2].plot(results_periodic_noinhib['ndryperiods'].values[:],array([results_periodic_noinhib.sel(ndryperiods=n,pH=pH)['Total CH4(aq)'].isel(time=arctic.simlength*24-1) for n in results_periodic_noinhib['ndryperiods'].values[:]])*porosity/arctic.BD_layerest2_trough['Organic',False],'o-',label=pH,c=cm(norm(pH)))
+        axs[0,2].plot(results_periodic_noinhib_mineral['ndryperiods'].values[:],array([results_periodic_noinhib_mineral.sel(ndryperiods=n,pH=pH)['Total CH4(aq)'].isel(time=arctic.simlength*24-1) for n in results_periodic_noinhib_mineral['ndryperiods'].values[:]])*porosity/arctic.BD_layerest2_trough['Organic',False],'+--',c=cm(norm(pH)))
 
 
     axs[0,0].set_xlabel('Number of oxic-anoxic cycles')
     axs[0,1].set_xlabel('Number of oxic-anoxic cycles')
+    axs[0,2].set_xlabel('Number of oxic-anoxic cycles')
     axs[0,0].set_ylabel('Cumulative CO$_2$ flux\n(mmol g dwt$^{-1}$)')
     axs[0,1].set_ylabel('Cumulative CH$_4$ flux\n(mmol g dwt$^{-1}$)')
+    axs[0,2].set_ylabel('Cumulative CH$_4$ flux\n(mmol g dwt$^{-1}$)')
     axs[0,0].set_title('Cumulative CO$_2$ flux')
-    axs[0,1].set_title('Cumulative CH$_4$ flux')
+    axs[0,1].set_title('Cumulative CH$_4$ flux\n (Direct Fe(III) inhib.)')
+    axs[0,2].set_title('Cumulative CH$_4$ flux\n (No Fe(III) inhib.)')
     axs[0,0].set_ylim(bottom=0)
-    axs[0,1].set_ylim(bottom=0)
+    axs[0,1].set_ylim(bottom=0,top=axs[0,2].get_ylim()[1])
+    axs[0,2].set_ylim(bottom=0)
     axs[0,1].legend(title='Initial pH')
     axs[0,0].set_xticks(results_periodic['ndryperiods'].values[:])
     axs[0,1].set_xticks(results_periodic['ndryperiods'].values[:])
+    axs[0,2].set_xticks(results_periodic['ndryperiods'].values[:])
     axs[0,0].legend(handles=[axs[0,0].lines[0],axs[0,0].lines[1]],labels=['Organic','Mineral'])
 
     axs[0,0].set_title('(a)',loc='left')
     axs[0,1].set_title('(b)',loc='left')
+    axs[0,2].set_title('(c)',loc='left')
 
 
     ndry_plotted=[3]
-    fig,axs=subplots(ncols=len(ndry_plotted),nrows=6,num='Periodic comparison',clear=True,figsize=(8,12),squeeze=False)
+    fig,axs=subplots(ncols=len(ndry_plotted),nrows=5,num='Periodic comparison',clear=True,figsize=(6,8.5),squeeze=False)
 
-    from string import ascii_lowercase
+
     for nn,ndry in enumerate(ndry_plotted):
         c='k'
         for nnn,pH in enumerate(results_periodic['pH'][:3]):
             ls=[':','-','--'][nnn]
+            c='k'
             plot_result(results_periodic.sel(ndryperiods=ndry,pH=pH),CH4flux_ax=axs[0,nn],gdrywt=True,
                     BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={'color':c,'ls':ls},CO2flux_args={'color':c,'ls':ls})
-            axs[2,nn].plot(results_periodic['time'][:-1],(results_periodic.sel(ndryperiods=ndry,pH=pH)['Total Fe++'].diff(dim='time')*24*1e3*porosity+results_periodic.sel(ndryperiods=ndry,pH=pH)['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Organic',False],ls,c=c,label=str(ndry))
+            axs[1,nn].plot(results_periodic['time'][:-1],(results_periodic.sel(ndryperiods=ndry,pH=pH)['Total Fe++'].diff(dim='time')*24*1e3*porosity+results_periodic.sel(ndryperiods=ndry,pH=pH)['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Organic',False],ls,c=c,label=str(ndry))
 
-            axs[3,nn].plot(results_periodic['time'],results_periodic.sel(ndryperiods=ndry,pH=pH)['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c=c)
-            axs[4,nn].plot(results_periodic['time'],-log10(results_periodic.sel(ndryperiods=ndry,pH=pH)['Free H+']),ls,c=c)
-            axs[5,nn].plot(results_periodic['time'],results_periodic['Total Acetate-'].sel(ndryperiods=ndry,pH=pH)*1e3,c=c,ls=ls)
+            axs[2,nn].plot(results_periodic['time'],results_periodic.sel(ndryperiods=ndry,pH=pH)['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c=c)
+            axs[3,nn].plot(results_periodic['time'],-log10(results_periodic.sel(ndryperiods=ndry,pH=pH)['Free H+']),ls,c=c)
+            axs[4,nn].plot(results_periodic['time'],results_periodic['Total Acetate-'].sel(ndryperiods=ndry,pH=pH)*1e3,c=c,ls=ls)
             # axs[1,nn].plot(results_periodic['time'][:-1],diff(results_periodic['Total Tracer'].sel(ndryperiods=ndry,pH=pH)*results_periodic['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic['time'])*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c='b')
             CO2flux=diff(results_periodic['Total Tracer'].sel(ndryperiods=ndry,pH=pH)*results_periodic['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic['time'])*1e3/arctic.BD_layerest2_trough['Organic',False]
             CH4flux=diff(results_periodic['Total CH4(aq)'].sel(ndryperiods=ndry,pH=pH)*results_periodic['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic['time'])*1e3/arctic.BD_layerest2_trough['Organic',False]
-            axs[1,nn].plot(results_periodic['time'][:-1],CO2flux/CH4flux,ls=ls,c=c)
+            # axs[1,nn].plot(results_periodic['time'][:-1],CO2flux/CH4flux,ls=ls,c=c)
+
+            c='b'
+            plot_result(results_periodic_noinhib.sel(ndryperiods=ndry,pH=pH),CH4flux_ax=axs[0,nn],gdrywt=True,
+                    BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={'color':c,'ls':ls},CO2flux_args={'color':c,'ls':ls})
+            axs[1,nn].plot(results_periodic_noinhib['time'][:-1],(results_periodic_noinhib.sel(ndryperiods=ndry,pH=pH)['Total Fe++'].diff(dim='time')*24*1e3*porosity+results_periodic_noinhib.sel(ndryperiods=ndry,pH=pH)['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Organic',False],ls,c=c,label=str(ndry))
+
+            axs[2,nn].plot(results_periodic_noinhib['time'],results_periodic_noinhib.sel(ndryperiods=ndry,pH=pH)['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c=c)
+            axs[3,nn].plot(results_periodic_noinhib['time'],-log10(results_periodic_noinhib.sel(ndryperiods=ndry,pH=pH)['Free H+']),ls,c=c)
+            axs[4,nn].plot(results_periodic_noinhib['time'],results_periodic_noinhib['Total Acetate-'].sel(ndryperiods=ndry,pH=pH)*1e3,c=c,ls=ls)
+            # axs[1,nn].plot(results_periodic_noinhib['time'][:-1],diff(results_periodic_noinhib['Total Tracer'].sel(ndryperiods=ndry,pH=pH)*results_periodic_noinhib['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic_noinhib['time'])*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c='b')
+            CO2flux=diff(results_periodic_noinhib['Total Tracer'].sel(ndryperiods=ndry,pH=pH)*results_periodic_noinhib['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic_noinhib['time'])*1e3/arctic.BD_layerest2_trough['Organic',False]
+            CH4flux=diff(results_periodic_noinhib['Total CH4(aq)'].sel(ndryperiods=ndry,pH=pH)*results_periodic_noinhib['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic_noinhib['time'])*1e3/arctic.BD_layerest2_trough['Organic',False]
+            axs[1,nn].plot(results_periodic_noinhib['time'][:-1],CO2flux/CH4flux,ls=ls,c=c)
+
 
         axs[0,0].legend(labels=results_periodic['pH'][:3].values,title='Initial pH')
         axs[0,nn].set_xlim(0,arctic.simlength)
-        axs[1,nn].set_xlim(0,arctic.simlength)
-        axs[1,nn].set_title('CO$_2$:CH$_4$ flux ratio')
-        axs[1,nn].set_ylabel('CO$_2$:CH$_4$ ratio')
-        axs[1,nn].set_ylim(-2,300)
-        axs[1,nn].set_xlabel('Time (days)')
+        # axs[1,nn].set_xlim(0,arctic.simlength)
+        # axs[1,nn].set_title('CO$_2$:CH$_4$ flux ratio')
+        # axs[1,nn].set_ylabel('CO$_2$:CH$_4$ ratio')
+        # axs[1,nn].set_ylim(-2,300)
+        # axs[1,nn].set_xlabel('Time (days)')
         axs[0,nn].set_title('CH$_4$ flux rate')
 
-        axs[2,nn].set_ylim(bottom=0)
+        axs[1,nn].set_ylim(bottom=0)
+        axs[1,nn].set_xlabel('Time (days)')
+        axs[1,nn].set_ylabel('Fe(II) production rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
+        axs[1,nn].set_title('Fe(II) production rate')
+
         axs[2,nn].set_xlabel('Time (days)')
-        axs[2,nn].set_ylabel('Fe(II) production rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
-        axs[2,nn].set_title('Fe(II) production rate')
+        axs[2,nn].set_ylabel('Fe oxides \n(mmol g dwt$^{-1}$)')
+        axs[2,nn].set_title('Fe oxide minerals ')
 
         axs[3,nn].set_xlabel('Time (days)')
-        axs[3,nn].set_ylabel('Fe oxides \n(mmol g dwt$^{-1}$)')
-        axs[3,nn].set_title('Fe oxide minerals ')
+        axs[3,nn].set_ylabel('pH')
+        axs[3,nn].set_title('pH')
 
+        axs[4,nn].set_ylim(bottom=1e-5)
         axs[4,nn].set_xlabel('Time (days)')
-        axs[4,nn].set_ylabel('pH')
-        axs[4,nn].set_title('pH')
+        axs[4,nn].set_ylabel('Concentration (mM)')
+        axs[4,nn].set_title('Acetate concentration')
 
-        axs[5,nn].set_ylim(bottom=1e-5)
-        axs[5,nn].set_xlabel('Time (days)')
-        axs[5,nn].set_ylabel('Concentration (mM)')
-        axs[5,nn].set_title('Acetate concentration')
-
-        for x in range(6):
-            for num in range(ndry):
-                axs[x,nn].axvspan(arctic.simlength*arctic.oxicfrac/ndry+num*arctic.simlength/ndry,(num+1)*arctic.simlength/ndry,color='b',alpha=0.1,zorder=-1)
+        for x in range(5):
+            # for num in range(ndry):
+                # axs[x,nn].axvspan(arctic.simlength*arctic.oxicfrac/ndry+num*arctic.simlength/ndry,(num+1)*arctic.simlength/ndry,color='b',alpha=0.1,zorder=-1)
+            axs[x,nn].pcolormesh(results_periodic['time'],axs[x,nn].get_ylim(),results_periodic.sel(ndryperiods=ndry,pH=pH)['Total O2(aq)'].to_masked_array()[:-1,None].T,cmap=cmap_O2,zorder=-1,shading='flat',alpha=0.15)
             axs[x,nn].set_xlim(0,arctic.simlength)
             axs[x,nn].set_title('('+ascii_lowercase[x*len(ndry_plotted)+nn]+')',loc='left')
 
 
-    fig,axs=subplots(ncols=len(ndry_plotted),nrows=6,num='Periodic comparison mineral',clear=True,figsize=(8,12),squeeze=False)
+    fig,axs=subplots(ncols=len(ndry_plotted),nrows=5,num='Periodic comparison mineral',clear=True,figsize=(6,8.5),squeeze=False)
 
     from string import ascii_lowercase
     for nn,ndry in enumerate(ndry_plotted):
         c='k'
         for nnn,pH in enumerate(results_periodic_mineral['pH'][:3]):
             ls=[':','-','--'][nnn]
+            c='k'
             plot_result(results_periodic_mineral.sel(ndryperiods=ndry,pH=pH),CH4flux_ax=axs[0,nn],gdrywt=True,
                     BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={'color':c,'ls':ls},CO2flux_args={'color':c,'ls':ls})
-            axs[2,nn].plot(results_periodic_mineral['time'][:-1],(results_periodic_mineral.sel(ndryperiods=ndry,pH=pH)['Total Fe++'].diff(dim='time')*24*1e3*porosity+results_periodic_mineral.sel(ndryperiods=ndry,pH=pH)['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Organic',False],ls,c=c,label=str(ndry))
+            axs[1,nn].plot(results_periodic_mineral['time'][:-1],(results_periodic_mineral.sel(ndryperiods=ndry,pH=pH)['Total Fe++'].diff(dim='time')*24*1e3*porosity+results_periodic_mineral.sel(ndryperiods=ndry,pH=pH)['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Organic',False],ls,c=c,label=str(ndry))
 
-            axs[3,nn].plot(results_periodic_mineral['time'],results_periodic_mineral.sel(ndryperiods=ndry,pH=pH)['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c=c)
-            axs[4,nn].plot(results_periodic_mineral['time'],-log10(results_periodic_mineral.sel(ndryperiods=ndry,pH=pH)['Free H+']),ls,c=c)
-            axs[5,nn].plot(results_periodic_mineral['time'],results_periodic_mineral['Total Acetate-'].sel(ndryperiods=ndry,pH=pH)*1e3,c=c,ls=ls)
+            axs[2,nn].plot(results_periodic_mineral['time'],results_periodic_mineral.sel(ndryperiods=ndry,pH=pH)['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c=c)
+            axs[3,nn].plot(results_periodic_mineral['time'],-log10(results_periodic_mineral.sel(ndryperiods=ndry,pH=pH)['Free H+']),ls,c=c)
+            axs[4,nn].plot(results_periodic_mineral['time'],results_periodic_mineral['Total Acetate-'].sel(ndryperiods=ndry,pH=pH)*1e3,c=c,ls=ls)
             # axs[1,nn].plot(results_periodic_mineral['time'][:-1],diff(results_periodic_mineral['Total Tracer'].sel(ndryperiods=ndry,pH=pH)*results_periodic_mineral['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic_mineral['time'])*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c='b')
             CO2flux=diff(results_periodic_mineral['Total Tracer'].sel(ndryperiods=ndry,pH=pH)*results_periodic_mineral['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic_mineral['time'])*1e3/arctic.BD_layerest2_trough['Organic',False]
             CH4flux=diff(results_periodic_mineral['Total CH4(aq)'].sel(ndryperiods=ndry,pH=pH)*results_periodic_mineral['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic_mineral['time'])*1e3/arctic.BD_layerest2_trough['Organic',False]
-            axs[1,nn].plot(results_periodic_mineral['time'][:-1],CO2flux/CH4flux,ls=ls,c=c)
+            # axs[1,nn].plot(results_periodic_mineral['time'][:-1],CO2flux/CH4flux,ls=ls,c=c)
+
+            c='b'
+            plot_result(results_periodic_noinhib_mineral.sel(ndryperiods=ndry,pH=pH),CH4flux_ax=axs[0,nn],gdrywt=True,
+                    BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={'color':c,'ls':ls},CO2flux_args={'color':c,'ls':ls})
+            axs[1,nn].plot(results_periodic_noinhib_mineral['time'][:-1],(results_periodic_noinhib_mineral.sel(ndryperiods=ndry,pH=pH)['Total Fe++'].diff(dim='time')*24*1e3*porosity+results_periodic_noinhib_mineral.sel(ndryperiods=ndry,pH=pH)['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Organic',False],ls,c=c,label=str(ndry))
+
+            axs[2,nn].plot(results_periodic_noinhib_mineral['time'],results_periodic_noinhib_mineral.sel(ndryperiods=ndry,pH=pH)['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c=c)
+            axs[3,nn].plot(results_periodic_noinhib_mineral['time'],-log10(results_periodic_noinhib_mineral.sel(ndryperiods=ndry,pH=pH)['Free H+']),ls,c=c)
+            axs[4,nn].plot(results_periodic_noinhib_mineral['time'],results_periodic_noinhib_mineral['Total Acetate-'].sel(ndryperiods=ndry,pH=pH)*1e3,c=c,ls=ls)
+            # axs[1,nn].plot(results_periodic_noinhib_mineral['time'][:-1],diff(results_periodic_noinhib_mineral['Total Tracer'].sel(ndryperiods=ndry,pH=pH)*results_periodic_noinhib_mineral['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic_noinhib_mineral['time'])*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c='b')
+            CO2flux=diff(results_periodic_noinhib_mineral['Total Tracer'].sel(ndryperiods=ndry,pH=pH)*results_periodic_noinhib_mineral['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic_noinhib_mineral['time'])*1e3/arctic.BD_layerest2_trough['Organic',False]
+            CH4flux=diff(results_periodic_noinhib_mineral['Total CH4(aq)'].sel(ndryperiods=ndry,pH=pH)*results_periodic_noinhib_mineral['Porosity'].sel(ndryperiods=ndry,pH=pH,time=0))/diff(results_periodic_noinhib_mineral['time'])*1e3/arctic.BD_layerest2_trough['Organic',False]
+            # axs[1,nn].plot(results_periodic_noinhib_mineral['time'][:-1],CO2flux/CH4flux,ls=ls,c=c)
+
 
         axs[0,0].legend(labels=results_periodic_mineral['pH'][:3].values,title='Initial pH')
         axs[0,nn].set_xlim(0,arctic.simlength)
-        axs[1,nn].set_xlim(0,arctic.simlength)
-        axs[1,nn].set_title('CO$_2$:CH$_4$ flux ratio')
-        axs[1,nn].set_ylabel('CO$_2$:CH$_4$ ratio')
-        axs[1,nn].set_ylim(-2,300)
-        axs[1,nn].set_xlabel('Time (days)')
+        # axs[1,nn].set_xlim(0,arctic.simlength)
+        # axs[1,nn].set_title('CO$_2$:CH$_4$ flux ratio')
+        # axs[1,nn].set_ylabel('CO$_2$:CH$_4$ ratio')
+        # axs[1,nn].set_ylim(-2,300)
+        # axs[1,nn].set_xlabel('Time (days)')
         axs[0,nn].set_title('CH$_4$ flux rate')
 
-        axs[2,nn].set_ylim(bottom=0)
+        axs[1,nn].set_ylim(bottom=0)
+        axs[1,nn].set_xlabel('Time (days)')
+        axs[1,nn].set_ylabel('Fe(II) production rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
+        axs[1,nn].set_title('Fe(II) production rate')
+
         axs[2,nn].set_xlabel('Time (days)')
-        axs[2,nn].set_ylabel('Fe(II) production rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
-        axs[2,nn].set_title('Fe(II) production rate')
+        axs[2,nn].set_ylabel('Fe oxides \n(mmol g dwt$^{-1}$)')
+        axs[2,nn].set_title('Fe oxide minerals ')
 
         axs[3,nn].set_xlabel('Time (days)')
-        axs[3,nn].set_ylabel('Fe oxides \n(mmol g dwt$^{-1}$)')
-        axs[3,nn].set_title('Fe oxide minerals ')
+        axs[3,nn].set_ylabel('pH')
+        axs[3,nn].set_title('pH')
 
+        axs[4,nn].set_ylim(bottom=1e-5)
         axs[4,nn].set_xlabel('Time (days)')
-        axs[4,nn].set_ylabel('pH')
-        axs[4,nn].set_title('pH')
+        axs[4,nn].set_ylabel('Concentration (mM)')
+        axs[4,nn].set_title('Acetate concentration')
 
-        axs[5,nn].set_ylim(bottom=1e-5)
-        axs[5,nn].set_xlabel('Time (days)')
-        axs[5,nn].set_ylabel('Concentration (mM)')
-        axs[5,nn].set_title('Acetate concentration')
-
-        for x in range(6):
-            for num in range(ndry):
-                axs[x,nn].axvspan(arctic.simlength*arctic.oxicfrac/ndry+num*arctic.simlength/ndry,(num+1)*arctic.simlength/ndry,color='b',alpha=0.1,zorder=-1)
+        for x in range(5):
+            # for num in range(ndry):
+                # axs[x,nn].axvspan(arctic.simlength*arctic.oxicfrac/ndry+num*arctic.simlength/ndry,(num+1)*arctic.simlength/ndry,color='b',alpha=0.1,zorder=-1)
+            axs[x,nn].pcolormesh(results_periodic['time'],axs[x,nn].get_ylim(),results_periodic.sel(ndryperiods=ndry,pH=pH)['Total O2(aq)'].to_masked_array()[:-1,None].T,cmap=cmap_O2,zorder=-1,shading='flat',alpha=0.15)
             axs[x,nn].set_xlim(0,arctic.simlength)
             axs[x,nn].set_title('('+ascii_lowercase[x*len(ndry_plotted)+nn]+')',loc='left')
 

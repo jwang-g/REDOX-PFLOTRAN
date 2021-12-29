@@ -230,6 +230,8 @@ class PF_network_writer(PF_writer):
                     continue
                 if 'CN' in sandbox_reacts.nodes[pool]:
                     self.add_line(pool.ljust(20)+'{CN:1.{prec}f}'.format(CN=sandbox_reacts.nodes[pool]['CN'],prec=self.precision))
+                elif pool.endswith('C') and pool[:-1]+'N' in self.network.nodes:
+                    self.add_line(pool[:-1].ljust(20)+'# Variable C:N pool')
                 else:
                     self.add_line(pool.ljust(20)+'# Variable C:N pool')
             self.decrease_level()
@@ -495,11 +497,11 @@ class PF_network_writer(PF_writer):
         
         
     def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.pft',print_output=False,length_days=None,
-                        log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',CO2name='HCO3-'):
+                        log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',CO2name='HCO3-',**kwargs):
         inputdeck=simulation_name+'_generated.in'
         print('Setting up input deck in %s'%inputdeck)
         self.write_into_input_deck(template_file,inputdeck,length_days=length_days,
-                                    log_formulation=log_formulation,database=database,truncate_concentration=truncate_concentration,CO2name=CO2name)
+                                    log_formulation=log_formulation,database=database,truncate_concentration=truncate_concentration,CO2name=CO2name,**kwargs)
         import subprocess
         cmd='{pflotran_exe:s} -pflotranin {simname:s}_generated.in'.format(pflotran_exe=pflotran_exe,simname=simulation_name)
         print('Running cmd: %s'%cmd)
@@ -695,18 +697,22 @@ class decomp_network(nx.MultiDiGraph):
         for upstream_pool in reactant_pools.keys():
             assert upstream_pool in self.nodes,'Pool %s must be added before reaction is added'%upstream_pool
             for downstream_pool in product_pools.keys():
-                assert downstream_pool in self.nodes,'Pool %s must be added before reaction is added'%downstream_pool
+                assert downstream_pool in self.nodes or downstream_pool+'C' in self.nodes,'Pool %s must be added before reaction is added'%downstream_pool
                 monod_terms=reaction_data.pop('monod_terms',[])
                 inhibition_terms=reaction_data.pop('inhibition_terms',[])
-                k=self.add_edge(upstream_pool,downstream_pool,name=reaction_data['name'],reaction=reaction)
+                if downstream_pool not in self.nodes:
+                    Dadd='C'
+                else:
+                    Dadd=''
+                k=self.add_edge(upstream_pool,downstream_pool+Dadd,name=reaction_data['name'],reaction=reaction)
                 for term in monod_terms:
                     for reqitem in ['species','k']:
                         assert reqitem in term.keys(),'Monod terms must include "%s"'%reqitem
-                self.edges[(upstream_pool,downstream_pool,k)]['monod_terms']=monod_terms
+                self.edges[(upstream_pool,downstream_pool+Dadd,k)]['monod_terms']=monod_terms
                 for term in inhibition_terms:
                     for reqitem in ['species','k','type']:
                         assert reqitem in term.keys(),'Inhibition terms must include "%s"'%reqitem
-                self.edges[(upstream_pool,downstream_pool,k)]['inhibition_terms']=inhibition_terms
+                self.edges[(upstream_pool,downstream_pool+Dadd,k)]['inhibition_terms']=inhibition_terms
             
         return
         

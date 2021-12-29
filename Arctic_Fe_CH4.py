@@ -84,17 +84,23 @@ anox_inhib_conc = 1e-5
 
 truncate_conc=1e-15
 
-def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
+def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc,Fe_inhibit_CH4=True,rate_scale=1e-8):
+
+    # Turn off inhibition of methanogenesis by Fe+++ by setting inhibition constant very high
+    if Fe_inhibit_CH4:
+        Fe_CH4_inhib=1.0
+    else:
+        Fe_CH4_inhib=1e10
 
     reactions = [
-    decomp_network.reaction(name='Aerobic decomposition',reactant_pools={'cellulose':1.0},product_pools={'HCO3-':1.0},reactiontype='SOMDECOMP',
-                                            rate_constant=1e-1,rate_units='y', 
-                                            # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='THRESHOLD 1.0d20')]),
-                                        monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=1.1e-9)]),
+    # decomp_network.reaction(name='Aerobic decomposition',reactant_pools={'cellulose':1.0},product_pools={'HCO3-':1.0},reactiontype='SOMDECOMP',
+    #                                         rate_constant=0.0,rate_units='1/d',turnover_name='RATE_DECOMPOSITION', 
+    #                                         # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='THRESHOLD 1.0d20')]),
+    #                                     monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=1.1e-9)]),
     
     # From Dave Graham: SOM-C + H2O -> DOM-C
     decomp_network.reaction(name='Hydrolysis',stoich='1.0 cellulose -> 1.0 DOM1',reactiontype='SOMDECOMP',
-                                            rate_constant=1e-1,rate_units='y', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
+                                            rate_constant=rate_scale,rate_units='y', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                         inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=conc_scales['DOM1']),
                                                           # decomp_network.inhibition(species='O2(aq)',k=6.25e-11,type='THRESHOLD -1.0d10')
                                                         #   decomp_network.inhibition(species='O2(aq)',type='MONOD',k=1e-11),
@@ -105,7 +111,7 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
     # Dave Graham: DOM-C + 0.67 H2O -> 0.33 CH3COO- + 0.33 HCO3- + 0.67 H+ + 0.67 H2
     # Should it be inhibited by H2?
     decomp_network.reaction(name='fermentation',reactant_pools={'DOM1':1/6,'H2O':2/3},product_pools={'Acetate-':1/3,'HCO3-':1/3,'H+':2/3,'H2(aq)':2/3,'Tracer':1/3}, # balancing pH of FeIII release requires an extra 5.5 H+ to be released here
-                                            rate_constant=1e-10,reactiontype='MICROBIAL', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
+                                            rate_constant=rate_scale*40,reactiontype='MICROBIAL', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                         inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=anox_inhib_conc,type='MONOD'),decomp_network.inhibition(species='Acetate-',k=conc_scales['Acetate-'],type='MONOD')],
                                         monod_terms=[decomp_network.monod(species='DOM1',k=conc_scales['DOM1'],threshold=1.1e-15)]),
 
@@ -113,13 +119,13 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
     # O2   + 4H+ + 4 e- -> 2H2O
     decomp_network.reaction(name='DOM aerobic respiration',stoich='1.0 DOM1 + 1.0 O2(aq) + 1.0 H2O -> 1.0 HCO3- + 1.0 H+ + 1.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=0.0),decomp_network.monod(species='DOM1',k=conc_scales['DOM1'],threshold=1.1e-16)],
-                                        rate_constant=1.0e-9,reactiontype='MICROBIAL'),
+                                        rate_constant=rate_scale*50,reactiontype='MICROBIAL'),
 
     # C2H3O2- + 2 H2O -> 2 CO2 + 7 H+ + 8 e-
     # 2 O2    + 8 H+ + 8 e- -> 4 H2O
     decomp_network.reaction(name='Acetate aerobic respiration',stoich='1.0 Acetate-  + 2.0 O2(aq)  -> 2.0 HCO3-  + 2.0 H+  + 2.0 Tracer ',
                                             monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=0.0),decomp_network.monod(species='Acetate-',k=conc_scales['Acetate-'],threshold=1.1e-16)],
-                                        rate_constant=1.0e-9,reactiontype='MICROBIAL'),
+                                        rate_constant=rate_scale*50,reactiontype='MICROBIAL'),
 
 
     # C2H3O2- + 2 H2O -> 2 CO2 + 7 H+ + 8 e-
@@ -127,16 +133,16 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
     decomp_network.reaction(name='Fe(III) reduction',stoich='1.0 Acetate- + 8.0 Fe+++ + 4.0 H2O -> 2.0 HCO3- + 8.0 Fe++ + 9.0 H+ + 2.0 Tracer',
                                             monod_terms=[decomp_network.monod(species='Acetate-',k=conc_scales['Acetate-'],threshold=1.1e-15),decomp_network.monod(species='Fe+++',k=conc_scales['Fe+++'],threshold=1.1e-15)],
                                             inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=anox_inhib_conc,type='MONOD')],
-                                            rate_constant=2e-10,reactiontype='MICROBIAL'),
+                                            rate_constant=rate_scale*3,reactiontype='MICROBIAL'),
                                             
     # Oxidation of Fe++
     # Currently assuming backward reaction rate is zero
     decomp_network.reaction(name='Fe(II) abiotic oxidation',stoich='1.0 Fe++ + 0.25 O2(aq) + 1.0 H+ <-> 1.0 Fe+++ + 0.5 H2O',
-                                            rate_constant=1e-2,backward_rate_constant=0.0,reactiontype='GENERAL'),
+                                            rate_constant=0.0,backward_rate_constant=0.0,reactiontype='GENERAL'),
                                             
     decomp_network.reaction(name='Fe(II) microbial oxidation',stoich='1.0 Fe++ + 0.25 O2(aq) + 1.0 H+ -> 1.0 Fe+++ + 0.5 H2O',
                                             monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=0.0),decomp_network.monod(species='Fe++',k=conc_scales['Fe++'],threshold=1.1e-15)],
-                                            rate_constant=1e-8,reactiontype='MICROBIAL'),
+                                            rate_constant=rate_scale*200,reactiontype='MICROBIAL'),
 
     # Acetoclastic methanogenesis
     # C2H3O2- + H+ -> CH4 + HCO3- + H+
@@ -147,28 +153,28 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
                                             monod_terms=[decomp_network.monod(species='Acetate-',k=conc_scales['Acetate-'],threshold=1.1e-15),
                                                          ],
                                             inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=anox_inhib_conc,type='MONOD'),
-                                                              decomp_network.inhibition(species='Fe+++',k=conc_scales['Fe+++'],type='MONOD'),
+                                                              decomp_network.inhibition(species='Fe+++',k=conc_scales['Fe+++']*Fe_CH4_inhib,type='MONOD'),
                                                               decomp_network.inhibition(species='H+',k=10**-5.54,type='MONOD'),
                                                               decomp_network.inhibition(species='H+',k=10**-5.54,type='INVERSE_MONOD')],
-                                            rate_constant=1e-10,reactiontype='MICROBIAL'),
+                                            rate_constant=rate_scale*2,reactiontype='MICROBIAL'),
 
     # Hydrogenotrophic methanogenesis
     decomp_network.reaction(name='Hydrogenotrophic methanogenesis',stoich='4.0 H2(aq) + 1.0 HCO3- + 1.0 H+ -> 1.0 CH4(aq) + 3.0 H2O',
                                         monod_terms=[decomp_network.monod(species='H2(aq)',k=conc_scales['H2(aq)'],threshold=1.1e-15),decomp_network.monod(species='HCO3-',k=conc_scales['HCO3-'],threshold=1.1e-15)],
                                         # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD'),decomp_network.inhibition(species='Fe+++',k=conc_scales['Fe+++'],type='MONOD')],
                                         inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=anox_inhib_conc,type='MONOD'),
-                                        decomp_network.inhibition(species='Fe+++',k=conc_scales['Fe+++'],type='MONOD'),
+                                        decomp_network.inhibition(species='Fe+++',k=conc_scales['Fe+++']*Fe_CH4_inhib,type='MONOD'),
                                         decomp_network.inhibition(species='H+',k=10**-6.75,type='MONOD'),
                                         # decomp_network.inhibition(species='NO3-',k=conc_scales['NO3-'],type='MONOD'),
                                         # decomp_network.inhibition(species='SO4--',k=conc_scales['SO4--'],type='MONOD')
                                         ],
-                                        rate_constant=1e-10,reactiontype='MICROBIAL'),
+                                        rate_constant=rate_scale*3*0.32,reactiontype='MICROBIAL'),
     
     # H2 oxidation if oxygen available
     decomp_network.reaction(name='Hydrogen oxidation',stoich='2.0 H2(aq) + 1.0 O2(aq) -> 2.0 H2O',
                                         monod_terms=[decomp_network.monod(species='H2(aq)',k=conc_scales['H2(aq)'],threshold=1.1e-15),
                                                      decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=0.0)],
-                                        rate_constant=1e-8,reactiontype='MICROBIAL'),
+                                        rate_constant=rate_scale*200,reactiontype='MICROBIAL'),
     
     # Cation exchange
     decomp_network.ion_exchange(name='Cation exchange',cations={'Fe++':0.1,'Fe+++':0.3,'Mg++':1.1,'Ca++':4.1,'Na+':1.0,'K+':0.9,'H+':1.1},CEC=2000.0,mineral=None)
@@ -176,25 +182,6 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc):
     ]
     return reactions
 
-reactions=make_reactions()
-rate_scale=1e-8
-rateconstants_named={
-       'Fe(II) abiotic oxidation'              : 0.0,
-       'Fe(II) microbial oxidation'            : rate_scale*200,
-       'Hydrogen oxidation'                    : rate_scale*200,
-       'fermentation'                          : rate_scale*40,
-       "DOM aerobic respiration"               : rate_scale*50,
-       "Acetate aerobic respiration"           : rate_scale*50,
-       "Fe(III) reduction"                     : rate_scale*3,
-       "Acetaclastic methanogenesis"           : rate_scale*2, 
-       "Hydrogenotrophic methanogenesis"       : rate_scale*3*0.32, # Scaling factor between acetaclastic and hydrogenotrophic from optimization of Kotsyurbenko et al data 
-       "Aerobic decomposition"                 : rate_scale*10.0*0, #1.0/(365*24*3600)*1.0
-       "Hydrolysis"                            : rate_scale*1.0 #1.0/(365*24*3600)*1.0
-}
-
-rateconstants=run_alquimia.convert_rateconstants(rateconstants_named,reactions=reactions)
-
-reaction_network =  decomp_network.decomp_network(pools=pools,reactions=reactions)
 
 # Incubation data
 import pandas,glob
@@ -383,10 +370,7 @@ if __name__ == '__main__':
     #             break
     #         x+=1
 
-
-    # Generate PFLOTRAN input file with correct reactions
-    decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt',deckname,log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25,database='/home/b0u/models/PFLOTRAN/REDOX-PFLOTRAN/hanford.dat')
-                
+        
     O2_const=numpy.zeros(365*24)+dq
     O2_initial=numpy.zeros(simlength*24)
     O2_initial[:int(simlength*24*initfrac)]=dq
@@ -403,30 +387,35 @@ if __name__ == '__main__':
     nperiods=[]
     pHsims=[]
     BDsims=[]
+    inhibs=[]
 
-    # For comparison with data
-    for sim in incubations:
-        for BD_method in ['Bockheim','porosity']:
-            simtypes.append(sim)
-            nperiods.append(None)
-            pHsims.append(None)
-            BDsims.append(BD_method)
+    for inhib in [True,False]:
+        # For comparison with data
+        for sim in incubations:
+            for BD_method in ['Bockheim','porosity']:
+                simtypes.append(sim)
+                nperiods.append(None)
+                pHsims.append(None)
+                BDsims.append(BD_method)
+                inhibs.append(inhib)
 
-    # Organic horizon oxic-anoxic
-    for ndryperiods in [1,2,3,4,5]:
-        for pH in [4.5,5.0,5.5,6.0]:
-            simtypes.append('organic_trough')
-            nperiods.append(ndryperiods)
-            pHsims.append(pH)
-            BDsims.append('Bockheim')
+        # Organic horizon oxic-anoxic
+        for ndryperiods in [1,2,3,4,5]:
+            for pH in [4.5,5.0,5.5,6.0]:
+                simtypes.append('organic_trough')
+                nperiods.append(ndryperiods)
+                pHsims.append(pH)
+                BDsims.append('Bockheim')
+                inhibs.append(inhib)
 
-    # Mineral horizon oxic-anoxic
-    for ndryperiods in [1,2,3,4,5]:
-        for pH in [4.5,5.0,5.5,6.0]:
-            simtypes.append('mineral_trough')
-            nperiods.append(ndryperiods)
-            pHsims.append(pH)
-            BDsims.append('Bockheim')
+        # Mineral horizon oxic-anoxic
+        for ndryperiods in [1,2,3,4,5]:
+            for pH in [4.5,5.0,5.5,6.0]:
+                simtypes.append('mineral_trough')
+                nperiods.append(ndryperiods)
+                pHsims.append(pH)
+                BDsims.append('Bockheim')
+                inhibs.append(inhib)
 
     sims_thisjob = list(range(jobnum,len(simtypes),totaljobs))
     print('Total number of sims: %d'%len(simtypes))
@@ -451,9 +440,14 @@ if __name__ == '__main__':
         run_name=simtypes[simnum]
         if nperiods[simnum] is not None:
             run_name = run_name + '_nperiods_%d'%nperiods[simnum]
-            O2_periodic=numpy.zeros(int(simlength/nperiods[simnum]*24))
-            O2_periodic[:int(simlength/nperiods[simnum]*24*oxicfrac)]=dq
-            diffquo={'O2(aq)':O2_periodic}
+
+            spinup_len=15
+            spinup=numpy.zeros(24*spinup_len)
+            # spinup[:5*24]=dq
+            O2_periodic=numpy.zeros(int((simlength-spinup_len)/nperiods[simnum]*24))
+            O2_periodic[:int((simlength-spinup_len)/nperiods[simnum]*24*oxicfrac)]=dq
+            O2_periodic=numpy.resize(O2_periodic,(simlength-spinup_len)*24)
+            diffquo={'O2(aq)':numpy.concatenate((spinup,O2_periodic))}
         else:
             run_name = run_name + '_BD_%s'%BD_method
             if simtypes[simnum].startswith('highO2'):
@@ -463,7 +457,34 @@ if __name__ == '__main__':
         if pHsims[simnum] is not None:
             initcond=decomp_network.change_constraint(initcond,'H+','%1.2f P'%pHsims[simnum])
             run_name = run_name + '_pH_%1.1f'%pHsims[simnum]
+        if inhibs[simnum] == False:
+            run_name = run_name + '_noFeCH4Inhibition'
+        
+        
+        # Generate PFLOTRAN input file with correct reactions
+        rate_scale=1e-8
+        reactions=make_reactions(Fe_inhibit_CH4=inhibs[simnum],rate_scale=rate_scale)
+        rateconstants_named={
+            'Fe(II) abiotic oxidation'              : 0.0,
+            'Fe(II) microbial oxidation'            : rate_scale*200,
+            'Hydrogen oxidation'                    : rate_scale*200,
+            'fermentation'                          : rate_scale*40,
+            "DOM aerobic respiration"               : rate_scale*50,
+            "Acetate aerobic respiration"           : rate_scale*50,
+            "Fe(III) reduction"                     : rate_scale*3,
+            "Acetaclastic methanogenesis"           : rate_scale*2, 
+            "Hydrogenotrophic methanogenesis"       : rate_scale*3*0.32, # Scaling factor between acetaclastic and hydrogenotrophic from optimization of Kotsyurbenko et al data 
+            # "Aerobic decomposition"                 : rate_scale*10.0*0, #1.0/(365*24*3600)*1.0
+            "Hydrolysis"                            : rate_scale*1.0 #1.0/(365*24*3600)*1.0
+        }
 
+        rateconstants=run_alquimia.convert_rateconstants(rateconstants_named,reactions=reactions)
+
+        reaction_network =  decomp_network.decomp_network(pools=pools,reactions=reactions)
+
+        decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt',deckname,log_formulation=True,CO2name='Tracer',truncate_concentration=1e-25,database='/home/b0u/models/PFLOTRAN/REDOX-PFLOTRAN/hanford.dat')
+            
+        
         result,units=run_alquimia.run_simulation(deckname,simlength,timestep,run_name=run_name,initcond=initcond,
                         hands_off=False,rateconstants=rateconstants,bc=pools_atmoO2_organic,
                         diffquo=diffquo,truncate_concentration=truncate_conc,CEC=CEC,porosity=porosity) 
