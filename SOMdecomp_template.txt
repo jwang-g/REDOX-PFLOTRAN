@@ -82,7 +82,7 @@ END
 #=========================== fluid properties =================================
 FLUID_PROPERTY
   PHASE LIQUID
-  DIFFUSION_COEFFICIENT 1.d-9
+  DIFFUSION_COEFFICIENT 0.d-9
 END
 
 FLUID_PROPERTY
