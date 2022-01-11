@@ -2,7 +2,7 @@
 
 # Install PFLOTRAN and build chemical reactions library
 # This is a fork of PFLOTRAN with some additional reactions and infrastructure for coupling with ELM
-git clone https://github.com/fmyuan/pflotran-elm-interface.git
+git clone https://github.com/bsulman/pflotran-elm-interface.git
 pushd pflotran-interface/src/pflotran
 git checkout pflotran-elm-interface
 export PETSC_DIR=/software/user_tools/current/cades-ccsi/petsc-x/openmpi-1.10-gcc-5.3
