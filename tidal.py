@@ -13,15 +13,15 @@ decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immo
 decomp_network.decomp_pool(name='DOM1',CN=50,constraints={'initial':1e-15},kind='primary'),
 # decomp_network.decomp_pool(name='DOM2',CN=50,constraints={'initial':1e-30},kind='primary'),
 decomp_network.decomp_pool(name='H+',kind='primary',constraints={'initial':'6.0 P'}),
-decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':1e-4}),
+decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':'0.2 G O2(g)'}),
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
 # decomp_network.decomp_pool(name='Mn+++',kind='primary',constraints={'initial':'1.0e-30 M Manganite'}),
 # decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}),
-decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'1e-9'}),
+decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'.37e-10 M Fe(OH)3'}),
 decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-15'}),
 decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-15}), # SOMDecomp sandbox requires this
-decomp_network.decomp_pool(name='NO3-',kind='primary',constraints={'initial':1e-7}), 
-decomp_network.decomp_pool(name='SO4--',kind='primary',constraints={'initial':1e-6}), 
+decomp_network.decomp_pool(name='NO3-',kind='primary',constraints={'initial':1e-5}), 
+decomp_network.decomp_pool(name='SO4--',kind='primary',constraints={'initial':1e-5}), 
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
 decomp_network.decomp_pool(name='CH4(aq)',kind='primary',constraints={'initial':1e-15}),
 decomp_network.decomp_pool(name='H2S(aq)',kind='secondary',constraints={'initial':1e-15}),
@@ -91,32 +91,31 @@ decomp_network.decomp_pool(name='H2O',kind='implicit'),
 
 
 conc_scales={
-    'DOM1':1e-2,
-    'Acetate-':1e-3,
-    'Fe+++':1e-8,
-    'NH4+':1e-5,
-    'HCO3-':1e-2,
-    'NO3-':1e-8,
+    'DOM1':1e-1,
+    'Acetate-':1e-1,
+    'Fe+++':1e-10,
+    'NH4+':1e-6,
+    'HCO3-':1e-6,
+    'NO3-':1e-6,
     'SO4--':1e-6,
-    'CH4(aq)':1e-5,
-    'H2(aq)':1e-5,
+    'CH4(aq)':1e-6,
+    'H2(aq)':1e-6,
     'O2(aq)':1e-4,
 }
 
-rate_scale=2e-10
-truncate_conc=1e-50
-thresh=truncate_conc*1.01
+rate_scale=10e-8
+truncate_conc=1e-30
+thresh=truncate_conc*0.0
 reactions = [
-    decomp_network.reaction(name='Aerobic decomposition',reactant_pools={'SOM':1.0},product_pools={'HCO3-':1.0},reactiontype='SOMDECOMP',
-                                            rate_constant=1e-6,rate_units='1/sec',turnover_name='RATE_CONSTANT', 
-                                            # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='THRESHOLD 1.0d20')]),
-                                        monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh)]),
+    # decomp_network.reaction(name='Aerobic decomposition',reactant_pools={'SOM':1.0},product_pools={'HCO3-':1.0},reactiontype='SOMDECOMP',
+    #                                         rate_constant=1e-8,rate_units='1/sec',turnover_name='RATE_CONSTANT', 
+    #                                         # inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=6.25e-8,type='THRESHOLD 1.0d20')]),
+    #                                     monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh)]),
                                         
                                         
     decomp_network.reaction(name='Hydrolysis',stoich='1.0 SOM -> 1.0 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
-                                            rate_constant=1e-7,rate_units='1/sec', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
+                                            rate_constant=rate_scale,rate_units='1/sec', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
                                         inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=conc_scales['DOM1']),
-                                                          decomp_network.inhibition(species='O2(aq)',k=6.25e-11,type='MONOD',threshold=thresh)#type='THRESHOLD -1.0d10')
                                                           # decomp_network.inhibition(species='O2(aq)',type='MONOD',k=1e-11),
                                                           ]),
     
@@ -377,7 +376,7 @@ simlength=30
 
 # Run using standard PFLOTRAN and generated input file
 precision=3
-result,units=decomp_network.PF_network_writer(reaction_network,precision=precision).run_simulation('SOMdecomp_template.txt','saline',pflotran_exe,print_output=False,length_days=simlength,truncate_concentration=truncate_conc,log_formulation=True)
+result,units=decomp_network.PF_network_writer(reaction_network,precision=precision).run_simulation('SOMdecomp_template.txt','saline',pflotran_exe,print_output=False,length_days=simlength,obs_time_hrs=1.0,truncate_concentration=truncate_conc,log_formulation=True)
 
 # Run using python interface to alquimia
 #rate_scale=0.0
@@ -396,8 +395,8 @@ rateconstants={
 'Sulfate reduction':rate_scale*0.3,
 'Methane oxidation (SO4)':rate_scale,
 'Acetoclastic methanogenesis':rate_scale*0.1,
-'Aerobic decomposition': 1e-6,
-'Hydrolysis':1e-7,
+# 'Aerobic decomposition': 1e-6,
+'Hydrolysis':rate_scale,
 }
 
 rateconstants_stoich=run_alquimia.convert_rateconstants(rateconstants,reactions,precision=precision)
@@ -426,7 +425,7 @@ for p in networkfig.axes[0].patches:
     if (ex.max[0]<155 or ex.max[0]>188) and ex.min[1]>300:
         p.set_connectionstyle('arc3,rad=-0.1')
 
-resultsfig,axs=pyplot.subplots(num='Results',clear=True,squeeze=False,nrows=2)
+resultsfig,axs=pyplot.subplots(num='Results',clear=True,squeeze=False,nrows=3)
 # plot_result(result,porewater_ax=axs[1,0],SOM_ax=axs[0,0],do_legend=True)
 # axs[1,0].set_ylim(bottom=1e-13)
 # axs[0,0].legend(fontsize='medium',ncol=2)
@@ -450,16 +449,35 @@ axs[0,0].set_ylabel('Relative concentration',fontsize='medium')
 axs[0,0].set_title('Simulated terminal electron acceptors',fontsize='large')
 axs[0,0].legend(fontsize='medium',ncol=2)
 
-axs[1,0].plot(t,(result_alquimia['Total O2(aq)']/result_alquimia['Total O2(aq)'].iloc[0]).values-(result['Total O2(aq)']/result['Total O2(aq)'].iloc[0]).values,label='O$_2$')
-axs[1,0].plot(t,(result_alquimia['Total NO3-']/(result_alquimia['Total NO3-']+result_alquimia['Total N2(aq)'])).values-(result['Total NO3-']/(result['Total NO3-']+result['Total N2(aq)'])).values,label='NO$_3^-$')
-axs[1,0].plot(t,(result_alquimia['Total Fe+++']/(result_alquimia['Total Fe+++']+result_alquimia['Total Fe++'])).values-(result['Total Fe+++']/(result['Total Fe+++']+result['Total Fe++'])).values,label='Fe(III)')
-axs[1,0].plot(t,(result_alquimia['Total SO4--']/(result_alquimia['Total SO4--']+result_alquimia['Total HS-'])).values-(result['Total SO4--']/(result['Total SO4--']+result['Total HS-'])).values,label='SO$_4^{--}$')
-axs[1,0].plot(t,(result_alquimia['Total CH4(aq)']/result_alquimia['Total CH4(aq)'].iloc[-1]).values-(result['Total CH4(aq)']/result['Total CH4(aq)'].iloc[-1]).values,label='CH$_4$')
+axs[1,0].plot(t,(result_alquimia['Total O2(aq)']).values-(result['Total O2(aq)']).values,label='O$_2$')
+axs[1,0].plot(t,(result_alquimia['Total NO3-']).values-(result['Total NO3-']).values,label='NO$_3^-$')
+axs[1,0].plot(t,(result_alquimia['Total Fe+++']).values-(result['Total Fe+++']).values,label='Fe(III)')
+axs[1,0].plot(t,(result_alquimia['Total SO4--']).values-(result['Total SO4--']).values,label='SO$_4^{--}$')
+axs[1,0].plot(t,(result_alquimia['Total CH4(aq)']).values-(result['Total CH4(aq)']).values,label='CH$_4$')
 
 
 axs[1,0].set_xlabel('Time (days)',fontsize='medium')
-axs[1,0].set_ylabel('Relative concentration',fontsize='medium')
-axs[1,0].set_title('Simulated terminal electron acceptors',fontsize='large')
+axs[1,0].set_ylabel('Concentration (M)',fontsize='medium')
+axs[1,0].set_title('Alquimia minus PFLOTRAN',fontsize='large')
 # axs[1,0].legend(fontsize='medium',ncol=2)
+
+axs[2,0].plot(t,result['Total O2(aq)'],label='O$_2$')
+axs[2,0].plot(t,result['Total NO3-'],label='NO$_3^-$')
+axs[2,0].plot(t,result['Total Fe+++'],label='Fe(III)')
+axs[2,0].plot(t,result['Total SO4--'],label='SO$_4^{--}$')
+axs[2,0].plot(t,result['Total CH4(aq)'],label='CH$_4$')
+
+
+axs[2,0].plot(t_alquimia,result_alquimia['Total O2(aq)'],ls='--',c='C0')
+axs[2,0].plot(t_alquimia,result_alquimia['Total NO3-'],ls='--',c='C1')
+axs[2,0].plot(t_alquimia,result_alquimia['Total Fe+++'],ls='--',c='C2')
+axs[2,0].plot(t_alquimia,result_alquimia['Total SO4--'],ls='--',c='C3')
+axs[2,0].plot(t_alquimia,result_alquimia['Total CH4(aq)'],'--',c='C4')
+
+axs[2,0].set_yscale('log')
+axs[2,0].legend()
+axs[2,0].set_xlabel('Time (days)',fontsize='medium')
+axs[2,0].set_ylabel('Concentration (M)',fontsize='medium')
+axs[2,0].set_title('Simulated terminal electron acceptors',fontsize='large')
 
 pyplot.show()

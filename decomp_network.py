@@ -271,7 +271,7 @@ class PF_network_writer(PF_writer):
 
 
     def write_into_input_deck(self,templatefile_name,outputfile_name,
-            indent_spaces=2,length_days=None,log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',chem_args={},verbose=True,**kwargs):
+            indent_spaces=2,length_days=None,obs_time_hrs=None,log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',chem_args={},verbose=True,**kwargs):
         base_indent=0
         with open(templatefile_name,'r') as templatefile:
             template_lines=templatefile.readlines()
@@ -481,6 +481,8 @@ class PF_network_writer(PF_writer):
                 
             elif 'FINAL_TIME' in line and length_days is not None:
                 self.add_line( 'FINAL_TIME {ndays:1.{prec}e} d\n'.format(ndays=length_days,prec=self.precision))
+            elif 'PERIODIC_OBSERVATION TIME' in line and obs_time_hrs is not None:
+                self.add_line('PERIODIC_OBSERVATION TIME %1.1d h'%obs_time_hrs)
             elif len(line.strip())>0 and line.strip().split()[0]=='OUTPUT':
                 self.output = self.output + line
                 if not verbose:
@@ -496,11 +498,11 @@ class PF_network_writer(PF_writer):
 
         
         
-    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.pft',print_output=False,length_days=None,
+    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.pft',print_output=False,length_days=None,obs_time_hrs=None,
                         log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',CO2name='HCO3-',**kwargs):
         inputdeck=simulation_name+'_generated.in'
         print('Setting up input deck in %s'%inputdeck)
-        self.write_into_input_deck(template_file,inputdeck,length_days=length_days,
+        self.write_into_input_deck(template_file,inputdeck,length_days=length_days,obs_time_hrs=obs_time_hrs,
                                     log_formulation=log_formulation,database=database,truncate_concentration=truncate_concentration,CO2name=CO2name,**kwargs)
         import subprocess
         cmd='{pflotran_exe:s} -pflotranin {simname:s}_generated.in'.format(pflotran_exe=pflotran_exe,simname=simulation_name)
