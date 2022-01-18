@@ -23,7 +23,7 @@ inds=VWC.isel(levgrnd=6).load().argsort()
 snapshots=[inds[len(inds)//10].item(),inds[len(inds)//10*9].item(),inds[len(inds)//5].item()]
 snapshot_styles=['--',':','-']
 
-f,a=plt.subplots(num=1,clear=True,nrows=4,ncols=2,gridspec_kw={'width_ratios':[1,0.5]},figsize=(6,8))
+f,a=plt.subplots(num='Water, oxygen, and carbon',clear=True,nrows=4,ncols=2,gridspec_kw={'width_ratios':[1,0.5]},figsize=(6,8))
 
 VWC.plot(ax=a[0,0],vmax=1,cbar_kwargs={'label':'Volumetric water\n(fraction of saturation)'})
 watervol=(porosity).to_masked_array()
@@ -100,7 +100,7 @@ if 'SIC_vr' in data:
     (calcite*dz[:,None]).sum(dim='levdcmp').plot(ax=a['C'])
     a['C'].set(title='Column total soil inorganic C',xlabel='Time (year)',ylabel='Total soil inorganic C (g C/m$^2$)',xlim=a['A'].get_xlim())
 
-f,a=plt.subplots(num='SOM time series',clear=True,nrows=2)
+f,a=plt.subplots(num='Carbon time series',clear=True,nrows=2)
 data['TOTSOMC'].plot(ax=a[0],label='Total SOM C')
 data['TOTLITC'].plot(ax=a[0],label='Total litter C')
 data['TOTVEGC'].plot(ax=a[0],label='Total vegetation C')
