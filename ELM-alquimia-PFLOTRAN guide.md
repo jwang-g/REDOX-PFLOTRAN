@@ -71,7 +71,7 @@ You can of course organize these codes however you want, as long as you make sur
         python network_for_ELM.py
 
     This command generates four PFLOTRAN input decks:
-    * `CTC_alquimia_forELM.in`: Approximate recreation of normal ELM pools without additional chemistry
+    * `CTC_alquimia_forELM.in`: Approximate recreation of normal ELM soil organic matter and inorganic N pools in PFLOTRAN without additional chemistry
     * `CTC_alquimia_forELM_adspinup.in`: Normal ELM pools with rate constants set for accelerated decomposition spinup
     * `CTC_alquimia_forELM_O2consuming.in`: ELM pools with oxygen consumption, dissolved CO2, DOM, and Fe cycling
     * `CTC_alquimia_forELM_O2consuming_adspinup.in`: ELM pools with oxygen consumption, dissolved CO2, DOM, and Fe cycling with modified rate constants for accelerated decomposition spinup
@@ -89,11 +89,11 @@ You can of course organize these codes however you want, as long as you make sur
     
     Notes:
     * `--cn_only`: PFLOTRAN setup does not yet support P cycling so we run with only C and N
-    * `--alquimia`: This flag turns on alquimia compilation in OLMT and is followed by the input deck that PFLOTRAN should use. In this case, the one for the expanded decomposition network that we just generated. You can run the other reaction network produced by `network_for_ELM.py` by switching this flag to the other input deck that was generated.
-    * `--alquimia_ad`: The path after this specifies the input deck to use for accelerated decomposition spinup. If not specified, it uses the same deck for both. This is necessary because the ELM connection is coded to use the rate constants from the input deck and cannot change them for different spinup stages.
-    * `--trans_varlist`: Turns out specific outputs for the transient (historical) simulation. New variables specific to alquimia include DOC, dissolved Fe(II), dissolved O2, pH, and the actual time stepping length that alquimia uses (`chem_dt`) after using variable time stepping to ensure a valid chemistry solution. Shorter `chem_dt` due to chemistry nonconvergence is the main reason the simulation might run significantly more slowly.
+    * `--alquimia`: This flag turns on alquimia compilation in OLMT and is followed by the path to the input deck that PFLOTRAN should use. In this case, the one for the expanded decomposition network that we just generated. You can run the other reaction network produced by `network_for_ELM.py` by switching this flag to the other input deck that was generated.
+    * `--alquimia_ad`: The path after this specifies the input deck to use for accelerated decomposition spinup. If not specified, it uses the same deck for both. This is necessary because the ELM-alquimia-PFLOTRAN connection uses the decomposition rate constants from the input deck and cannot automatically change them for different spinup stages.
+    * `--trans_varlist`: Turns on specific outputs for the transient (historical) simulation. New variables specific to alquimia include DOC, dissolved Fe(II), dissolved O2, pH, and the actual time stepping length that alquimia uses (`chem_dt`) after using variable time stepping to ensure a valid chemistry solution. Shorter `chem_dt` due to chemistry nonconvergence is the main reason the simulation might run significantly more slowly.
 
-4. Once simulation is finished, plot ten years of output (assuming an anaconda environement "myanaconda3" is set up following the REDOX-PFLOTRAN install instructions):
+4. Once simulation is finished, plot ten years of output (in this case, 1880-1889). Depends on an anaconda environment "myanaconda3" having been set up following the REDOX-PFLOTRAN installation instructions:
 
         cd $BASEDIR/REDOX-PFLOTRAN
         module load anaconda3
