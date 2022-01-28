@@ -2,7 +2,7 @@
 
 Benjamin Sulman
 
-_Updated 2022-01-18_
+_Updated 2022-01-28_
 
 ## Quick start guide:
 Set up a directory to store all this stuff:
@@ -24,13 +24,16 @@ You can of course organize these codes however you want, as long as you make sur
             cd OLMT
             git checkout bsulman/alquimia
 
+        Note: Your python installation will need to have the netCDF4 package installed to run OLMT. netCDF4 should be installed with the python version you get on cades (`module load python`) but if you are using an anaconda python environment you may need to install the netCDF4 package.
     
-    *	Clone/checkout correct ELM code (all one line):
+    *	Clone/checkout correct ELM code:
 
             cd $BASEDIR
-            git clone –-recursive -b bsulman/lnd/EMI_alquimia_hooks git@github.com:bsulman/E3SM.git
+            git clone -b bsulman/lnd/EMI_alquimia_hooks git@github.com:bsulman/E3SM.git
+            cd E3SM
+            git submodule update --init --recursive
 
-    *	To set up environment for ELM compilation, add the following to ~/.bashrc:
+    *	To set up environment for ELM compilation, add the following to ~/.bashrc (assuming PFLOTRAN is installed in $HOME/ELM-alquimia):
 
             # Modules on CADES
             module load PE-gnu/1.0
@@ -50,16 +53,13 @@ You can of course organize these codes however you want, as long as you make sur
             export PATH=$HDF5_PATH/bin:$PATH
             export LD_LIBRARY_PATH=$HDF5_PATH/lib:$LD_LIBRARY_PATH
             
-            # netcdf built with openmpi-1.10.2/gcc-5.3.0 and support of hdf5 (i.e. netcdf-4)
-            export NETCDF_PATH=$CCSI_USERTOOLS/netcdf4/4.4.0/openmpi-1.10-gcc-5.3
-            export PATH=$NETCDF_PATH/bin:$PATH
-            export LD_LIBRARY_PATH=$NETCDF_PATH/lib:$LD_LIBRARY_PATH
             
             module load mkl/2017
             BLASLAPACK_LIBDIR=/software/dev_tools/swtree/cs400_centos7.2_pe2016-08/mkl/2017/centos7.2_gnu5.3.0/lib
 
             # Make this your actual PFLOTRAN dir
-            export PFLOTRAN_DIR=$HOME/models/PFLOTRAN/pflotran-interface/src/pflotran
+            export PFLOTRAN_DIR=$HOME/ELM-alquimia/pflotran-interface/src/pflotran
+            export CLM_PFLOTRAN_SOURCE_DIR=$PFLOTRAN_DIR
 
             export PETSC_DIR=/software/user_tools/current/cades-ccsi/petsc-x
             export PETSC_ARCH=openmpi-1.10-gcc-5.3
