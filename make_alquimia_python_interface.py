@@ -6,9 +6,24 @@ alquimia_dir='alquimia/build/alquimia'
 alquimia_include='alquimia/build/include'
 pflotran_dir=os.environ['PFLOTRAN_DIR']
 # pflotran_dir='/Users/b0u/Documents/Models/PFLOTRAN/pflotran-interface/src/pflotran'
-petsc_lib=os.path.join(os.environ['PETSC_DIR'],os.environ['PETSC_ARCH'],'lib')
-petsc_archinclude=os.path.join(os.environ['PETSC_DIR'],os.environ['PETSC_ARCH'],'include')
-petsc_include=os.path.join(os.environ['PETSC_DIR'],'include')
+# Should set it up to check that these paths actually work
+petsc_paths=[
+  os.path.join(os.environ['PETSC_DIR'],os.environ['PETSC_ARCH']),
+  os.environ['PETSC_PATH'],
+  os.environ['PETSC_DIR'],
+  os.path.join(os.environ['PETSC_PATH'],os.environ['PETSC_ARCH']),
+]
+for pth in petsc_paths:
+  if os.path.exists(os.path.join(pth,'lib')):
+    petscpath=pth
+    print(f'Found petsc library in: {petscpath}')
+    break
+else:
+  raise RuntimeError('Failed to find PETSC in ',petsc_paths)
+
+petsc_lib=os.path.join(petscpath,'lib')
+petsc_archinclude=os.path.join(petscpath,'include')
+petsc_include=os.path.join(petscpath,'include')
 mpi_include=os.path.join(os.environ['OPENMPI_DIR'],'include')
 ffi_builder.set_source('_alquimia',
     r"""
