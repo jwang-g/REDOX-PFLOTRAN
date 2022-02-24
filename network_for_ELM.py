@@ -438,25 +438,25 @@ def test_solve(chem,data,status,dt=3600):
 
 if __name__=='__main__':
         # Write out input deck
-        decomp_network.PF_network_writer(decomp_network_ad,precision=8).write_into_input_deck('SOMdecomp_template.txt','CTC_alquimia_forELM_adspinup.in',
-                CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',
+        decomp_network.PF_network_writer(decomp_network_ad,precision=8).write_into_input_deck('SOMdecomp_template.txt','ELM_decks/CTC_alquimia_forELM_adspinup.in',
+                CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',database='hanford.dat',
                 chem_args={'MAX_RESIDUAL_TOLERANCE':.5e-13,'MAX_RELATIVE_CHANGE_TOLERANCE':1e-10}
                 )
 
-        decomp_network.PF_network_writer(decomp_network_notad,precision=8).write_into_input_deck('SOMdecomp_template.txt','CTC_alquimia_forELM.in',
-                CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',
+        decomp_network.PF_network_writer(decomp_network_notad,precision=8).write_into_input_deck('SOMdecomp_template.txt','ELM_decks/CTC_alquimia_forELM.in',
+                CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',database='hanford.dat',
                 chem_args={'MAX_RESIDUAL_TOLERANCE':.5e-13,'MAX_RELATIVE_CHANGE_TOLERANCE':1e-10}
                 )
 
 
         # Write out input deck
-        decomp_network.PF_network_writer(decomp_network_O2_ad,precision=8).write_into_input_deck('SOMdecomp_template.txt','CTC_alquimia_forELM_O2consuming_adspinup.in',
-                CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',
+        decomp_network.PF_network_writer(decomp_network_O2_ad,precision=8).write_into_input_deck('SOMdecomp_template.txt','ELM_decks/CTC_alquimia_forELM_O2consuming_adspinup.in',
+                CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',database='hanford.dat',
                 chem_args={'MAX_RESIDUAL_TOLERANCE':.5e-13,'MAX_RELATIVE_CHANGE_TOLERANCE':1e-10}
                 )
 
-        decomp_network.PF_network_writer(decomp_network_O2_notad,precision=8).write_into_input_deck('SOMdecomp_template.txt','CTC_alquimia_forELM_O2consuming.in',
-                CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',
+        decomp_network.PF_network_writer(decomp_network_O2_notad,precision=8).write_into_input_deck('SOMdecomp_template.txt','ELM_decks/CTC_alquimia_forELM_O2consuming.in',
+                CO2name='CO2(aq)',log_formulation=True,SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',database='hanford.dat',
                 chem_args={'MAX_RESIDUAL_TOLERANCE':.5e-13,'MAX_RELATIVE_CHANGE_TOLERANCE':1e-10}
                 )
 
@@ -464,12 +464,12 @@ if __name__=='__main__':
         if 'check_cons' in sys.argv:
                 from plot_pf_output import read_tecfile
                 import matplotlib.pyplot as plt
-                result,units=decomp_network.PF_network_writer(decomp_network_ad,precision=4).run_simulation('SOMdecomp_template.txt','CTC_alquimia_forELM_adspinup','../pflotran-interface/src/pflotran/pflotran',
+                result,units=decomp_network.PF_network_writer(decomp_network_ad,precision=4).run_simulation('SOMdecomp_template.txt','ELM_decks/CTC_alquimia_forELM_adspinup','../pflotran-interface/src/pflotran/pflotran',
                         print_output=False,length_days=20,log_formulation=True,CO2name='CO2(aq)',SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',
                         chem_args={'MAX_RESIDUAL_TOLERANCE':1e-15,'MAX_RELATIVE_CHANGE_TOLERANCE':1e-15})
                 d,u=read_tecfile('CTC_alquimia_forELM_adspinup_generated-mas.dat')
 
-                result2,units=decomp_network.PF_network_writer(decomp_network_O2_ad,precision=4).run_simulation('SOMdecomp_template.txt','CTC_alquimia_forELM_O2consuming_adspinup','../pflotran-interface/src/pflotran/pflotran',
+                result2,units=decomp_network.PF_network_writer(decomp_network_O2_ad,precision=4).run_simulation('SOMdecomp_template.txt','ELM_decks/CTC_alquimia_forELM_O2consuming_adspinup','../pflotran-interface/src/pflotran/pflotran',
                         print_output=False,length_days=20,log_formulation=True,CO2name='CO2(aq)',SOMdecomp_Q10=1.5,moisturefunc='LOGTHETA',
                         chem_args={'MAX_RESIDUAL_TOLERANCE':1e-15,'MAX_RELATIVE_CHANGE_TOLERANCE':1e-15})
                 d2,u2=read_tecfile('CTC_alquimia_forELM_O2consuming_adspinup_generated-mas.dat')
@@ -536,13 +536,16 @@ if __name__=='__main__':
                      'CO2(aq)':'CO$_2$','CWD fragmentation':'CWD\nfragmentation','Plant NH4 uptake':'Plant NH$_4$\nuptake','Plant NO3 uptake':'Plant NO$_3$ uptake',
                      'DOM1 respiration':'DOM\nrespiration','Fe(II) microbial oxidation':'Fe(II)\noxidation'},connectionstyle='arc3, rad=0.2')
                 
-                decomp_network.draw_network_with_reactions(decomp_network_notad,ax=a[0],do_legend=False,**opts)
+                decomp_network.draw_network_with_reactions(decomp_network_notad,ax=a[0],do_legend=True,**opts)
                 decomp_network.draw_network_with_reactions(make_aqueous_network(Fe=False),do_legend=False,ax=a[1],**opts)
                 decomp_network.draw_network_with_reactions(decomp_network_O2_notad,ax=a[2],do_legend=False,**opts)
 
                 a[0].set(facecolor='#8a9ebf',title='ELM default')
+                a[0].set_title('(a)',loc='left')
                 a[1].set(facecolor='#8a9ebf',title='ELM pools with oxygen')
+                a[1].set_title('(b)',loc='left')
                 a[2].set(facecolor='#8a9ebf',title='ELM pools with oxygen and Fe reduction')
+                a[2].set_title('(c)',loc='left')
 
                 plt.show()
 
@@ -551,7 +554,7 @@ if __name__=='__main__':
                         state=load_state_from_logfile(sys.argv[sys.argv.index('test_solve')+1])
                 else:
                         state=''
-                mobile,aux,miner=test_solve(*str_to_alquimia('CTC_alquimia_forELM_O2consuming_adspinup.in',state),dt=3600*0.5**12)
+                mobile,aux,miner=test_solve(*str_to_alquimia('ELM_decks/CTC_alquimia_forELM_O2consuming_adspinup.in',state),dt=3600*0.5**12)
                 print(aux)
                 print(mobile)
                 print(miner)

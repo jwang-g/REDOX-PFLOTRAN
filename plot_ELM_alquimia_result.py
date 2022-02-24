@@ -61,7 +61,7 @@ FeOxide=data['soil_FeOxide'].T.squeeze()[:10,:]
 pH=data['soil_pH'].T.squeeze()[:10,:]
 
 f,a=plt.subplots(num='Fe',clear=True,nrows=3,ncols=2,gridspec_kw={'width_ratios':[1,0.5]},figsize=(6,8))
-Fe2.plot(ax=a[0,0],vmax=Fe2.load()[:9,:].quantile(0.95),cbar_kwargs={'label':'Fe(II) concentration (mol Fe/m$^3$)'})
+Fe2.plot(ax=a[0,0],vmax=Fe2.load()[:7,:].quantile(0.95),cbar_kwargs={'label':'Fe(II) concentration (mol Fe/m$^3$)'})
 # a[0,1].plot(Fe2.mean(dim='time'),z)
 a[0,0].set(title='Fe(II) concentration',ylim=(maxdepth,0),xlabel='Time (year)',ylabel='Soil depth (m)')
 a[0,1].set(title='Fe(II) concentration',ylim=(maxdepth,0),xlabel='Fe(II) (mol Fe/m$^3$)',ylabel='Soil depth (m)')

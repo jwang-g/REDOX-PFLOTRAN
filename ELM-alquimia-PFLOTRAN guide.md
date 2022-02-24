@@ -82,6 +82,7 @@ You can of course organize these codes however you want, as long as you make sur
 
 3.	Run simulation with OLMT:
 
+        export BASEDIR=$HOME/ELM-alquimia
         cd $BASEDIR/OLMT
         mkdir -p ~/cases
         

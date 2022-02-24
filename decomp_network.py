@@ -1,4 +1,5 @@
 import networkx as nx
+import os
 
 nonCN_immobile_pools=['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass','Sorption_capacity','Plant_NH4_demand','Plant_NO3_demand']
 
@@ -422,7 +423,7 @@ class PF_network_writer(PF_writer):
                 if truncate_concentration is not None:
                     self.add_line('TRUNCATE_CONCENTRATION {conc:{fmt}}'.format(conc=truncate_concentration,fmt=fmt[1:]))
                     
-                self.add_line('DATABASE %s'%database)
+                self.add_line('DATABASE %s'%os.path.abspath(database))
                 
                 for arg in chem_args:
                     if isinstance(chem_args[arg],float):

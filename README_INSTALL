@@ -20,7 +20,7 @@ conda init
 # This makes a local copy of the python installations that you can update (only need to run once)
 conda create --name myanaconda3 --clone base
 conda activate myanaconda3
-conda install pygraphviz xarray
+conda install pygraphviz xarray netCDF4
 pip install mpi4py
 
 # Install python scripts for running alquimia-based biogeochemical simulations
