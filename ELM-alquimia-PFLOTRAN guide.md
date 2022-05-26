@@ -22,14 +22,14 @@ You can of course organize these codes however you want, as long as you make sur
             cd $BASEDIR
             git clone https://github.com/dmricciuto/OLMT.git
             cd OLMT
-            git checkout bsulman/alquimia
+            git checkout bsulman/coastal_main
 
         Note: Your python installation will need to have the netCDF4 package installed to run OLMT. netCDF4 should be installed with the python version you get on cades (`module load python`) but if you are using an anaconda python environment you may need to install the netCDF4 package.
     
     *	Clone/checkout correct ELM code:
 
             cd $BASEDIR
-            git clone -b bsulman/lnd/EMI_alquimia_hooks git@github.com:bsulman/E3SM.git
+            git clone -b coastal_main_E3SMv2 git@github.com:bsulman/E3SM.git
             cd E3SM
             git submodule update --init --recursive
 
@@ -86,7 +86,7 @@ You can of course organize these codes however you want, as long as you make sur
         cd $BASEDIR/OLMT
         mkdir -p ~/cases
         
-        python site_fullrun.py --site US-PHM --caseidprefix test_alquimia  --nyears_ad_spinup 50 --nyears_final_spinup 50 --tstep 1 --cpl_bypass --machine cades --no_dynroot --spinup_vars --sitegroup Wetland --gswp3 --nyears_transient 51 --nofire --model_root $BASEDIR/E3SM --nopftdyn --ccsm_input /nfs/data/ccsi/proj-shared/E3SM/inputdata --caseroot ~/cases --runroot /lustre/or-scratch/cades-ccsi/$USER/  --mpilib openmpi --pio_version 1 --hist_nhtfrq_trans -24 --hist_mfilt_trans 365 --hist_mfilt_spinup 12 --hist_nhtfrq_spinup 0 --cn_only --alquimia $BASEDIR/REDOX-PFLOTRAN/CTC_alquimia_forELM_O2consuming.in --alquimia_ad $BASEDIR/REDOX-PFLOTRAN/CTC_alquimia_forELM_O2consuming_adspinup.in --trans_varlist "TOTVEGC,TOTSOMC,TOTLITC,soil_O2,HR,GPP,NEE,SMINN,SMINN_TO_PLANT,DIC_vr,SIC_vr,H2OSOI,watsat,SOIL1C_vr,SOIL2C_vr,SOIL3C_vr,SOIL4C_vr,LITR1C_vr,LITR2C_vr,LITR3C_vr,DOC_vr,soil_Fe2,soil_FeOxide,soil_pH,chem_dt"
+        python site_fullrun.py --site US-PHM --caseidprefix test_alquimia  --nyears_ad_spinup 50 --nyears_final_spinup 50 --tstep 1 --cpl_bypass --machine cades --no_dynroot --spinup_vars --sitegroup Wetland --gswp3 --nyears_transient 51 --nofire --model_root $BASEDIR/E3SM --nopftdyn --ccsm_input /nfs/data/ccsi/proj-shared/E3SM/inputdata --caseroot ~/cases --runroot /lustre/or-scratch/cades-ccsi/$USER/  --mpilib openmpi --pio_version 2 --hist_nhtfrq_trans -24 --hist_mfilt_trans 365 --hist_mfilt_spinup 12 --hist_nhtfrq_spinup 0 --cn_only --alquimia $BASEDIR/REDOX-PFLOTRAN/CTC_alquimia_forELM_O2consuming.in --alquimia_ad $BASEDIR/REDOX-PFLOTRAN/CTC_alquimia_forELM_O2consuming_adspinup.in --trans_varlist "TOTVEGC,TOTSOMC,TOTLITC,soil_O2,HR,GPP,NEE,SMINN,SMINN_TO_PLANT,DIC_vr,SIC_vr,H2OSOI,watsat,SOIL1C_vr,SOIL2C_vr,SOIL3C_vr,SOIL4C_vr,LITR1C_vr,LITR2C_vr,LITR3C_vr,DOC_vr,soil_Fe2,soil_FeOxide,soil_pH,chem_dt"
 
     This should compile ELM and run a simulation with coupler bypass and alquimia turned on, using the expanded reaction network with oxygen, DOM, and iron, going through accelerated spinup, normal spinup, and historical simulations. It will run significantly slower than a normal ELM simulation.
     
@@ -95,6 +95,7 @@ You can of course organize these codes however you want, as long as you make sur
     * `--alquimia`: This flag turns on alquimia compilation in OLMT and is followed by the path to the input deck that PFLOTRAN should use. In this case, the one for the expanded decomposition network that we just generated. You can run the other reaction network produced by `network_for_ELM.py` by switching this flag to the other input deck that was generated.
     * `--alquimia_ad`: The path after this specifies the input deck to use for accelerated decomposition spinup. If not specified, it uses the same deck for both. This is necessary because the ELM-alquimia-PFLOTRAN connection uses the decomposition rate constants from the input deck and cannot automatically change them for different spinup stages.
     * `--trans_varlist`: Turns on specific outputs for the transient (historical) simulation. New variables specific to alquimia include DOC, dissolved Fe(II), dissolved O2, pH, and the actual time stepping length that alquimia uses (`chem_dt`) after using variable time stepping to ensure a valid chemistry solution. Shorter `chem_dt` due to chemistry nonconvergence is the main reason the simulation might run significantly more slowly.
+    * `--pio_version 2`: Parallel input-output version. The branch of this code off E3SM v1 only works with PIO version 1 on CADES, and the current branch off E3SM v2 used in these directions only works with PIO version 2.
 
 4. Once simulation is finished, plot ten years of output (in this case, 1880-1889). Depends on an anaconda environment "myanaconda3" having been set up following the REDOX-PFLOTRAN installation instructions:
 
