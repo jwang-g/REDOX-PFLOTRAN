@@ -137,9 +137,10 @@ class layer:
         self.output['flow_in'][step,:]=numpy.array([self.flow_in.get(name,0.0) for name in self.primary_names])
         self.output['flow_out'][step,:]=numpy.array([self.flow_out.get(name,0.0) for name in self.primary_names])
         
-    def convert_output(self):
+    def convert_output(self,downsample=10):
         import pandas
         output_DF=pandas.DataFrame(index=self.output['time'])
+        output_DF['time']=self.output['time']
         output_DF['Porosity']=self.output['porosity']
         output_DF['ncuts']=self.output['ncuts']
         output_DF['actual_dt']=self.output['actual_dt']
@@ -180,8 +181,12 @@ class layer:
         
         output_DF['CEC H+']=pandas.DataFrame(self.output['CEC H+'],index=self.output['time'])
         output_units['CEC H+']='mol/m^3'
+
+        ind=numpy.arange(len(output_DF))
+        output_DF=output_DF.groupby(numpy.floor(ind/downsample)*downsample).mean()
         
-        self.output_DF=output_DF.reset_index(drop=True).set_index(output_DF.index/(24*3600))
+        self.output_DF=output_DF.reset_index(drop=True).set_index(output_DF['time']/(24*3600))
+        self.output_DF['time']=self.output_DF['time']/(24*3600)
         self.output_units=output_units
         
         
@@ -316,7 +321,7 @@ def convert_to_xarray(layers,t0=0.0,leaf_Mn=None,drop_nas=True,convert_output=Tr
     for l in layers:
         if convert_output or not hasattr(l,'output_DF'):
             l.convert_output()
-    data_array = xarray.concat([xarray.Dataset.from_dataframe(layer.output_DF) for layer in layers],dim='layer').rename({'index':'time','layer':'depth'})
+    data_array = xarray.concat([xarray.Dataset.from_dataframe(layer.output_DF) for layer in layers],dim='layer').rename({'layer':'depth'})
     data_array['dz']=xarray.DataArray([layer.volume for layer in layers],dims='depth',attrs={'units':'cm'})*100
     data_array['z_bottom']=data_array['dz'].cumsum()
     data_array['z_top']=data_array['z_bottom']-data_array['dz']
@@ -359,19 +364,21 @@ def copy_to_layers(data_xarray,layers):
             elif var.endswith('VF'):
                 layers[depth].mineral_volume_fraction[var[:-3]]=data_xarray[var].dropna(dim='time').isel(time=-1,depth=depth).item()
 
-leakage=2.5e-4
-reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=1e-4,Mn_peroxidase_Mn3_leakage=leakage,Mn3_scale=1e-13,NH4_scale=1e-2,DOM_scale=1.0) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
+reaction_network=Mn.make_network(leaf_Mn_mgkg=0.0,Mn2_scale=1e-4,Mn3_scale=1e-15,NH4_scale=1e-2,DOM_scale=1.0) # We will add the Mn along with leaf litter manually instead of generating it through decomposition
 
 rateconstants={
     'DOM aerobic respiration':1e-7,
-    'DOM2 aerobic respiration':0.5e-9*0,
-    'Mn Peroxidase':5e-6, # Manganese Peroxidase
+    # 'DOM2 aerobic respiration':0.5e-9*0,
     'Hydrolysis':1.5/(365*24*3600),
     'Lignin exposure':1.0/(365*24*3600),
-    'Lignin depolymerization':0.01/(365*24*3600)*0,
-    'Root uptake of Mn++':1.0e-8/100**3*1e-1,
+    # 'Lignin depolymerization':0.01/(365*24*3600)*0,
+    'Mn Peroxidase':0.2e-8,     # Manganese Peroxidase (produces chelated Mn+++)
+    'Mn chelate lignin':0.2e-2, # chelated Mn+++ reacting with lignin/DOM2
+    'Mn chelate loss':1.0e-2,   # Chelated Mn+++ spontaneously decomposing
+    'Mn-independent lignin degradation':0.7e-10, 
+    'Root uptake of Mn++':0.2e-8/100**3,
     # Bandstra et al microbial Mn reduction median rate of 0.0123 mM/hour -> 3.4e-9 M/s
-    'DOM1 Mn+++ reduction':5e-11, #1e-7, # microbial Manganese reduction. 
+    'DOM1 Mn+++ reduction':2e-9, #1e-7, # microbial Manganese reduction. 
     # Beth says there should be plenty of papers out there about this but maybe not a good synthesis
     'DOM1 Mn+++ abiotic reduction':1e30, # abiotic Mn reduction. Rate constant is multiplied by [Mn+++]^4*[DOM1] so it needs to be very high
     'Bacterial Mn++ oxidation':1e-11, # Bacterial Mn++ oxidation. Rate constant 1e-9 estimated from Fig 8 in Tebo et al 2004 (~35 uM over 10 hours)
@@ -380,7 +387,7 @@ rateconstants={
     'DOM sorption':1e-10,  # M/(biomass*s)
 }
 
-precision=2
+precision=4
 
 incubation_length=5 # Years of litter decomp
 
@@ -397,7 +404,7 @@ not_T_sens = [
 ]
 
 def run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*12,nyears=40,restart_state=None,do_incubation=True,
-            fname=None,anox_lenscale=1.0,anox_depthscale=0.125):
+            fname=None,anox_lenscale=1.0,anox_depthscale=0.125,birnessite_rateconst=2e-11):
     chem,data,sizes,status=init_alquimia(input_file,hands_off=False)
     rateconstants_warmed=rateconstants.copy()
     for react in rateconstants_warmed:
@@ -547,7 +554,7 @@ def run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*1
 
     Mn_molarmass=54.94        #g/mol
     C_molarmass=12.01         #g/mol
-    litter_ligninfrac=0.5     # Davey et al 2007 Table 2 has oak litter lignin ~250-350 mg/g (.25-.35 g/g)
+    litter_ligninfrac=0.25     # Davey et al 2007 Table 2 has oak litter lignin ~250-350 mg/g (.25-.35 g/g)
     litter_Cfrac_mass=0.4       #g/g Davey et al 2007 Table 2 has oak litter C ~ 0.52
     litter_Mn_mg_g_initial=2.0  #mg/g
     
@@ -565,7 +572,7 @@ def run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*1
     for l in range(len(layers)):
         layers[l].total_immobile['Root_biomass']=root_biomass_top*numpy.exp(-z_mid[l]/root_efolding)/(root_Cfrac*12)*100**3
         layers[l].mineral_rate_cnst['Mn(OH)2(am)']=2e-11
-        layers[l].mineral_rate_cnst['Birnessite2']=2e-11
+        layers[l].mineral_rate_cnst['Birnessite2']=birnessite_rateconst
         # layers[l].surface_site_density['>DOM1']=1e3
         layers[l].total_immobile['Sorption_capacity']=1/12*100**3*0.01 # 1 g/cm3
         # Sinusoid redox state
@@ -600,7 +607,7 @@ def run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*1
 
     flow_in=numpy.zeros(len(layers),dtype=float)
     flow_out=numpy.zeros(len(layers),dtype=float)
-    immobile_specs=['DOM2','Tracer2','Tracer','DOM3']
+    immobile_specs=['DOM2','Tracer2','Tracer','DOM3','chelated_Mn+++']
 
 
     t0=time.time()
@@ -744,7 +751,7 @@ def run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*1
             t1=time.time()
             cuts=[l.output['ncuts'][step-100:step].mean() for l in layers]
             mean_dt=numpy.mean([l.output['actual_dt'][step-100:step].mean() for l in layers])
-            print('*** Step {step:d} of {nsteps:d} ({nyears:1.1f} of {totalyears:d} years). Time elapsed: {t:1.1f} min ({tperstep:1.1f} s per {steplength:1.1f} hour timestep). Mean cuts: {meancuts:s} Mean dt: {meandt:1.1f} s ***'.format(
+            print('*** Step {step:d} of {nsteps:d} ({nyears:1.1f} of {totalyears:d} years). Time elapsed: {t:1.1f} min ({tperstep:1.2f} s per {steplength:1.1f} hour timestep). Mean cuts: {meancuts:s} Mean dt: {meandt:1.1f} s ***'.format(
                     step=step,nsteps=nsteps,t=(t1-t0)/60,tperstep=(t1-tprev)/25,meancuts=str(cuts),meandt=mean_dt,steplength=dt/3600,nyears=step*dt/(3600*24*365),totalyears=int(nsteps*dt/(3600*24*365))),flush=True)
             tprev=t1
 
@@ -759,15 +766,16 @@ def run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*1
     today=datetime.datetime.today()
     if fname is None:
         fname='/lustre/or-hydra/cades-ccsi/scratch/b0u/Mn_output/Mn_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
-    gname='pH{ph:1.1f}_Ndep{Ndep:03d}_warming{warming:d}_anox_freq{redox:d}_anox_len{anoxlen:1.1f}'.format(ph=pH,Ndep=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),warming=int(warming),redox=int(anox_freq),anoxlen=anox_lenscale)
+    gname=make_gname(pH,Ndep,warming,anox_freq,anox_lenscale,birnessite_rateconst)
     
-    newdims=['soil_pH','Ndep','warming','redox_cycles','anox_lenscales']
+    newdims=['soil_pH','Ndep','warming','redox_cycles','anox_lenscales','birnrate']
     output['soil_pH']=pH
     output['Ndep']=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600)))
     output['warming']=warming
     output['redox_cycles']=anox_freq 
     output['anox_lenscales']=anox_lenscale 
     output['warming']=warming
+    output['birnrate']=round(birnessite_rateconst*1e12,5)
     output=output.expand_dims(newdims).set_coords(newdims)
 
     import os
@@ -779,6 +787,10 @@ def run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*1
         convert_to_xarray([incubation_layer],leaf_Mn=leaf_Mn_concs).to_netcdf(fname,mode='a',group=gname+'_incubation')
 
     return success
+
+def make_gname(pH,Ndep,warming,anox_freq,anox_lenscale,birnessite_rateconst):
+    gname='pH{ph:1.1f}_Ndep{Ndep:03d}_warming{warming:d}_anox_freq{redox:d}_anox_len{anoxlen:1.1f}_birnrate{birnrate:1.1f}'.format(ph=pH,Ndep=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),warming=int(warming),redox=int(anox_freq),anoxlen=anox_lenscale,birnrate=birnessite_rateconst*1e12)
+    return gname
 
 def setup_sims():
     import pandas
@@ -792,13 +804,18 @@ def setup_sims():
     # pHs=[4.5,6.0]
     # anox_freqs=[12,8,4,1] # anoxic events per year
     anox_freqs=[50] # ~ weekly anoxic periods
-    anox_lengths=[0.1,0.25,0.5,1,2]
+    anox_lengths=[0.25,0.5,2]
+    birn_rates=1e-12*2.0**numpy.arange(-2,8,2)
 
     Ndep_sims=[]
     pH_sims=[]
     anox_freq_sims=[]
     anox_len_sims=[]
     warming_sims=[]
+
+    # Consider rearranging this so main thing is warming x Ndep x pH x birn_rate
+    # and redox is a separate set?
+    birnrate_sims=[]
 
     # Build one long list of all the sim params first
     for sim in range(len(Ndeps)):
@@ -807,23 +824,23 @@ def setup_sims():
         warming=warmings[sim]
 
         for pH in pHs:
-            for anox_freq in anox_freqs:
-                for anox_len in anox_lengths:
-                    Ndep_sims.append(Ndeps[sim])
-                    warming_sims.append(warming)
-                    anox_freq_sims.append(anox_freq)
-                    anox_len_sims.append(anox_len)
-                    pH_sims.append(pH)
+            for birn_rate in birn_rates:
+                Ndep_sims.append(Ndeps[sim])
+                warming_sims.append(warming)
+                anox_freq_sims.append(50)
+                anox_len_sims.append(1.0)
+                pH_sims.append(pH)
+                birnrate_sims.append(birn_rate)
 
-    # Add some sims with redox_cycles=0 for incubations
-    for pH in pHs:
+    for anox_len in anox_lengths:
         Ndep_sims.append(0)
         warming_sims.append(0)
-        anox_freq_sims.append(0)
-        anox_len_sims.append(0)
-        pH_sims.append(pH)
+        anox_freq_sims.append(50)
+        anox_len_sims.append(anox_len)
+        pH_sims.append(pHs[2])
+        birnrate_sims.append(birn_rates[2])
 
-    return pandas.DataFrame({'Ndep':Ndep_sims,'warming':warming_sims,'anox_freq':anox_freq_sims,'anox_len':anox_len_sims,'pH':pH_sims})
+    return pandas.DataFrame({'Ndep':Ndep_sims,'warming':warming_sims,'anox_freq':anox_freq_sims,'anox_len':anox_len_sims,'pH':pH_sims,'birn_rate':birnrate_sims})
 
 if __name__ == '__main__':
 
@@ -836,18 +853,18 @@ if __name__ == '__main__':
     
     parser = ArgumentParser()
     parser.add_argument('-f',dest='fname',help='Output file name',default='')
-    parser.add_argument('-n',dest='jobnum',help='Job number',default=0)
+    parser.add_argument('-n',dest='jobnum',help='Job number',default=1)
     parser.add_argument('-N',dest='totaljobs',help='Total number of jobs',default=1)
     options = parser.parse_args()
 
-    if options.fname is not '':
+    if options.fname != '':
         fname=options.fname
     else:
         today=datetime.datetime.today()
         fname='/lustre/or-scratch/cades-ccsi/b0u/Mn_output/Mn_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
    
-    jobnum=int(options.jobnum)
-    totaljobs=int(options.totaljobs)+1
+    jobnum=int(options.jobnum)-1
+    totaljobs=int(options.totaljobs)
     # Set up for parallel jobs
     if jobnum+1>totaljobs:
         raise ValueError('jobnum + 1 > totaljobs')
@@ -874,7 +891,8 @@ if __name__ == '__main__':
         warming=this_sim['warming']
         anox_freq=this_sim['anox_freq']
         anox_len=this_sim['anox_len']
-        run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*6,fname=fname,anox_lenscale=anox_len,
-            do_incubation=(anox_freq==0) and (Ndep==0) and (warming==0))
+        birn_rate=this_sim['birn_rate']
+        run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*6,fname=fname,anox_lenscale=anox_len,birnessite_rateconst=birn_rate,
+            do_incubation=False,nyears=40)
 
     print('\n\n\n Simulations finished. Total time: %1.1f hours\n'%((time.time()-starting_time)/3600),flush=True)
