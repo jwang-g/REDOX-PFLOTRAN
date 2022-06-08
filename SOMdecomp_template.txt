@@ -6,9 +6,6 @@ SIMULATION
   PROCESS_MODELS
     SUBSURFACE_TRANSPORT
       MODE GIRT
-      OPTIONS
-      # NUMERICAL_JACOBIAN
-      /
     /
   /
 
@@ -31,8 +28,6 @@ REFERENCE_LIQUID_DENSITY 1.d3
 CHEMISTRY
 
 
-  #LOG_FORMULATION
-  DATABASE ./hanford.dat
 
   OUTPUT
     !PH
@@ -55,10 +50,11 @@ END
 
 #=========================== solver options ===================================
 NUMERICAL_METHODS TRANSPORT
+! For single point sim, SOLVER DIRECT and other options commented out seems to work the best 
 LINEAR_SOLVER
   SOLVER DIRECT
   !SOLVER ITERATIVE     ! default: ITERATIVE or KRYLOV: KSP_TYPE of BCGS and PC_TYPE of BJACOBI, if not modified below
-  PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
+  !PC_TYPE JACOBI       ! default (iterative): BJACOBI. 
   !KSP_TYPE fgmres      ! default: BCGS. NOT much difference 
 END
 
@@ -67,7 +63,7 @@ NEWTON_SOLVER
   RTOL 1.d-15
   STOL 1.d-10
   ITOL 1.d-10
-  NUMERICAL_JACOBIAN
+  !NUMERICAL_JACOBIAN
 END
 END
 
@@ -86,7 +82,7 @@ END
 #=========================== fluid properties =================================
 FLUID_PROPERTY
   PHASE LIQUID
-  DIFFUSION_COEFFICIENT 1.d-9
+  DIFFUSION_COEFFICIENT 0.d-9
 END
 
 FLUID_PROPERTY
@@ -112,10 +108,11 @@ ALPHA 1.9401d-4
 
 #=========================== output options ===================================
 OUTPUT
-  PERIODIC_OBSERVATION TIME 1.0 h
+  PERIODIC_OBSERVATION TIME 1.0 d
   #SCREEN PERIODIC 10
   #PERIODIC TIMESTEP 1
   #FORMAT HDF5
+  #SCREEN OFF # Should turn off PFLOTRAN (and alquimia) writing to text output
   VARIABLES
     POROSITY
     /

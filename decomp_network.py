@@ -1,4 +1,7 @@
 import networkx as nx
+import os
+
+nonCN_immobile_pools=['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass','Sorption_capacity','Plant_NH4_demand','Plant_NO3_demand']
 
 class decomp_pool(dict):
     pass
@@ -13,6 +16,37 @@ def pools_dict_to_list(pools):
         return list(pools.values())
     else:
         return pools
+
+def get_stoich_from_name(name,reactions,precision=2):
+    if isinstance(reactions,list):
+        react=pools_list_to_dict(reactions)[name]
+    elif isinstance(reactions,dict):
+        react=reactions[name]
+    elif isinstance(reactions,decomp_network):
+        found_react=False
+        for r in reactions.edges:
+            if reactions.edges[r]['name']==name:
+                react=reactions.edges[r]['reaction']
+                found_react=True
+                break
+        if not found_react:
+            raise ValueError('Reaction "%s" not found in reaction network'%name)
+    else:
+        raise ValueError('reactions not in implemented format')
+    
+    if react['reactiontype']=='MICROBIAL':
+        stoich=PF_microbial_reaction_writer(reactions,precision=precision).write_reaction_stoich(react['reactant_pools'],react['product_pools'])
+    elif react['reactiontype']=='GENERAL':
+        stoich=PF_general_reaction_writer(reactions,precision=precision).write_reaction_stoich(react['reactant_pools'],react['product_pools'])
+    elif react['reactiontype']=='SOMDECOMP':
+        prods=list(react['product_pools'].keys())
+        if len(prods)==1 and (prods[0]=='HCO3-' or 'CO2' in prods[0]):
+            stoich='%s decay to %s (SOMDEC sandbox)'%(list(react['reactant_pools'])[0],'CO2')
+        else:
+            stoich='%s decay to %s (SOMDEC sandbox)'%(list(react['reactant_pools'])[0],list(react['product_pools'])[0])
+    else:
+        raise ValueError("Reaction type '%s' not implemented"%react['reactiontype'])
+    return stoich.strip()
 
 def change_constraint(pools,poolname,newval,constraint='initial',inplace=False):
     'Change a constraint value for a pool in a list of pools. Returns a copy unless inplace is True'
@@ -170,7 +204,7 @@ class PF_writer:
         raise NotImplementedError('Must use subclass of PF_reaction_writer to write out reactions')
         
 class PF_network_writer(PF_writer):
-    def write_all_reactions(self,base_indent=0,indent_spaces=2,CO2name='HCO3-'):
+    def write_all_reactions(self,base_indent=0,indent_spaces=2,CO2name='HCO3-',SOMdecomp_Q10=None,moisturefunc=None):
         self.indent_spaces=indent_spaces
         self.base_indent=base_indent
 
@@ -197,9 +231,25 @@ class PF_network_writer(PF_writer):
                     continue
                 if 'CN' in sandbox_reacts.nodes[pool]:
                     self.add_line(pool.ljust(20)+'{CN:1.{prec}f}'.format(CN=sandbox_reacts.nodes[pool]['CN'],prec=self.precision))
+                elif pool.endswith('C') and pool[:-1]+'N' in self.network.nodes:
+                    self.add_line(pool[:-1].ljust(20)+'# Variable C:N pool')
                 else:
                     self.add_line(pool.ljust(20)+'# Variable C:N pool')
             self.decrease_level()
+
+            # Note: Universal abiotic factors must come earlier in input deck than reactions for them to propagate properly
+            if SOMdecomp_Q10 is not None or moisturefunc is not None:
+                self.increase_level('Abiotic_Factors')
+                if SOMdecomp_Q10 is not None:
+                    self.increase_level('TEMPERATURE_RESPONSE_FUNCTION')
+                    self.add_line(f'Q10 {SOMdecomp_Q10:1.{self.precision}f}')
+                    self.decrease_level()
+
+                if moisturefunc is not None:
+                    self.increase_level('MOISTURE_RESPONSE_FUNCTION')
+                    self.add_line(moisturefunc)
+                    self.decrease_level()
+                self.decrease_level()
         
             # Write out all the reactions
             already_done=[]
@@ -213,6 +263,7 @@ class PF_network_writer(PF_writer):
             self.add_line('CO2_SPECIES_NAME '+CO2name)
             if 'O2(aq)' in self.network.nodes:
                 self.add_line('O2_SPECIES_NAME O2(aq)')
+
             
         for lev in range(len(self.level)):
             self.decrease_level()
@@ -221,7 +272,7 @@ class PF_network_writer(PF_writer):
 
 
     def write_into_input_deck(self,templatefile_name,outputfile_name,
-            indent_spaces=2,length_days=None,log_formulation=True,truncate_concentration=1e-80,CO2name='HCO3-',database='./hanford.dat'):
+            indent_spaces=2,length_days=None,obs_time_hrs=None,log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',chem_args={},verbose=True,**kwargs):
         base_indent=0
         with open(templatefile_name,'r') as templatefile:
             template_lines=templatefile.readlines()
@@ -284,7 +335,7 @@ class PF_network_writer(PF_writer):
                 self.add_line( '#### NOTE: Beginning of auto-inserted immobile species ####')
                 for pool in self.network.nodes:
                     if self.network.nodes[pool]['kind']=='immobile':
-                        if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass','Sorption_capacity']: # This should be improved
+                        if 'CN' in self.network.nodes[pool] or pool in nonCN_immobile_pools: # This should be improved
                             self.add_line( pool)
                         else:
                             self.add_line( pool + 'C')
@@ -363,7 +414,7 @@ class PF_network_writer(PF_writer):
                 
                 # Reactions
                 self.add_line( '#### NOTE: Beginning of auto-inserted reactions ####')
-                self.write_all_reactions(base_indent=base_indent+indent_spaces,indent_spaces=indent_spaces,CO2name=CO2name)
+                self.write_all_reactions(base_indent=base_indent+indent_spaces,indent_spaces=indent_spaces,**kwargs)
                 self.add_line( '#### NOTE: End of auto-inserted reactions ####')
                 
                 if log_formulation:
@@ -372,7 +423,17 @@ class PF_network_writer(PF_writer):
                 if truncate_concentration is not None:
                     self.add_line('TRUNCATE_CONCENTRATION {conc:{fmt}}'.format(conc=truncate_concentration,fmt=fmt[1:]))
                     
-                self.add_line('DATABASE %s'%database)
+                self.add_line('DATABASE %s'%os.path.abspath(database))
+                
+                for arg in chem_args:
+                    if isinstance(chem_args[arg],float):
+                        self.add_line('{arg:s} {val:{fmt}}'.format(arg=arg,val=chem_args[arg],fmt=fmt[1:]))
+                    elif isinstance(chem_args[arg],int):
+                        self.add_line('{arg:s} {val:d}'.format(arg=arg,val=chem_args[arg]))
+                    elif isinstance(chem_args[arg],str):
+                        self.add_line('{arg:s} {val:s}'.format(arg=arg,val=chem_args[arg]))
+                    else:
+                        raise TypeError('chem_args must be float, int, or str (arg: %s)'%arg)
             
             elif len(line.split())>=2 and line.split()[0]=='CONSTRAINT':
                 constraintname=line.split()[1]
@@ -383,7 +444,7 @@ class PF_network_writer(PF_writer):
                     if not self.network.nodes[pool]['kind']=='immobile':
                         continue
                     constraint=self.network.nodes[pool]['constraints'].get(constraintname,1e-20)
-                    if 'CN' in self.network.nodes[pool] or pool in ['HRimm','Nmin','Nimp','Nimm','NGASmin','Root_biomass','Sorption_capacity']:
+                    if 'CN' in self.network.nodes[pool] or pool in nonCN_immobile_pools:
                         self.add_line( pool.ljust(20) + ' {const:{fmt}}'.format(const=constraint,fmt=fmt[1:]))
                     else:
                         if 'initCN' not in self.network.nodes[pool]:
@@ -421,6 +482,12 @@ class PF_network_writer(PF_writer):
                 
             elif 'FINAL_TIME' in line and length_days is not None:
                 self.add_line( 'FINAL_TIME {ndays:1.{prec}e} d\n'.format(ndays=length_days,prec=self.precision))
+            elif 'PERIODIC_OBSERVATION TIME' in line and obs_time_hrs is not None:
+                self.add_line('PERIODIC_OBSERVATION TIME %1.1d h'%obs_time_hrs)
+            elif len(line.strip())>0 and line.strip().split()[0]=='OUTPUT':
+                self.output = self.output + line
+                if not verbose:
+                    self.add_line('SCREEN OFF')
             else:
                 if not line.isspace():
                     base_indent=len(line)-len(line.lstrip())
@@ -432,12 +499,12 @@ class PF_network_writer(PF_writer):
 
         
         
-    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.pft',print_output=False,length_days=None,
-                        log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',CO2name='HCO3-'):
+    def run_simulation(self,template_file,simulation_name,pflotran_exe,output_suffix='-obs-0.pft',print_output=False,length_days=None,obs_time_hrs=None,
+                        log_formulation=True,truncate_concentration=1e-80,database='./hanford.dat',CO2name='HCO3-',**kwargs):
         inputdeck=simulation_name+'_generated.in'
         print('Setting up input deck in %s'%inputdeck)
-        self.write_into_input_deck(template_file,inputdeck,length_days=length_days,
-                                    log_formulation=log_formulation,database=database,truncate_concentration=truncate_concentration,CO2name=CO2name)
+        self.write_into_input_deck(template_file,inputdeck,length_days=length_days,obs_time_hrs=obs_time_hrs,
+                                    log_formulation=log_formulation,database=database,truncate_concentration=truncate_concentration,CO2name=CO2name,**kwargs)
         import subprocess
         cmd='{pflotran_exe:s} -pflotranin {simname:s}_generated.in'.format(pflotran_exe=pflotran_exe,simname=simulation_name)
         print('Running cmd: %s'%cmd)
@@ -451,6 +518,7 @@ class PF_network_writer(PF_writer):
         import plot_pf_output
         outputfile=simulation_name + '_generated' + output_suffix
         # Set up for more flexibility in output formats
+        print('Reading output from file %s'%outputfile)
         output_data,units=plot_pf_output.read_tecfile(outputfile)
         return output_data,units
         
@@ -480,6 +548,8 @@ class PF_sandbox_reaction_writer(PF_writer):
                 self.add_line('HALF_SATURATION_CONSTANT'+' {const:{fmt}}'.format(const=monod['k'],fmt=fmt))
                 if 'threshold' in monod:
                     self.add_line('THRESHOLD_CONCENTRATION {const:{fmt}}'.format(const=monod['threshold'],fmt=fmt))
+                if monod.get('pool_normalized',False):
+                    self.add_line('POOL_NORMALIZED')
                 self.decrease_level()
         for inhib in reaction_data.pop('inhibition_terms',[]):
                 self.increase_level('INHIBITION')
@@ -494,7 +564,7 @@ class PF_sandbox_reaction_writer(PF_writer):
             if isinstance(val,str):
                 self.add_line(param.ljust(20)+val)
             elif isinstance(val,float):
-                self.add_line(param.ljust(20)+' {val:{fmt}}'.format(val=val),fmt=fmt)
+                self.add_line(param.ljust(20)+f' {val:{fmt}}')
             else:
                 raise ValueError('Parameter {param:s} was not a str or float'.format(param=param))
         self.decrease_level()
@@ -630,18 +700,22 @@ class decomp_network(nx.MultiDiGraph):
         for upstream_pool in reactant_pools.keys():
             assert upstream_pool in self.nodes,'Pool %s must be added before reaction is added'%upstream_pool
             for downstream_pool in product_pools.keys():
-                assert downstream_pool in self.nodes,'Pool %s must be added before reaction is added'%downstream_pool
+                assert downstream_pool in self.nodes or downstream_pool+'C' in self.nodes,'Pool %s must be added before reaction is added'%downstream_pool
                 monod_terms=reaction_data.pop('monod_terms',[])
                 inhibition_terms=reaction_data.pop('inhibition_terms',[])
-                k=self.add_edge(upstream_pool,downstream_pool,name=reaction_data['name'],reaction=reaction)
+                if downstream_pool not in self.nodes:
+                    Dadd='C'
+                else:
+                    Dadd=''
+                k=self.add_edge(upstream_pool,downstream_pool+Dadd,name=reaction_data['name'],reaction=reaction)
                 for term in monod_terms:
                     for reqitem in ['species','k']:
                         assert reqitem in term.keys(),'Monod terms must include "%s"'%reqitem
-                self.edges[(upstream_pool,downstream_pool,k)]['monod_terms']=monod_terms
+                self.edges[(upstream_pool,downstream_pool+Dadd,k)]['monod_terms']=monod_terms
                 for term in inhibition_terms:
                     for reqitem in ['species','k','type']:
                         assert reqitem in term.keys(),'Inhibition terms must include "%s"'%reqitem
-                self.edges[(upstream_pool,downstream_pool,k)]['inhibition_terms']=inhibition_terms
+                self.edges[(upstream_pool,downstream_pool+Dadd,k)]['inhibition_terms']=inhibition_terms
             
         return
         
@@ -715,7 +789,7 @@ def get_reaction_from_database(name,kind,filename='hanford.dat'):
                     out.add_edge(name.strip('>'),lsplit[offset+2+specnum*2].strip("'"),reactiontype='equilibrium')
                     out.add_edge(lsplit[offset+2+specnum*2].strip("'"),name,reactiontype='equilibrium')
                 return out
-        if kind is 'surf_complex':
+        if kind == 'surf_complex':
             raise ValueError('Species {species:s} of kind {kind:s} not found in database. For surf_complex, try searching for the complex instead of the site'.format(species=name,kind=kind))
         else:
             raise ValueError('Species {species:s} of kind {kind:s} not found in database'.format(species=name,kind=kind))
@@ -745,7 +819,7 @@ def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',
     for p in network.nodes:
         if network.nodes[p]['kind'] in omit or p in omit or p in ['HRimm','Tracer']:
             to_draw.remove_node(p)
-        elif network.nodes[p]['kind'] is 'surf_complex':
+        elif network.nodes[p]['kind'] == 'surf_complex':
             for cplx in network.nodes[p]['complexes']:
                 to_draw=nx.compose(get_reaction_from_database(cplx,'surf_complex',filename=database_file),to_draw)
         elif network.nodes[p]['kind'] not in ['primary','immobile','implicit','sorbed']:
@@ -781,14 +855,14 @@ def draw_network(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',
     return to_draw
     
 def draw_network_with_reactions(network,omit=[],arrowsize=15,font_size='small',arrowstyle='->',database_file='hanford.dat',do_legend=True,
-            node_colors=node_colors,namechanges={},font_color=None,node_alpha=0.8,node_size=None,edge_color=None,markers={'Reaction':'*'},pos=None,
+            node_colors=node_colors,namechanges={},font_color='k',node_alpha=0.8,node_size=None,edge_color=None,markers={'Reaction':'*'},pos=None,
             width=None,connectionstyle=None,**kwargs):
     to_draw=network.copy()
     
     for p in network.nodes:
         if network.nodes[p]['kind'] in omit or p in omit or p in ['HRimm','Tracer']:
             to_draw.remove_node(p)
-        elif network.nodes[p]['kind'] is 'surf_complex':
+        elif network.nodes[p]['kind'] == 'surf_complex':
             for cplx in network.nodes[p]['complexes']:
                 # to_draw=nx.compose(get_reaction_from_database(cplx,'surf_complex',filename=database_file),to_draw)
                 to_draw.add_edge(p.strip('>'),cplx.strip('>'))

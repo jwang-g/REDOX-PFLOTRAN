@@ -1,3 +1,4 @@
+from decomp_network import get_stoich_from_name
 from _alquimia import ffi,lib
 import numpy
 
@@ -46,6 +47,9 @@ def print_alquimia_object(obj,indent=0):
     else:
         print(' '*indent+obj)
 
+def convert_rateconstants(rateconstants,reactions,precision=2):
+    import decomp_network
+    return dict([(decomp_network.get_stoich_from_name(name,reactions,precision),rateconstants[name]) for name in rateconstants])
 
 def convert_output(output,meta_data,secondary_names):
     import pandas
@@ -53,7 +57,7 @@ def convert_output(output,meta_data,secondary_names):
     output_DF['Porosity']=output['porosity']
     output_DF['ncuts']=output['ncuts']
     output_DF['actual_dt']=output['actual_dt']
-    output_units={'time':'s','Porosity':'NA','ncuts':'NA','actual_dt':'s'}
+    output_units={'time':'days','Porosity':'NA','ncuts':'NA','actual_dt':'s'}
     total=pandas.DataFrame(output['total_mobile'],columns=get_alquimiavector(meta_data.primary_names),index=output['time']).add_prefix('Total ')
     for col in total.columns:
         output_DF[col]=total[col]
@@ -81,25 +85,26 @@ def convert_output(output,meta_data,secondary_names):
     
     return output_DF.reset_index(drop=True).set_index(output_DF.index/(24*3600)),output_units
 
-def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flux_tol=0.15,truncate_concentration=0.0,rateconstants={},min_cuts=0):
+def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flux_tol=0.15,truncate_concentration=0.0,rateconstants={},min_cuts=0,hands_off=False):
     converged=False
     porosity=data.state.porosity
     
     max_cuts=num_cuts
     actual_dt=dt/2**num_cuts
     
-    for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
-        data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
-    
-    for spec in diffquo.keys():
-        pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
-        if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
-            # print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
-            for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
-                if '->' in reactname and spec in reactname.split('->')[0].split():  # reactants
-                    
-                    # print('Setting rate of reaction %s to zero'%reactname)
-                    data.properties.aqueous_kinetic_rate_cnst.data[num]=0.0
+    if not hands_off:
+        for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+            data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
+        
+        for spec in diffquo.keys():
+            pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+            if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
+                print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
+                for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+                    if '->' in reactname and spec in reactname.split('->')[0].split():  # reactants
+                        
+                        # print('Setting rate of reaction %s to zero'%reactname)
+                        data.properties.aqueous_kinetic_rate_cnst.data[num]=0.0
     
     cut_for_flux=False
     flux=numpy.zeros(data.meta_data.primary_names.size)
@@ -187,13 +192,13 @@ def run_onestep(chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flu
                 raise RuntimeError('Pflotran failed to converge after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
             
         # Run it twice, because we cut the time step in half
-        ncuts=run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+        ncuts=run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants,hands_off=hands_off)
         if ncuts>max_cuts:
             max_cuts=ncuts
             
         # This starts from ncuts so it doesn't have to try all the ones that failed again
         for n in range(2**(ncuts-(num_cuts+1))):
-            ncuts2=run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+            ncuts2=run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants,hands_off=hands_off)
             if ncuts2>max_cuts:
                 max_cuts=ncuts2
 
@@ -204,7 +209,7 @@ def convert_condition_to_alquimia(cond,name):
     if cond is None:
         condition=ffi.new("AlquimiaGeochemicalCondition *")
         lib.AllocateAlquimiaGeochemicalCondition(len(name), 0, 0, condition);
-        condition.name[0:len(init_cond_name)]=name.encode()
+        condition.name[0:len(name)]=name.encode()
         return condition
 
 
@@ -217,7 +222,13 @@ def convert_condition_to_alquimia(cond,name):
         if constraint['kind']=='primary':
             primary.append(constraint)
         if constraint['kind']=='immobile':
-            immobile.append(constraint)
+            if 'initCN' in constraint:
+                # For flexible CN pools, need to add separate C and N pool constraints
+                from decomp_network import decomp_pool
+                immobile.append(decomp_pool(name=constraint['name']+'C',kind='immobile',constraints={name:constraint['constraints'][name]}))
+                immobile.append(decomp_pool(name=constraint['name']+'N',kind='immobile',constraints={name:constraint['constraints'][name]/constraint['initCN']}))
+            else:
+                immobile.append(constraint)
         if constraint['kind']=='mineral':
             mineral.append(constraint)
         if constraint['kind']=='surf_complex':
@@ -321,11 +332,13 @@ def init_alquimia(input_file,hands_off=True):
 
 def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,saturation=1.0,hands_off=True,
                     water_density=1000.0,temperature=25.0,porosity=0.25,pressure=101325.0,initcond=None,bc=None,
-                    diffquo={},rateconstants={},truncate_concentration=0.0,CEC=None,printstep=50):
+                    diffquo={},rateconstants={},truncate_concentration=0.0,CEC=None,printstep=50,run_name=''):
     
     import time
     t0=time.time()
     nsteps=int(simlength_days/(dt/(3600*24)))
+
+    print('Starting initialization: %s'%run_name)
 
     engine_name='pflotran'
     status=ffi.new('AlquimiaEngineStatus *') 
@@ -366,6 +379,12 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
             
 
     # Set up initial condition
+    if porosity <= 0:
+        raise ValueError('Porosity must be > 0')
+    if water_density <= 0:
+        raise ValueError('Water density must be > 0')
+    if pressure <= 0:
+        raise ValueError('pressure must be > 0')
 
     # Initialize state data
     data.properties.volume=volume
@@ -395,8 +414,9 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
                 
     # Aqueous kinetic rate constants also need to be specified in hands-off mode
     # Alquimia interface always sets backward rate to zero
-    for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
-        data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
+    if not hands_off:
+        for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+            data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
 
     init_cond=convert_condition_to_alquimia(initcond,'initial')
     chem.ProcessCondition(ffi.new('void **',data.engine_state),init_cond,ffi.addressof(data.properties),ffi.addressof(data.state),ffi.addressof(data.aux_data),status)
@@ -431,9 +451,10 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
 
     *****************************************************
     Successfully initialized alquimia geochemical engine
+    Simulation: %s
     *****************************************************
 
-    ''')
+    '''%run_name)
 
     # Read secondary complex names from input file since Alquimia does not provide them
     with open(input_file,'r') as infile:
@@ -473,13 +494,13 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
                     else:
                         dq[spec]=0.0
                         # print('O2 before: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
-            num_cuts=c.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+            num_cuts=c.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=rateconstants,hands_off=hands_off)
             c.copy_from_alquimia(data)
             # Write output
             c.write_output(step,dt,num_cuts)
             # print('O2 after: %1.1g'%data.state.total_mobile.data[get_alquimiavector(data.meta_data.primary_names).index('O2(aq)')])
         except RuntimeError as err:
-            print('ERROR on timestep %d, layer %d: %s'%(step,n,err))
+            print('ERROR on timestep %d: %s'%(step,err))
             print('Returning output so far')
             c.write_output(step,dt,num_cuts)
             success=False
@@ -495,15 +516,11 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
         if step%printstep==0:
             t1=time.time()
             print('*** Step {step:d} of {nsteps:d}. Time elapsed: {t:d} s ({tperstep:1.1g} s per {steplength:1.1g} hour timestep). Mean cuts: {meancuts:1.1f} Mean dt: {meandt:1.1f} s ***'.format(
-                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=c.output['ncuts'][step-10:step].mean(),meandt=c.output['actual_dt'][step-10:step].mean(),steplength=dt/3600))
+                    step=step,nsteps=nsteps,t=int(t1-t0),tperstep=(t1-tprev)/25,meancuts=c.output['ncuts'][step-10:step].mean(),meandt=c.output['actual_dt'][step-10:step].mean(),steplength=dt/3600),flush=True)
             tprev=t1
         
     
-        
-    import pandas
-    # Put into a dataframe in the same format as reading it out of a tecfile
-    # output_DF,output_units=convert_output(output,data.meta_data,secondary_names)
-    
+
     # Need to free all the Alquimia arrays?
     lib.FreeAlquimiaData(data)
     
@@ -512,11 +529,11 @@ def run_simulation(input_file,simlength_days,dt=3600*12,min_dt=0.1,volume=1.0,sa
     if success:
         print('''
 
-        *****************************************************
-        *           Successfully finished run               *
-        *****************************************************
+        **********************************************************
+        *           Successfully finished run %s in %1.1f minutes            
+        **********************************************************
 
-        ''')
+        '''%(run_name,(time.time()-t0)/60))
     return c.output_DF,c.output_units
 
 
@@ -635,7 +652,7 @@ class cell:
         # Assumes there is one ion exchange site, and that the buffering sorption site is on Rock(s)
         # Aux doubles in this spot stores free surface site density (probably best not to rely on aux_doubles in general though)
         if '>Carboxylate-' in self.surface_site_names:
-            self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[len(self.total_mobile)*2+len(self.secondary_free_ion_concentration)+self.surface_site_names.index('>Carboxylate-')])
+            self.output['CEC H+'][step]=self.total_immobile['H+']-(self.surface_site_density['>Carboxylate-']*self.mineral_volume_fraction['Rock(s)']-self.aux_doubles[-len(self.surface_site_names)+self.surface_site_names.index('>Carboxylate-')])
         else:
             self.output['CEC H+'][step]=self.total_immobile['H+']
 
@@ -678,7 +695,7 @@ class cell:
         self.output_units=output_units
         
         
-    def run_onestep(self,chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flux_tol=0.15,truncate_concentration=0.0,rateconstants={},min_cuts=0):
+    def run_onestep(self,chem,data,dt,status,min_dt=0.1,num_cuts=0,diffquo={},bc=None,flux_tol=0.15,truncate_concentration=0.0,rateconstants={},min_cuts=0,hands_off=False):
         self.copy_to_alquimia(data)
         converged=False
         porosity=data.state.porosity
@@ -686,18 +703,20 @@ class cell:
         max_cuts=num_cuts
         actual_dt=dt/2**num_cuts
         
-        for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
-            data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
+        if not hands_off:
+            for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+                data.properties.aqueous_kinetic_rate_cnst.data[num]=rateconstants[reactname]
         
-        for spec in diffquo.keys():
-            pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
-            if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
-                # print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
-                for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
-                    if '->' in reactname and spec in reactname.split('->')[0].split():  # reactants
-                        
-                        # print('Setting rate of reaction %s to zero'%reactname)
-                        data.properties.aqueous_kinetic_rate_cnst.data[num]=0.0
+            names=get_alquimiavector(data.meta_data.primary_names)
+            for spec in names:
+                pos=names.index(spec)
+                if data.state.total_mobile.data[pos] < truncate_concentration and data.state.total_mobile.data[pos] != 0.0:
+                    # print('Truncating concentration of {spec:s} from {conc:1.1g}'.format(spec=spec,conc=data.state.total_mobile.data[pos]))
+                    for num,reactname in enumerate(get_alquimiavector(data.meta_data.aqueous_kinetic_names)):
+                        if '->' in reactname and spec in reactname.split('->')[0].split():  # reactants
+                            
+                            # print('Setting rate of reaction %s to zero'%reactname)
+                            data.properties.aqueous_kinetic_rate_cnst.data[num]=0.0
         
         cut_for_flux=False
         flux=numpy.zeros(data.meta_data.primary_names.size)
@@ -775,6 +794,14 @@ class cell:
         else:
 
             if actual_dt/2<min_dt:
+                print('Mobile: ')
+                print(self.total_mobile)
+                print('Free:')
+                print(self.free_mobile)
+                print('Immobile:')
+                print(self.total_immobile)
+                print('Mineral VF:')
+                print(self.mineral_volume_fraction)
                 if cut_for_flux:
                     raise RuntimeError('Pflotran failed to converge (because of boundary fluxes) after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
                 else:
@@ -782,7 +809,7 @@ class cell:
             
             # data will be reset to layer contents at beginning of next call
             # Run it twice, because we cut the time step in half
-            ncuts=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+            ncuts=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=num_cuts+1,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants,hands_off=hands_off)
             # If this completes, it means that run_onestep was successful
             self.copy_from_alquimia(data)
             if ncuts>max_cuts:
@@ -790,7 +817,7 @@ class cell:
                 
             # This starts from ncuts so it doesn't have to try all the ones that failed again
             for n in range(2**(ncuts-(num_cuts+1))):
-                ncuts2=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants)
+                ncuts2=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc,truncate_concentration=truncate_concentration,rateconstants=rateconstants,hands_off=hands_off)
                 self.copy_from_alquimia(data)
                 if ncuts2>max_cuts:
                     max_cuts=ncuts2
