@@ -101,7 +101,7 @@ def make_network(leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,Mn3_scal
     # Model runs faster if Mn limitation is on this step (source limit) instead of limiting decomposition rate of DOM2 and building up inhibiting DOM2 concentrations
             decomp_network.reaction(name='Lignin exposure',reactant_pools={'Lignin':1.0},product_pools={'DOM2':1.0},
                                             rate_constant=2e-1,rate_units='y', 
-                                        inhibition_terms=[decomp_network.inhibition(species='DOM2',type='MONOD',k=2e-3),
+                                        inhibition_terms=[decomp_network.inhibition(species='DOM2',type='MONOD',k=2e-3,pool_normalized=True),
                                         decomp_network.inhibition(species='Cellulose',type='MONOD',k=40), # Suggested by Sun et al 2019, which found that MnP activity only increased late in decomposition
                                         # decomp_network.inhibition(species='Mn++',type='INVERSE_MONOD',k=Mn2_scale),decomp_network.inhibition(species='NH4+',k=NH4_scale,type='MONOD')
                                         ],
@@ -164,7 +164,7 @@ def make_network(leaf_Mn_mgkg=25.0,change_constraints={},Mn2_scale=1e-5,Mn3_scal
             decomp_network.reaction(name='Mn-independent lignin degradation',stoich='1.0 DOM2 -> 1.0 DOM1',
                                             monod_terms=[decomp_network.monod(species='DOM2',k=0.05)],
                                             # inhibition_terms=[decomp_network.inhibition(species='NH4+',k=NH4_scale,type='MONOD')],
-                                        rate_constant=1.0e-5,reactiontype='MICROBIAL'),
+                                        rate_constant=1.0e-5,reactiontype='GENERAL'),
 
     # Manganese reduction reaction
     # CH2O + 2 H2O -> HCO3- + 5 H+ + 4 e-

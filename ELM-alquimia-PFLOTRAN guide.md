@@ -58,7 +58,7 @@ You can of course organize these codes however you want, as long as you make sur
             BLASLAPACK_LIBDIR=/software/dev_tools/swtree/cs400_centos7.2_pe2016-08/mkl/2017/centos7.2_gnu5.3.0/lib
 
             # Make this your actual PFLOTRAN dir
-            export PFLOTRAN_DIR=$HOME/ELM-alquimia/pflotran-interface/src/pflotran
+            export PFLOTRAN_DIR=$HOME/ELM-alquimia/pflotran-elm-interface/src/pflotran
             export CLM_PFLOTRAN_SOURCE_DIR=$PFLOTRAN_DIR
 
             export PETSC_DIR=/software/user_tools/current/cades-ccsi/petsc-x
@@ -68,6 +68,7 @@ You can of course organize these codes however you want, as long as you make sur
 2.	Generate PFLOTRAN input decks:
 
         cd $BASEDIR/REDOX-PFLOTRAN
+        mkdir -p ELM_decks
         python network_for_ELM.py
 
     This command generates four PFLOTRAN input decks:
@@ -86,7 +87,7 @@ You can of course organize these codes however you want, as long as you make sur
         cd $BASEDIR/OLMT
         mkdir -p ~/cases
         
-        python site_fullrun.py --site US-PHM --caseidprefix test_alquimia  --nyears_ad_spinup 50 --nyears_final_spinup 50 --tstep 1 --cpl_bypass --machine cades --no_dynroot --spinup_vars --sitegroup Wetland --gswp3 --nyears_transient 51 --nofire --model_root $BASEDIR/E3SM --nopftdyn --ccsm_input /nfs/data/ccsi/proj-shared/E3SM/inputdata --caseroot ~/cases --runroot /lustre/or-scratch/cades-ccsi/$USER/  --mpilib openmpi --pio_version 2 --hist_nhtfrq_trans -24 --hist_mfilt_trans 365 --hist_mfilt_spinup 12 --hist_nhtfrq_spinup 0 --cn_only --alquimia $BASEDIR/REDOX-PFLOTRAN/CTC_alquimia_forELM_O2consuming.in --alquimia_ad $BASEDIR/REDOX-PFLOTRAN/CTC_alquimia_forELM_O2consuming_adspinup.in --trans_varlist "TOTVEGC,TOTSOMC,TOTLITC,soil_O2,HR,GPP,NEE,SMINN,SMINN_TO_PLANT,DIC_vr,SIC_vr,H2OSOI,watsat,SOIL1C_vr,SOIL2C_vr,SOIL3C_vr,SOIL4C_vr,LITR1C_vr,LITR2C_vr,LITR3C_vr,DOC_vr,soil_Fe2,soil_FeOxide,soil_pH,chem_dt"
+        python site_fullrun.py --site US-PHM --caseidprefix test_alquimia  --nyears_ad_spinup 50 --nyears_final_spinup 50 --tstep 1 --cpl_bypass --machine cades --no_dynroot --spinup_vars --sitegroup Wetland --gswp3 --nyears_transient 51 --nofire --model_root $BASEDIR/E3SM --nopftdyn --ccsm_input /nfs/data/ccsi/proj-shared/E3SM/inputdata --caseroot ~/cases --runroot /lustre/or-scratch/cades-ccsi/$USER/  --mpilib openmpi --pio_version 2 --hist_nhtfrq_trans -24 --hist_mfilt_trans 365 --hist_mfilt_spinup 12 --hist_nhtfrq_spinup 0 --cn_only --alquimia $BASEDIR/REDOX-PFLOTRAN/ELM_decks/CTC_alquimia_forELM_O2consuming.in --alquimia_ad $BASEDIR/REDOX-PFLOTRAN/ELM_decks/CTC_alquimia_forELM_O2consuming_adspinup.in --trans_varlist "TOTVEGC,TOTSOMC,TOTLITC,soil_O2,HR,GPP,NEE,SMINN,SMINN_TO_PLANT,DIC_vr,SIC_vr,H2OSOI,watsat,SOIL1C_vr,SOIL2C_vr,SOIL3C_vr,SOIL4C_vr,LITR1C_vr,LITR2C_vr,LITR3C_vr,DOC_vr,soil_Fe2,soil_FeOxide,soil_pH,chem_dt"
 
     This should compile ELM and run a simulation with coupler bypass and alquimia turned on, using the expanded reaction network with oxygen, DOM, and iron, going through accelerated spinup, normal spinup, and historical simulations. It will run significantly slower than a normal ELM simulation.
     

@@ -375,7 +375,7 @@ rateconstants={
     'Mn Peroxidase':0.2e-8,     # Manganese Peroxidase (produces chelated Mn+++)
     'Mn chelate lignin':0.2e-2, # chelated Mn+++ reacting with lignin/DOM2
     'Mn chelate loss':1.0e-2,   # Chelated Mn+++ spontaneously decomposing
-    'Mn-independent lignin degradation':0.7e-10, 
+    'Mn-independent lignin degradation':0.4e-8, 
     'Root uptake of Mn++':0.2e-8/100**3,
     # Bandstra et al microbial Mn reduction median rate of 0.0123 mM/hour -> 3.4e-9 M/s
     'DOM1 Mn+++ reduction':2e-9, #1e-7, # microbial Manganese reduction. 
@@ -893,6 +893,6 @@ if __name__ == '__main__':
         anox_len=this_sim['anox_len']
         birn_rate=this_sim['birn_rate']
         run_sim(Ndep,warming,pH,anox_freq,rateconstants,input_file,Q10=2.0,dt=3600*6,fname=fname,anox_lenscale=anox_len,birnessite_rateconst=birn_rate,
-            do_incubation=False,nyears=40)
+            do_incubation=False,nyears=80)
 
     print('\n\n\n Simulations finished. Total time: %1.1f hours\n'%((time.time()-starting_time)/3600),flush=True)
