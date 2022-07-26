@@ -40,6 +40,7 @@ axs[0].plot(phs,hydrogenotrophic,label='Hydrogenotrophic')
 axs[0].plot(phs,hydrogenotrophic+acetaclastic,label='Total')
 axs[0].errorbar(kotsy_ph,kotsy_acet/kotsy_total.max(),yerr=kotsy_acet_err/kotsy_total.max(),c='C0',ls='None',marker='o')
 axs[0].errorbar(kotsy_ph,kotsy_total/kotsy_total.max(),yerr=kotsy_total_err/kotsy_total.max(),c='C2',ls='None',marker='o')
+axs[0].errorbar(kotsy_ph,(kotsy_total-kotsy_acet)/kotsy_total.max(),yerr=(kotsy_total_err**2+kotsy_acet_err**2)**0.5/kotsy_total.max(),c='C3',ls='None',marker='o')
 axs[0].legend()
 
 axs[1].plot(phs,acetaclastic/(acetaclastic+hydrogenotrophic))

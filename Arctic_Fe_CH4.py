@@ -72,7 +72,7 @@ decomp_network.decomp_pool(name='H2O',kind='implicit'),
 # Fe(III) should precipitate in this system, so if it's dissolved it would be complexed with something
 
 conc_scales={
-    'DOM1':5e-1,
+    'DOM1':1e-1,
     'Acetate-':0.4e-1,
     'Fe+++':1e-10,
     'O2(aq)':1e-4,
@@ -87,7 +87,7 @@ truncate_conc=1e-15
 def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc,Fe_inhibit_CH4=True,rate_scale=1e-8):
 
     # Turn off inhibition of methanogenesis by Fe+++ by setting inhibition constant very high
-    if Fe_inhibit_CH4:
+    if Fe_inhibit_CH4==True:
         Fe_CH4_inhib=1.0
     else:
         Fe_CH4_inhib=1e10
@@ -101,7 +101,7 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc,Fe_in
     # From Dave Graham: SOM-C + H2O -> DOM-C
     decomp_network.reaction(name='Hydrolysis',stoich='1.0 cellulose -> 1.0 DOM1',reactiontype='SOMDECOMP',
                                             rate_constant=rate_scale,rate_units='y', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
-                                        inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=conc_scales['DOM1']),
+                                        inhibition_terms=[decomp_network.inhibition(species='DOM1',type='MONOD',k=conc_scales['DOM1'],pool_normalized=True),
                                                           # decomp_network.inhibition(species='O2(aq)',k=6.25e-11,type='THRESHOLD -1.0d10')
                                                         #   decomp_network.inhibition(species='O2(aq)',type='MONOD',k=1e-11),
                                                           ]),
@@ -110,10 +110,11 @@ def make_reactions(conc_scales=conc_scales,anox_inhib_conc=anox_inhib_conc,Fe_in
     # C6H12O6 + 4 H2O -> 2 CH3COO- + 2 HCO3- + 4 H+ + 4 H2
     # Dave Graham: DOM-C + 0.67 H2O -> 0.33 CH3COO- + 0.33 HCO3- + 0.67 H+ + 0.67 H2
     # Should it be inhibited by H2?
-    decomp_network.reaction(name='fermentation',reactant_pools={'DOM1':1/6,'H2O':2/3},product_pools={'Acetate-':1/3,'HCO3-':1/3,'H+':2/3,'H2(aq)':2/3,'Tracer':1/3}, # balancing pH of FeIII release requires an extra 5.5 H+ to be released here
+    decomp_network.reaction(name='fermentation',reactant_pools={'DOM1':1.0,'H2O':2/3},product_pools={'Acetate-':1/3,'HCO3-':1/3,'H+':2/3,'H2(aq)':2/3,'Tracer':1/3}, # balancing pH of FeIII release requires an extra 5.5 H+ to be released here
                                             rate_constant=rate_scale*40,reactiontype='MICROBIAL', #  Jianqiu Zheng et al., 2019: One third of fermented C is converted to CO2
-                                        inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=anox_inhib_conc,type='MONOD'),decomp_network.inhibition(species='Acetate-',k=conc_scales['Acetate-'],type='MONOD')],
-                                        monod_terms=[decomp_network.monod(species='DOM1',k=conc_scales['DOM1'],threshold=1.1e-15)]),
+                                        inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=anox_inhib_conc,type='MONOD'),
+                                                        decomp_network.inhibition(species='Acetate-',k=conc_scales['Acetate-']*0.5,type='MONOD')],
+                                        monod_terms=[decomp_network.monod(species='DOM1',k=conc_scales['DOM1']*0.1,threshold=1.1e-15)]),
 
     # CH2O + H2O -> CO2 + 4H+ + 4 e-
     # O2   + 4H+ + 4 e- -> 2H2O
@@ -212,7 +213,7 @@ BD_porosity_fit_mineral = linregress(corephysdata[['Dry_Bulk_Density','Porosity'
 waterchemistry=pandas.read_csv(datadir+'/Barrow_porewater_chem/BGC_BarrowWaterChemistry_2013_2014_v1.csv',header=8,skiprows=[9,10],na_values=-9999)
 waterchemistry_units=pandas.read_csv(datadir+'/Barrow_porewater_chem/BGC_BarrowWaterChemistry_2013_2014_v1.csv',header=8,na_values=-9999).iloc[0]
 
-cellulosefrac=0.05
+cellulosefrac=0.25
 molar_volume_FeOH3=34.3600 #cm3/mol
 porosity=0.5
 
@@ -226,7 +227,7 @@ def get_layer(Core_ID,layer,minT=4.0):
 
 
 # CEC numbers estimated from http://www.soilquality.org.au/factsheets/cation-exchange-capacity
-def make_initcond(Core_ID,layer,cellulosefrac=0.05,porosity=None,minT=4.0,FeII_FeVF_factor=1.5,CEC_OM=200,CEC_mineral=25,oxic=False,Fe_SSA=1e2,carboxylate_conc=0.1,BD_factor=1.0,otherconstraints={},BD_method='Bockheim'):
+def make_initcond(Core_ID,layer,cellulosefrac=0.25,porosity=None,minT=4.0,FeII_FeVF_factor=1.5,CEC_OM=200,CEC_mineral=25,oxic=False,Fe_SSA=1e2,carboxylate_conc=0.1,BD_factor=1.0,otherconstraints={},BD_method='Bockheim'):
     if isinstance(Core_ID,int):
         Core_ID='NGADG%04d'%Core_ID
     data_layer=Barrow_synthesis_data[(Barrow_synthesis_data['Soil_layer'].str.capitalize()==layer.capitalize())&(Barrow_synthesis_data['Core_ID']==Core_ID)&(Barrow_synthesis_data['Incubation_Temperature']>minT)]
@@ -388,44 +389,52 @@ if __name__ == '__main__':
     pHsims=[]
     BDsims=[]
     inhibs=[]
+    Fescales=[]
 
-    for inhib in [True,False]:
+    for inhib in [True,False,'noFe']:
         # For comparison with data
         for sim in incubations:
-            for BD_method in ['Bockheim','porosity']:
-                simtypes.append(sim)
-                nperiods.append(None)
-                pHsims.append(None)
-                BDsims.append(BD_method)
-                inhibs.append(inhib)
+            for BD_method in ['Bockheim']:
+                for Fescale in [0.1,0.5,1.0,2.0]:
+                    simtypes.append(sim)
+                    nperiods.append(None)
+                    pHsims.append(None)
+                    BDsims.append(BD_method)
+                    inhibs.append(inhib)
+                    Fescales.append(Fescale)
 
         # Organic horizon oxic-anoxic
         for ndryperiods in [1,2,3,4,5]:
-            for pH in [4.5,5.0,5.5,6.0]:
-                simtypes.append('organic_trough')
-                nperiods.append(ndryperiods)
-                pHsims.append(pH)
-                BDsims.append('Bockheim')
-                inhibs.append(inhib)
+            for pH in [4.5,5.0,5.5]:
+                for Fescale in [0.1,0.5,1.0,2.0]:
+                    simtypes.append('organic_trough')
+                    nperiods.append(ndryperiods)
+                    pHsims.append(pH)
+                    BDsims.append('Bockheim')
+                    inhibs.append(inhib)
+                    Fescales.append(Fescale)
 
         # Mineral horizon oxic-anoxic
         for ndryperiods in [1,2,3,4,5]:
-            for pH in [4.5,5.0,5.5,6.0]:
-                simtypes.append('mineral_trough')
-                nperiods.append(ndryperiods)
-                pHsims.append(pH)
-                BDsims.append('Bockheim')
-                inhibs.append(inhib)
+            for pH in [4.5,5.0,5.5]:
+                for Fescale in [0.1,0.5,1.0,2.0]:
+                    simtypes.append('mineral_trough')
+                    nperiods.append(ndryperiods)
+                    pHsims.append(pH)
+                    BDsims.append('Bockheim')
+                    inhibs.append(inhib)
+                    Fescales.append(Fescale)
 
     sims_thisjob = list(range(jobnum,len(simtypes),totaljobs))
     print('Total number of sims: %d'%len(simtypes))
+    print('Number of sims in this job: %d'%len(sims_thisjob))
     print('This job: ',sims_thisjob)
 
 
     for simnum in sims_thisjob:
         BD_method=BDsims[simnum]
         if simtypes[simnum] == 'highO2_organic':
-            initcond,BD,SOC,CEC,porosity=make_initcond(3,'Organic',cellulosefrac=.05,oxic=True,porosity=0.6,BD_method=BD_method)
+            initcond,BD,SOC,CEC,porosity=make_initcond(3,'Organic',cellulosefrac=.25,oxic=True,porosity=0.6,BD_method=BD_method)
         elif simtypes[simnum] == 'organic_trough':
             initcond,BD,SOC,CEC,porosity=make_initcond(9,'Organic',BD_method=BD_method)   
         elif simtypes[simnum] == 'organic_nottrough':
@@ -441,11 +450,12 @@ if __name__ == '__main__':
         if nperiods[simnum] is not None:
             run_name = run_name + '_nperiods_%d'%nperiods[simnum]
 
-            spinup_len=15
+            spinup_len=0 #15
             spinup=numpy.zeros(24*spinup_len)
             # spinup[:5*24]=dq
             O2_periodic=numpy.zeros(int((simlength-spinup_len)/nperiods[simnum]*24))
-            O2_periodic[:int((simlength-spinup_len)/nperiods[simnum]*24*oxicfrac)]=dq
+            # O2_periodic[:int((simlength-spinup_len)/nperiods[simnum]*24*oxicfrac)]=dq
+            O2_periodic[-int((simlength-spinup_len)/nperiods[simnum]*24*oxicfrac):]=dq
             O2_periodic=numpy.resize(O2_periodic,(simlength-spinup_len)*24)
             diffquo={'O2(aq)':numpy.concatenate((spinup,O2_periodic))}
         else:
@@ -459,24 +469,32 @@ if __name__ == '__main__':
             run_name = run_name + '_pH_%1.1f'%pHsims[simnum]
         if inhibs[simnum] == False:
             run_name = run_name + '_noFeCH4Inhibition'
-        
+        if inhibs[simnum] == 'noFe':
+            run_name = run_name + '_noFe'
+            initcond=decomp_network.change_constraint(initcond,'Fe(OH)3','0.0d-3  1.d0 m^2/m^3')
+            initcond=decomp_network.change_constraint(initcond,'Fe++',1e-10)
+        if Fescales[simnum]!=1.0:
+            run_name = run_name + '_Fescale_%1.1f'%Fescales[simnum]
         
         # Generate PFLOTRAN input file with correct reactions
-        rate_scale=1e-8
+        rate_scale=0.75e-8
         reactions=make_reactions(Fe_inhibit_CH4=inhibs[simnum],rate_scale=rate_scale)
         rateconstants_named={
             'Fe(II) abiotic oxidation'              : 0.0,
             'Fe(II) microbial oxidation'            : rate_scale*200,
             'Hydrogen oxidation'                    : rate_scale*200,
-            'fermentation'                          : rate_scale*40,
-            "DOM aerobic respiration"               : rate_scale*50,
-            "Acetate aerobic respiration"           : rate_scale*50,
+            'fermentation'                          : rate_scale*4*Fescales[simnum],
+            "DOM aerobic respiration"               : rate_scale*25,
+            "Acetate aerobic respiration"           : rate_scale*40,
             "Fe(III) reduction"                     : rate_scale*3,
             "Acetaclastic methanogenesis"           : rate_scale*2, 
             "Hydrogenotrophic methanogenesis"       : rate_scale*3*0.32, # Scaling factor between acetaclastic and hydrogenotrophic from optimization of Kotsyurbenko et al data 
             # "Aerobic decomposition"                 : rate_scale*10.0*0, #1.0/(365*24*3600)*1.0
-            "Hydrolysis"                            : rate_scale*1.0 #1.0/(365*24*3600)*1.0
+            "Hydrolysis"                            : rate_scale*5.0 #1.0/(365*24*3600)*1.0
         }
+
+        if inhibs[simnum] == 'noFe':
+            rateconstants_named['Fe(III) reduction']=0.0
 
         rateconstants=run_alquimia.convert_rateconstants(rateconstants_named,reactions=reactions)
 

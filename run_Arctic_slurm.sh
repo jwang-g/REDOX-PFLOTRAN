@@ -22,7 +22,7 @@
 source ~/.bashrc
 
 module load anaconda3
-conda activate myanaconda3
+conda activate py39f
 
 python Arctic_Fe_CH4.py -n ${SLURM_ARRAY_TASK_ID} -N ${SLURM_ARRAY_TASK_MAX}
 # python Arctic_Fe_CH4_paramtest.py -n ${SLURM_ARRAY_TASK_ID} -N ${SLURM_ARRAY_TASK_MAX}
