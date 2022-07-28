@@ -251,13 +251,13 @@ edonor={
 }
 ##gene cost benefit for growth by having that gene or pathway
 gnpnlty={
-    'Hydrolysis':0.2,
-    'fermentation':0.1,    #
-    'DOM oxidation (O2)':0.2,
-    'Acetate oxidation (O2)':0.6,
-    'Fe(III) reduction':0.3,
-    'Acetoclastic methanogenesis':0.02,
-    'Hydrogenotrophic methanogenesis':0.01,
+    'Hydrolysis':0.9,
+    'fermentation':0.8,    #
+    'DOM oxidation (O2)':0.8,
+    'Acetate oxidation (O2)':0.9,
+    'Fe(III) reduction':0.7,
+    'Acetoclastic methanogenesis':0.6,
+    'Hydrogenotrophic methanogenesis':0.5,
     'Nitrification':0.1,
     'Denitrification':0.07,
     'Sulfate reduction':0.3,
@@ -309,20 +309,35 @@ def growth_rate(microbe):   ##compute maximum growth rate with gene penalities/c
     #NH4_grw=0.07*m_vol**0.27
     #NO3_grw=0.14*m_vol**0.27
     unit_scale=1e-6   ## convert from mmol/m3 to mol/L
+    #gnks={
+    #'DOM1':0.5*m_vol**0.27*unit_scale,
+    #'Acetate-':5*m_vol**0.27*unit_scale, 
+    #'Fe+++':0.14*m_vol**0.27*unit_scale, 
+    #'Fe++':0.14*m_vol**0.27*unit_scale, 
+    #'NH4+':0.07*m_vol**0.27*unit_scale, 
+    #'HCO3-':0.14*m_vol**0.27*unit_scale, 
+    #'NO3-':0.07*m_vol**0.27*unit_scale, 
+    #'HS-':0.07*m_vol**0.27*unit_scale,
+    #'SO4--':0.07*m_vol**0.27*unit_scale, 
+    #'CH4(aq)':0.07*m_vol**0.27*unit_scale, 
+    #'H2(aq)':0.1*m_vol**0.27*unit_scale, 
+    #'H+':0.1*m_vol**0.27*unit_scale, 
+    #'O2(aq)':0.1*m_vol**0.27*unit_scale, 
+    #}
     gnks={
-    'DOM1':200*m_vol**0.27*unit_scale,
-    'Acetate-':100*m_vol**0.27*unit_scale, 
-    'Fe+++':0.14*m_vol**0.27*unit_scale, 
-    'Fe++':0.14*m_vol**0.27*unit_scale, 
-    'NH4+':0.07*m_vol**0.27*unit_scale, 
-    'HCO3-':0.14*m_vol**0.27*unit_scale, 
-    'NO3-':0.07*m_vol**0.27*unit_scale, 
-    'HS-':0.07*m_vol**0.27*unit_scale,
-    'SO4--':8*m_vol**0.27*unit_scale, 
-    'CH4(aq)':0.14*m_vol**0.27*unit_scale, 
-    'H2(aq)':0.14*m_vol**0.27*unit_scale, 
-    'H+':0.14*m_vol**0.27*unit_scale, 
-    'O2(aq)':14*m_vol**0.27*unit_scale, 
+    'DOM1':1e4*0.5*m_vol**0.27*unit_scale,#0.5*m_vol**0.27*unit_scale,
+    'Acetate-':1e2*5*m_vol**0.27*unit_scale,#5*m_vol**0.27*unit_scale,
+    'Fe+++':0.14*m_vol**0.27*unit_scale,
+    'Fe++':1e4*0.14*m_vol**0.27*unit_scale,
+    'NH4+':1e2*0.07*m_vol**0.27*unit_scale,
+    'HCO3-':1e4*0.14*m_vol**0.27*unit_scale,
+    'NO3-':10*0.07*m_vol**0.27*unit_scale,
+    'HS-':1e4*0.07*m_vol**0.27*unit_scale,
+    'SO4--':1e4*0.07*m_vol**0.27*unit_scale,
+    'CH4(aq)':1e3*0.07*m_vol**0.27*unit_scale,
+    'H2(aq)':1e3*0.1*m_vol**0.27*unit_scale,
+    'H+':1e3*0.1*m_vol**0.27*unit_scale,
+    'O2(aq)':1e2*0.5*m_vol**0.27*unit_scale,#0.1*m_vol**0.27*unit_scale,
     }
     growth=Vm
     #for idx in range(len(m.genes)):
@@ -336,7 +351,7 @@ class microbe:
         self.CN=CN
         self.name=name
 
-    def make_reaction(self,react):
+    def make_reaction(self,react,carb):
         reaction=copy.deepcopy(react)
         if 'HCO3-' in reaction['product_pools']:
             C_out='HCO3-'
@@ -345,12 +360,15 @@ class microbe:
         elif 'CH4(aq)' in reaction['product_pools']:
             C_out='CH4(aq)'        
         else:
-            raise ValueError('Products must include HCO3- or DOM1 to substract C from')
+            C_out=self.name
+            #raise ValueError('Products must include HCO3- or DOM1 to substract C from')
         # Not taking DOM C:N into account currently
         # This needs to check if the reaction is SOMDECOMP in which case representation of microbial products will be different
         microbe_yield = yield_calculation(reaction['name'],reaction['reactant_pools'],reaction['product_pools'],Gib_std)
+        carb_type=carb   #flag to identify whether it is autotrophy or heterotrophy
         if react['reactiontype'] == 'MICROBIAL':
             if 'DOM1' in reaction['reactant_pools']:
+                carb_type['DOM1']=1
                 for i in range(len(pools)):
                     if 'DOM1' == pools[i]['name']:
                         DOM_CN=pools[i]['CN']
@@ -362,9 +380,45 @@ class microbe:
                         elif dNH4 < 0:
                             reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+abs(dNH4)
             elif 'Acetate-' in reaction['reactant_pools']:
+                carb_type['Acetate-']=1
                 reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+microbe_yield/self.CN
-            ##partition carbon out of reactants
-            reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content; 
+            elif 'HCO3-' in reaction['reactant_pools']:
+                carb_type['HCO3-']=1
+                reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+microbe_yield/self.CN
+            elif 'CH4(aq)' in reaction['reactant_pools']:
+                carb_type['CH4(aq)']=1
+                reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+microbe_yield/self.CN
+            else:
+                if carb_type['DOM1']==1:
+                    reaction['reactant_pools']['DOM1']=reaction['reactant_pools'].get('DOM1',0)+microbe_yield
+                    #reaction['product_pools'][self.name]=microbe_yield
+                    for i in range(len(pools)):
+                        if 'DOM1' == pools[i]['name']:
+                            DOM_CN=pools[i]['CN']
+                            dNH4=reaction['reactant_pools']['DOM1']/DOM_CN-microbe_yield/self.CN 
+                            #reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content; 
+                            #partition NH4+ to biomass
+                            if dNH4 > 0:        ##NH4 surplus to be mineralized
+                                reaction['product_pools']['NH4+']=reaction['product_pools'].get('NH4+',0)+dNH4  
+                            elif dNH4 < 0:
+                                reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+abs(dNH4)
+                elif carb_type['Acetate-']==1:          #acetate has two carbon in one molecular, microbe yield is in unit of per carbon
+                    reaction['reactant_pools']['Acetate-']=reaction['reactant_pools'].get('Acetate-',0)+microbe_yield/2
+                    reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+microbe_yield/self.CN
+                    #reaction['product_pools'][self.name]=microbe_yield
+                elif carb_type['HCO3-']==1:
+                    reaction['reactant_pools']['HCO3-']=reaction['reactant_pools'].get('HCO3-',0)+microbe_yield
+                    reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+microbe_yield/self.CN
+                    #reaction['product_pools'][self.name]=microbe_yield
+                elif carb_type['CH4(aq)']==1:
+                    reaction['reactant_pools']['CH4(aq)']=reaction['reactant_pools'].get('CH4(aq)',0)+microbe_yield
+                    reaction['reactant_pools']['NH4+']=reaction['reactant_pools'].get('NH4+',0)+microbe_yield/self.CN
+                    #reaction['product_pools'][self.name]=microbe_yield
+            if C_out != self.name:
+                #reaction['product_pools'][self.name]=microbe_yield
+            #else:
+                ##partition carbon out of reactants
+                reaction['product_pools'][C_out]=reaction['product_pools'][C_out]-microbe_yield # Subtract microbe C content; 
             #reaction['product_pools']['NH4+']=reaction['product_pools'].get('NH4+',0)+microbe_yield/self.CN    ## why add NH4+ into product pools? It should be in the reactant pools or N_out; microbe_yield/self.CN  (microbe_yield is in gram of cells/mol of electron donor and it needs to be congverted to grams of C/electron donor)
             #print(reaction['product_pools']['NH4+'],self.CN,reaction['product_pools'].get('NH4+',0),microbe_yield/self.CN)
             #reaction['rate_constant']= 1.0 # Rate constant depending on microbial size, growth rate, gene copy, ...???
@@ -378,26 +432,50 @@ class microbe:
             raise ValueError('Microbe genes only defined for microbial reactions currently')
         reaction['name']=reaction['name']+f' ({self.name})'     #cjw comment out the microbial name
 
-        return reaction
+        return reaction, carb
 
 # See Smeaton, Christina M., and Philippe Van Cappellen. 2018. “Gibbs Energy Dynamic Yield Method (GEDYM): Predicting Microbial Growth Yields under Energy-Limiting Conditions.” Geochimica et Cosmochimica Acta 241 (November): 1–16. https://doi.org/10.1016/j.gca.2018.08.023.
 microbes=[
     microbe(genes=[reactions[0],reactions[1]],size=5.0,CN=1.0,name='microbe1'),
-    microbe(genes=[reactions[1],reactions[2]],size=10.0,CN=15.0,name='microbe2'),
-    microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=25.0,name='microbe3')
+    microbe(genes=[reactions[1],reactions[9]],size=10.0,CN=15.0,name='microbe2'),
+    microbe(genes=[reactions[5],reactions[8]],size=40.0,CN=25.0,name='microbe3'),
+    microbe(genes=[reactions[9],reactions[12]],size=15.0,CN=5.0,name='microbe4'),
+    microbe(genes=[reactions[6],reactions[4]],size=20.0,CN=10.0,name='microbe5'),
+
+    microbe(genes=[reactions[1],reactions[9]],size=50.0,CN=20.0,name='microbe6'),
+    microbe(genes=[reactions[4],reactions[11]],size=60.0,CN=10.0,name='microbe7'),#microbe(genes=[reactions[8],reactions[7]],size=2.0,CN=5.0,name='microbe7'), #negative CH4
+    microbe(genes=[reactions[5],reactions[4]],size=8.0,CN=25.0,name='microbe8'),
+    microbe(genes=[reactions[4],reactions[13]],size=50.0,CN=10.0,name='microbe9'),
+    microbe(genes=[reactions[9],reactions[4]],size=30.0,CN=15.0,name='microbe10'),
+    
+    #microbe(genes=[reactions[5],reactions[7]],size=8.0,CN=25.0,name='microbe11'),
+    #microbe(genes=[reactions[2],reactions[7]],size=8.0,CN=25.0,name='microbe11'),
+    #microbe(genes=[reactions[0],reactions[1]],size=5.0,CN=1.0,name='microbe1'),
+    #microbe(genes=[reactions[1],reactions[8]],size=10.0,CN=15.0,name='microbe2'),
+    #microbe(genes=[reactions[5],reactions[4]],size=40.0,CN=25.0,name='microbe3'),
+    #microbe(genes=[reactions[1],reactions[8]],size=15.0,CN=5.0,name='microbe4'),
+    #microbe(genes=[reactions[6],reactions[4]],size=20.0,CN=10.0,name='microbe5'),
+
+    #microbe(genes=[reactions[8],reactions[10]],size=15.0,CN=20.0,name='microbe6'),
+    #microbe(genes=[reactions[9],reactions[11]],size=20.0,CN=2.0,name='microbe7'),
+    #microbe(genes=[reactions[12],reactions[1]],size=30.0,CN=15.0,name='microbe8'),
+    #microbe(genes=[reactions[0],reactions[13]],size=50.0,CN=10.0,name='microbe9'),
 ]
 
-initial_biomass=1e-3
+initial_biomass=1e-6
 microbe_reactions=[]
 for m in microbes:
+    carb_type={'DOM1':0,'Acetate-':0,'HCO3-':0,'CH4(aq)':0}   #flag to identify whether it is autotrophy or heterotrophy
     for r in m.genes:
-        microbe_reactions.append(m.make_reaction(r))
+        rect,ctype=m.make_reaction(r,carb_type)
+        microbe_reactions.append(rect)
+        #microbe_reactions.append(m.make_reaction(r,carb_type))
     # Microbial biomass pools need to be included in immobile pools
     pools.append(decomp_network.decomp_pool(name=m.name,CN=m.CN,constraints={'initial':initial_biomass},kind='immobile'))
     # Add microbial biomass decay
     microbe_reactions.append( decomp_network.reaction(name=f'{m.name} turnover',stoich=f'1.0 {m.name} -> 0.5 DOM1',reactiontype='SOMDECOMP',turnover_name='RATE_CONSTANT',
             rate_constant=1e-6,rate_units='1/sec',
-            monod_terms=[decomp_network.monod(species=m.name,type='MONOD',k=1e-8)], # Monod dependence on biomass prevents it from exponentially decaying without limit
+            monod_terms=[decomp_network.monod(species=m.name,type='MONOD',k=1e-4)], # Monod dependence on biomass prevents it from exponentially decaying without limit
                                                           ))
 
 network=decomp_network.decomp_network(pools,microbe_reactions)
@@ -429,18 +507,19 @@ pyplot.savefig('microbes_network.pdf')
 for m in microbes:
     mxgrow,gnk=growth_rate(m)
     for idx in range(len(m.genes)):
+        cmplx=gnpnlty[m.genes[idx]['name']]
         if 'inhibition_terms' in m.genes[idx].keys():
             inhterm=m.genes[idx]['inhibition_terms']      # a list of dictionary of inhibition informariton
             for inh in range(len(inhterm)):
                 inhspec=inhterm[inh]['species']
                 if inhspec in gnk.keys():
-                    inhterm[inh]['k']=gnk[inhspec]
+                    inhterm[inh]['k']=gnk[inhspec]*cmplx
         if 'monod_terms' in m.genes[idx].keys():
             modterm=m.genes[idx]['monod_terms'] 
             for mod in range(len(modterm)):
                 modspec=modterm[mod]['species']
                 if modspec in gnk.keys():
-                    modterm[mod]['k']=gnk[modspec]
+                    modterm[mod]['k']=gnk[modspec]*cmplx
         #print(m.genes[idx].keys())
     #print('after name',f'({m.name})')
     #print(mxgrow)
