@@ -202,11 +202,7 @@ def make_network(change_constraints={},change_rate={}):
 
 	    decomp_network.reaction(name='Autotrophic DNRA',stoich='1.0 HS- + 1.0 NO3- + 1.0 H+ + 1.0 H2O -> 1.0 SO4-- + 1.0 NH4+',
                                                 monod_terms=[decomp_network.monod(species='NO3-',k=conc_scales['NO3-'],threshold=thresh),decomp_network.monod(species='HS-',k=conc_scales['HS-'],threshold=thresh)],
-                                                inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD')],
-	                                            rate_constant=rate_scale,reactiontype='MICROBIAL'),
-        
-        decomp_network.reaction(name='Sulfide oxidation',stoich='1.0 HS- + 2.0 O2(aq) -> 1.0 SO4-- + 1.0 H+',
-                                                monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh),decomp_network.monod(species='HS-',k=conc_scales['HS-'],threshold=thresh)],
+                                                inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD'),decomp_network.inhibition(species='CH4(aq)',k=conc_scales['CH4(aq)'],type='MONOD')],
 	                                            rate_constant=rate_scale,reactiontype='MICROBIAL'),
         ##added by Jiaze wwww        
 
@@ -225,19 +221,16 @@ def make_network(change_constraints={},change_rate={}):
 	    # Methane oxidation (NO3)
 	    decomp_network.reaction(name='Methane oxidation (NO3)',stoich='1.0 CH4(aq)  + 1.0 NO3-  -> 1.0 HCO3-  + 1.0 NH4+ + 1.0 Tracer ',
 	                                            monod_terms=[decomp_network.monod(species='NO3-',k=conc_scales['NO3-'],threshold=thresh),decomp_network.monod(species='CH4(aq)',k=conc_scales['CH4(aq)'],threshold=thresh)],
-                                                inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD')],
 	                                        rate_constant=rate_scale,reactiontype='MICROBIAL'),
 
 	    # Methane oxidation (SO4)
 	    decomp_network.reaction(name='Methane oxidation (SO4)',stoich='1.0 CH4(aq)  + 1.0 SO4-- -> 1.0 HCO3-  + 1.0 HS- + 1.0 H2O + 1.0 Tracer ',
 	                                            monod_terms=[decomp_network.monod(species='SO4--',k=conc_scales['SO4--'],threshold=thresh),decomp_network.monod(species='CH4(aq)',k=conc_scales['CH4(aq)'],threshold=thresh)],
-                                                inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD')],
 	                                        rate_constant=rate_scale,reactiontype='MICROBIAL'),
 
 	    # Methane oxidation (Fe)
 	    decomp_network.reaction(name='Methane oxidation (Fe)',stoich='1.0 CH4(aq)  + 8.0 Fe+++ + 3.0 H2O -> 1.0 HCO3-  + 8.0 Fe++ + 9.0 H+ + 1.0 Tracer ',
 	                                            monod_terms=[decomp_network.monod(species='Fe+++',k=conc_scales['Fe+++'],threshold=thresh),decomp_network.monod(species='CH4(aq)',k=conc_scales['CH4(aq)'],threshold=thresh)],
-                                                inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD')],
 	                                        rate_constant=rate_scale,reactiontype='MICROBIAL'),
 
 

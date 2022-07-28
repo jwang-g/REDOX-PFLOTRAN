@@ -204,10 +204,17 @@ class layer:
 
         for spec in diffquo.keys():
             pos=get_alquimiavector(data.meta_data.primary_names).index(spec)
+<<<<<<< HEAD
 
             bc_conc=bc.total_mobile.data[pos]
             local_conc=data.state.total_mobile.data[pos]
 
+=======
+            
+            bc_conc=bc.total_mobile.data[pos]
+            local_conc=data.state.total_mobile.data[pos]
+            
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
             if local_conc<0:
                 raise RuntimeError('Initial concentration of %s < 0'%spec)
 
@@ -265,7 +272,11 @@ class layer:
                     raise RuntimeError('Pflotran failed to converge (because of boundary fluxes) after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
                 else:
                     raise RuntimeError('Pflotran failed to converge after %d cuts to dt = %1.2f s'%(num_cuts,actual_dt))
+<<<<<<< HEAD
 
+=======
+ 
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
             #flux_tmp=numpy.zeros(data.meta_data.primary_names.size)
             # data will be reset to layer contents at beginning of next call
             # Run it twice, because we cut the time step in half
@@ -280,12 +291,20 @@ class layer:
             # This starts from ncuts so it doesn't have to try all the ones that failed again
             for n in range(2**(ncuts-(num_cuts+1))):
                 ncuts2=self.run_onestep(chem,data,dt,status,min_dt,num_cuts=ncuts,diffquo=diffquo,bc=bc_tmp,truncate_concentration=truncate_concentration,rateconstants=rateconstants,TRc=TRc,EvR=EvR,PwR=PwR)
+<<<<<<< HEAD
 
+=======
+                
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
                 self.copy_from_alquimia(data)
                 bc_tmp=bc
                 if ncuts2>max_cuts:
                     max_cuts=ncuts2
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
             return max_cuts
 
 
@@ -364,7 +383,11 @@ rateconstants={
 '1.00e+00 CH4(aq)  + 1.00e+00 NO3-  -> 1.00e+00 HCO3-  + 1.00e+00 NH4+  + 1.00e+00 Tracer':rate_scale*0.01,
 '1.00e+00 Acetate-  + 1.00e+00 SO4--  -> 2.00e+00 HCO3-  + 2.00e+00 HS-  + 2.00e+00 Tracer':rate_scale*0.01,
 '1.00e+00 CH4(aq)  + 1.00e+00 SO4--  -> 1.00e+00 HCO3-  + 1.00e+00 HS-  + 1.00e+00 H2O  + 1.00e+00 Tracer':rate_scale,
+<<<<<<< HEAD
 '1.00e+00 Acetate-  -> 1.00e+00 CH4(aq)  + 1.00e+00 HCO3-  + 1.00e+00 Tracer':rate_scale*10,
+=======
+'1.00e+00 Acetate-  -> 1.00e+00 CH4(aq)  + 1.00e+00 HCO3-  + 1.00e+00 Tracer':rate_scale*100,
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
 'SOM decay to CO2 (SOMDEC sandbox)': 1e-6,
 'SOM decay to DOM1 (SOMDEC sandbox)':1e-7,
 }
@@ -412,12 +435,21 @@ for pH in numpy.arange(6.3,7.3):
 #cjw        layers=[layer(0.05,rateconstants=rateconstants_warmed,BD=0.05,porosity=0.5)]+[layer(0.1,BD=0.25,rateconstants=rateconstants_warmed) for num in range(3)]
     #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.08,porosity=0.95,saturation=0.8)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.15,rateconstants=rateconstants_warmed,porosity=0.92,saturation=0.85)]+[layer(0.05,BD=0.2,rateconstants=rateconstants_warmed,porosity=0.9,saturation=0.88)]+[layer(0.05,BD=0.25,rateconstants=rateconstants_warmed,porosity=0.85,saturation=0.88)]+[layer(0.1,BD=0.35,rateconstants=rateconstants_warmed,porosity=0.75,saturation=0.9)]
     #station 2825
+<<<<<<< HEAD
     #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.15,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.15,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.13,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.88)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.89)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.91)]+[layer(0.1,BD=0.09,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
     ##station 3166
     #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.04,porosity=0.98,saturation=0.93)]+[layer(0.05,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.1,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.92)]
     ##station 3169
     layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.27,porosity=0.90,saturation=0.74)]+[layer(0.05,BD=0.18,rateconstants=rateconstants_warmed,porosity=0.93,saturation=0.81)]+[layer(0.05,BD=0.17,rateconstants=rateconstants_warmed,porosity=0.93,saturation=0.82)]+[layer(0.05,BD=0.11,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.88)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.91)]+[layer(0.1,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
 
+=======
+    layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.15,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.15,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.13,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.88)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.89)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.91)]+[layer(0.1,BD=0.09,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
+    ##station 3166
+    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.04,porosity=0.98,saturation=0.93)]+[layer(0.05,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.1,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.92)]
+    ##station 3169
+    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.27,porosity=0.90,saturation=0.74)]+[layer(0.05,BD=0.18,rateconstants=rateconstants_warmed,porosity=0.93,saturation=0.81)]+[layer(0.05,BD=0.17,rateconstants=rateconstants_warmed,porosity=0.93,saturation=0.82)]+[layer(0.05,BD=0.11,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.88)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.91)]+[layer(0.1,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
+    
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     suldpth=[0.01,0.06,0.11,0.16,0.21,0.31]   #depth in meters for sulfur inicond profile
     sulidx=0
     for l in layers:
@@ -470,7 +502,11 @@ for pH in numpy.arange(6.3,7.3):
         data.state.porosity=l.porosity
         data.state.aqueous_pressure=l.pressure
 
+<<<<<<< HEAD
         #print('layer porosity,BD: %1.4f,%1.4f'%(l.porosity,l.BD))
+=======
+        #print('layer porosity,BD: %1.4f,%1.4f'%(l.porosity,l.BD)) 
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
 
 
             # Set properties: surface site density and mineral rate constants
@@ -562,13 +598,22 @@ for pH in numpy.arange(6.3,7.3):
     import operator
     import seaborn as sns
 
+<<<<<<< HEAD
 ##cjw parameter needed for transport
+=======
+##cjw parameter needed for transport 
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     tide_t=range(0,nsteps)
     Nlyr=range(0,len(layers))
     tdt=3600
 
+<<<<<<< HEAD
     wtl=pd.read_csv('./10WaterLevel_3169.csv')
     salinity=pd.read_csv('./10Salinity_3169.csv')
+=======
+    wtl=pd.read_csv('./WaterLevel_2825.csv')
+    salinity=pd.read_csv('./Salinity_2825.csv')
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
 
 #c    abmsl=2.59 #units in meter
 #c    alpha=[163,154.6,176.1,153.8,37.4,30.8,37.2,19.2]    #phase angle in degrees M2,S2,N2,K2,K1,O1,P1,Q1
@@ -591,16 +636,24 @@ for pH in numpy.arange(6.3,7.3):
 #c        sf+=[abs(sal),]
     Zt=wtl['WaterLevel'].values.tolist()
     sf=salinity['Salinity'].values.tolist()
+<<<<<<< HEAD
 ##replace NAN value with mean value
     rep_wtl=np.nanmean(Zt)
+=======
+##replace NAN value with mean value 
+    rep_wtl=np.nanmean(Zt)   
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     rep_sal=np.nanmean(sf)
 
     Zt=[rep_wtl if math.isnan(x) else x for x in Zt]
     sf=[rep_sal if math.isnan(x) else x for x in sf]
+<<<<<<< HEAD
 ##subset data to match rainfall data, here subset data to year 2009.
     Zt=[x for x in Zt[0:24*365]]
     sf=[x for x in sf[0:24*365]]
 
+=======
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     if len(Zt) < nsteps//repyr:               #run twice of the observation data.
         Zt=Zt+[rep_wtl]*(nsteps//repyr-len(Zt))
         sf=sf+[rep_sal]*(nsteps//repyr-len(sf))
@@ -610,12 +663,17 @@ for pH in numpy.arange(6.3,7.3):
 #cjw create a tidal forcing concentration of compounds in tide for water-sediment interface boundary
 ##tconc_frac is the fraction of each primary species relative to salinity in water.
 #    rstcl=0.14   #unit is mg/ml:mg/ml
+<<<<<<< HEAD
     salfc=0.00180665
+=======
+#    salfc=0.00180665
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
 #ppt to sulfate concetration
 #    sulfc=salfc/0.14 ## sulfate concetration is mg/L, and 1e-3*mg/L/molar_mass=M
     tconc_fc={
     #'DOM1':0.01,
     #'Acetate-':0.01,
+<<<<<<< HEAD
     'HCO3-':0,#0.01,
     'O2(aq)':0,
     'NO3-':0,#1.29046e-10,
@@ -633,6 +691,25 @@ for pH in numpy.arange(6.3,7.3):
     'N2O(aq)':0,#0.001,
     'H+':0,#0.01,         #this could be related to the alklinity in porewater and tide
     'Tracer':0,#0.01,
+=======
+    'HCO3-':0,
+    'O2(aq)':0,
+    'NO3-':1.29046e-10,
+    'NH4+':1.29046e-10,
+    'SO4--':1.80665e-3*0.14, #1.29046e-2, 
+    'Cl-':1.80665e-3,
+    'Na+':1.80665e-3*0.5769,     ##include potassium 1.13%,sodium 30.6%
+    'Ca++':1.80665e-3*0.024,
+    'HS-':1e-8,
+    #'Fe+++':1e-15,
+    #'Fe++':1e-2,
+    'CH4(aq)':0,
+    'H2(aq)':0,
+    'N2(aq)':0,
+    'N2O(aq)':0,
+    'H+':0,         #this could be related to the alklinity in porewater and tide
+    'Tracer':0,
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     }
 
     molar_mass={#'SOM':180.156,
@@ -664,7 +741,11 @@ for pH in numpy.arange(6.3,7.3):
         else:
             tmp=[i*tconc_fc[spec]/molar_mass[spec] for i in sf]
         tide_conc[spec]=tmp
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     ## evaptranspiration
     #t=range(0,24*365) #t in hours, dt is time step in hours
     tday=range(0,365*1)
@@ -681,7 +762,11 @@ for pH in numpy.arange(6.3,7.3):
         if dj > 6 and dj <= 18:
             Ehtmp=(-(dj**2-24*dj+144)*Etd[day]/288+0.125*Etd[day])*1e-3     ##unit is m3/h per unit area m2
         elif dj < 6 or dj > 18:
+<<<<<<< HEAD
             Ehtmp=0.0
+=======
+            Ehtmp=0.0   
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
         Eah+=[Ehtmp,]                    ##unit is m3/h per unit area m2.
 ##compute pulse rain fall
     #N_rain = 24*365*1 # sample count total hours for a year
@@ -692,20 +777,36 @@ for pH in numpy.arange(6.3,7.3):
     #    if sg_rain[i] == True:
     #        rain = 0.001#10*1e-10 #8.6      # unit is m3/h per unit area m2
     #    elif sg_rain[i] == False:
+<<<<<<< HEAD
     #        rain = 0.0
     #    Rg+=[rain,]
     prcp=pd.read_csv('./precip_h.csv')
     ptmp=prcp['HPCP'].values.tolist()
     Rg=[x*0.001 for x in ptmp[24*366:24*(366+365)]]
 
+=======
+    #        rain = 0.0      
+    #    Rg+=[rain,]
+    prcp=pd.read_csv('./precip_h.csv')
+    ptmp=prcp['HPCP'].values.tolist()
+    Rg=[x*0.001 for x in ptmp[24*366:24*(365+366)]]
+    
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     Eah=Eah*repyr
     Rg=Rg*repyr
 #Vp:volume of pore water in 30cm pedon(unit 1/m2)
 #Rg: is the empeirically determined rainfall amount in unit of l/m2/h (set rainfall to a constant number of 3.4 l/m2/day=3.4/24 l/m2/h)
+<<<<<<< HEAD
 #fc: is the field capacity(dimensionless quotient of porewater volume
 #    at field capacity to the saturated volume) 0.934+/-0.008 (0.966+/-0.029)
 #V0 is the saturated water volume (l/m2)or porosity of the 30-cm pedon
 #sd is the specific drainage rate (h-1). sd=K/(n*L), K is the hydraulic conductivities in cm/h,
+=======
+#fc: is the field capacity(dimensionless quotient of porewater volume 
+#    at field capacity to the saturated volume) 0.934+/-0.008 (0.966+/-0.029)
+#V0 is the saturated water volume (l/m2)or porosity of the 30-cm pedon
+#sd is the specific drainage rate (h-1). sd=K/(n*L), K is the hydraulic conductivities in cm/h, 
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
 #   (1.45cm/h, 0.21cm/h), n is porosities (0.43,67.7) which is dimensionless,L is the depth or length of the cores (30cm)
 #    based on the suggesting values at Goat Island and Oyster Landing, sd here iare 0.0103h-1 and 0.1114h-1.
 # the following equations are subject to the constraint that Vp can never exceed V0.
@@ -714,15 +815,26 @@ for pH in numpy.arange(6.3,7.3):
     #Rg=Eah*5  #3.4/24 # l/m2/h
     #V0=layers[num].volume*layers[num].porosity #field capacity of water volum for each layer with 1m2 surface unit is M3/m2. 300*0.677    #15/24 #l/m2, porosity n=V_v/V_t=0.67, V_t=0.3m*1m^2=0.3m^3=300l
     #dt=1 #time step is 1 hour
+<<<<<<< HEAD
     #Vp=[]
+=======
+    #Vp=[]    
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     #Rg=[]
 #salt excretion
 #Se is the rate of salt excretion in unit of g.m-2.h-1
 #Sp is the salt content in 30cm soil pedon in unit of g/m2
+<<<<<<< HEAD
 #k2 is the ion secretion factor
 #   and is expressed as a fraction of the theoretical maximum ion uptake
 #   that could be taken up passively in the transpiration stream, Here k2 is set to 0.03
 #k3 is the quotient of transpiration/evapotranspiration
+=======
+#k2 is the ion secretion factor 
+#   and is expressed as a fraction of the theoretical maximum ion uptake 
+#   that could be taken up passively in the transpiration stream, Here k2 is set to 0.03
+#k3 is the quotient of transpiration/evapotranspiration 
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
 #   and is set equal to 0.5 for simulation of high marsh sites dominated by dwarf spartina
     k2=0.03
     k3=0.5
@@ -739,6 +851,7 @@ for pH in numpy.arange(6.3,7.3):
 #salt ppt to g/m2 conversion factor 1ppt=1000mg/L=1000g/m3, pedon is 30cm depth
 ## high tide exchanges
 #sf is the salinity of infiltrating flood water in unit of g/L.
+<<<<<<< HEAD
 #kd is an empirically derived diffusion coeficient which is 0.0725 cm2/h. It was determined by
 #    kd=0.0725
 #    Lgth=1    #30/10   #core length in cm/10
@@ -746,6 +859,15 @@ for pH in numpy.arange(6.3,7.3):
 #    Sini=3906         #salt mass content g/m2=ppt*Vp=30ppt
 
 
+=======
+#kd is an empirically derived diffusion coeficient which is 0.0725 cm2/h. It was determined by 
+#    kd=0.0725
+#    Lgth=1    #30/10   #core length in cm/10 
+#    cfc=1
+#    Sini=3906         #salt mass content g/m2=ppt*Vp=30ppt
+
+ 
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
 
     #    soillyr=[l.volume for l in layers]
     zbio=0.1                #maximum bioturbation depth in meter below which bioturbation decrease exponentially
@@ -760,13 +882,21 @@ for pH in numpy.arange(6.3,7.3):
     coeffp=4*0.01                 ## unit in cm, coeffecient for exponential porosity change -> change unit to m
     por=porInf+(por0-porInf)*np.exp([i*(-1/coeffp) for i in mid_dpth])  #porosity within layers
     pori=porInf+(por0-porInf)*np.exp([i*(-1/coeffp) for i in zdpth])  #porosity at interfaces
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     alpha=np.array([0]+[(thick[i]+thick[i+1])/2 for i in range(len(thick)-1)])   ##[0] create a 0 value for alpha to have an extra column or element ie without [0], alpha will have 3 element, with it will have 4 element
 
     Temp=0                   ## temperature in degree.
     coeffDb=1*0.01                # coefficient for exponential bioturbation decrease unit in cm ->m
     sig=0.3*1e-3             ## diffusion boundary layer thickness in meter (which means it is 0.3 mm)
+<<<<<<< HEAD
     #Db0=15*(wInf*(365*24*3600)/0.01)**0.6*(1e-4/(24*3600))     ## bioturbation diffusion coeff in unit m^2/s (cm^2/yr -> m^2/s) above zbio
+=======
+    #Db0=15*(wInf*(365*24*3600)/0.01)**0.6*(1e-4/(24*3600))     ## bioturbation diffusion coeff in unit m^2/s (cm^2/yr -> m^2/s) above zbio 
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
 
     #ad=0.0336                     ## ion-specific coefficient with unit of cm2/d/degree C for diffusion coeff, ad is different among substrates -> change unit to m2/s/degree C
     adFc=0.0001/(24*3600)
@@ -776,7 +906,11 @@ for pH in numpy.arange(6.3,7.3):
     'O2(aq)':0.0386,
     'NO3-':0.0336,
     'NH4+':0.0336,
+<<<<<<< HEAD
     'SO4--':0.0336, #1.29046e-2,
+=======
+    'SO4--':0.0336, #1.29046e-2, 
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     'Cl-':0.0336,
     'Na+':0.0336,     ##include potassium 1.13%,sodium 30.6%
     'Ca++':0.0336,
@@ -800,7 +934,11 @@ for pH in numpy.arange(6.3,7.3):
     'O2(aq)':0.955,
     'NO3-':0.845*0.01,
     'NH4+':0.847*0.01,
+<<<<<<< HEAD
     'SO4--':0.432, #1.29046e-2,
+=======
+    'SO4--':0.432, #1.29046e-2, 
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     'Cl-':0.432,
     'Na+':0.432,     ##include potassium 1.13%,sodium 30.6%
     'Ca++':0.432,
@@ -819,16 +957,25 @@ for pH in numpy.arange(6.3,7.3):
 #    Dt={}
 #    Dsed={}
 #    Dsedi={}
+<<<<<<< HEAD
 
     #Dt= D0 + ad*Temp                  ## free solution diffusion coefficient at ambient temperature T
     #Dts=Dt*por**2            ## diffusion coefficient within layers.
     #Dtsi=Dt*pori**2          ## diffusion coefficient at interface layers
 
+=======
+    
+    #Dt= D0 + ad*Temp                  ## free solution diffusion coefficient at ambient temperature T 
+    #Dts=Dt*por**2            ## diffusion coefficient within layers.
+    #Dtsi=Dt*pori**2          ## diffusion coefficient at interface layers
+  
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     #Dsedb=[Fir[i]*Dts[i] for i in range(len(Dts))]                   ## enhanced difussion coeff within layer with bioturbation
     #Dsedbi=[Firi[i]*Dtsi[i] for i in range(len(Dtsi))]               ## enhanced difussion coeff at layer interface with bioturbation
 
     #Dsed=[Fir[i]*Dts[i]+Db0*np.exp(-1*(mid_dpth[i]-zbio)/coeffDb) for i in range(len(Dts))]                    ## enhanced diffusion coeff within layer below bioturbation
     #Dsedi=[Firi[i]*Dtsi[i]+Db0*np.exp(-1*(zdpth[i]-zbio)/coeffDb) for i in range(len(Dtsi))]                ## enhanced diffusion coeff at layer interface below bioturbation depth
+<<<<<<< HEAD
 
     #Db0=15*wInf**0.6*(1e-4/(365*24*3600))     ## bioturbation diffusion coeff in unit m^2/s (cm^2/yr -> m^2/s) above zbio
     #Dbz=[Db0*np.exp(-1*(mid_dpth[i]-zbio)/coeffDb) for i in range(len(mid_dpth))]    #bioturbation coeff within layer below zbio
@@ -837,6 +984,16 @@ for pH in numpy.arange(6.3,7.3):
     #Dsblk=Dsedb+Db0      ## diff coeff in model will be sum of Dbio + enhanced difussion coeff for dissolved species, for soild it will be Dbio
 
 
+=======
+    
+    #Db0=15*wInf**0.6*(1e-4/(365*24*3600))     ## bioturbation diffusion coeff in unit m^2/s (cm^2/yr -> m^2/s) above zbio 
+    #Dbz=[Db0*np.exp(-1*(mid_dpth[i]-zbio)/coeffDb) for i in range(len(mid_dpth))]    #bioturbation coeff within layer below zbio
+    #Dbzi=[Db0*np.exp(-1*(zdpth[i]-zbio)/coeffDb) for i in range(len(zdpth))]          #bioturbation coeff at layer interface below zbio
+    
+    #Dsblk=Dsedb+Db0      ## diff coeff in model will be sum of Dbio + enhanced difussion coeff for dissolved species, for soild it will be Dbio
+    
+    
+>>>>>>> e6c29c9268945aefa3c939cb7f808345c053a629
     #c=np.zeros((5,len(t)),dtype=np.float64)+0.01     #initial
     #c[:,0]=[0.05,0.04,0.03,0.02,0.01]
     #upbc=1  #boundary condition
@@ -1039,18 +1196,17 @@ for pH in numpy.arange(6.3,7.3):
                         if spec in D0.keys():
                             if spec in gas_species.keys():
                                 Cw_tmp=gas_species[spec]
-                                Cswi=Cw_tmp
-                                #if spec == 'O2(aq)':
+                                if spec == 'O2(aq)':
                                     #Cswi=0.002
                                     #Cw_tmp=gas_species[spec]#0.00028
-                                #    Cswi=Cw_tmp#(layers[num].total_mobile[spec]-Cw_tmp)*sig/(sig+thick[0]/2)+Cw_tmp
-                                #else:
-                                #    if layers[num].total_mobile[spec] > Cw_tmp:
-                                #        Cswi=Cw_tmp#(layers[num].total_mobile[spec]-Cw_tmp)*sig/(sig+thick[0]/2)+Cw_tmp
-                                #    else:
-                                #        Cswi=0.0#layers[num].total_mobile[spec]
+                                    Cswi=Cw_tmp#(layers[num].total_mobile[spec]-Cw_tmp)*sig/(sig+thick[0]/2)+Cw_tmp
+                                else:
+                                    if layers[num].total_mobile[spec] > Cw_tmp:
+                                        Cswi=Cw_tmp#(layers[num].total_mobile[spec]-Cw_tmp)*sig/(sig+thick[0]/2)+Cw_tmp
+                                    else:
+                                        Cswi=0.0#layers[num].total_mobile[spec]  
                             else:
-                                Cswi=layers[num].total_mobile[spec]
+                                Cswi=layers[num].total_mobile[spec]                        
                             rtmp1=pori[num]*Dsedi[spec][num]*(layers[num+1].total_mobile[spec]-layers[num].total_mobile[spec])/(layers[num].porosity*dz*thick[num])
                             rtmp2=wInf*porInf*(alpha[num+1]*layers[num].total_mobile[spec]+(1-alpha[num+1])*layers[num+1].total_mobile[spec])/(layers[num].porosity*thick[num])
                             rtmp3=por[num]*Dsed[spec][num]*100*(layers[num].total_mobile[spec]-Cswi)/(layers[num].porosity*thick[num]*(sig+thick[num]/2))  ##surface o2 diffusion increase 2 order (100)
@@ -1123,7 +1279,6 @@ for pH in numpy.arange(6.3,7.3):
                         Rc[spec]=[Rtmp]     ##suppose the flux happens at one unit m2 surface
                     else:
                         Rc[spec].append(Rtmp)
-
         #dCO2=layers[0].total_mobile['HCO3-']-initial_HCO3
         #layers[0].total_mobile['HCO3-']=layers[0].total_mobile['HCO3-']-dCO2
         #layers[0].total_immobile['H+']=layers[0].total_immobile['H+']-dCO2*1000*layers[0].porosity*layers[0].saturation
@@ -1277,7 +1432,6 @@ for pH in numpy.arange(6.3,7.3):
                         Vtmp_n=V0
                     #for spec in primarynames:
                         Sde_tmp=0.0
-
                     if spec in gas_species.keys():
                         Sde_tmp=0.0/3600
                     #elif spec in excret_spec:
@@ -1472,7 +1626,6 @@ def plot_output(output,axs,subsample=1,do_legend=True,**kwargs):
         #    axs[num,0].set_ylim([0,2])
         #    axs[num,1].set_ylim([0,0.0015])
         #axs[num,0].set_ylim([0,2000])
-
 
 
         #if num < 4:

@@ -15,16 +15,15 @@ decomp_network.decomp_pool(name='O2(aq)',kind='primary',constraints={'initial':'
 decomp_network.decomp_pool(name='HCO3-',kind='primary',constraints={'initial':'400e-6 G CO2(g)'}),
 # decomp_network.decomp_pool(name='Mn+++',kind='primary',constraints={'initial':'1.0e-30 M Manganite'}),
 # decomp_network.decomp_pool(name='Mn++',kind='primary',constraints={'initial':'1.0e-30'}),
-#decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'.37e-10 M Fe(OH)3'}),
-decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'0.37e-1'}),
+decomp_network.decomp_pool(name='Fe+++',kind='primary',constraints={'initial':'.37e-10 M Fe(OH)3'}),
 decomp_network.decomp_pool(name='Fe++',kind='primary',constraints={'initial':'0.37e-15'}),
 decomp_network.decomp_pool(name='NH4+',kind='primary',constraints={'initial':1e-5}), # SOMDecomp sandbox requires this
 decomp_network.decomp_pool(name='NO3-',kind='primary',constraints={'initial':1e-5}), 
-decomp_network.decomp_pool(name='SO4--',kind='primary',constraints={'initial':1e-3}), 
+decomp_network.decomp_pool(name='SO4--',kind='primary',constraints={'initial':1e-5}), 
 decomp_network.decomp_pool(name='Tracer',kind='primary',constraints={'initial':1e-15}), # Just to accumulate CO2 loss
 decomp_network.decomp_pool(name='CH4(aq)',kind='primary',constraints={'initial':1e-15}),
 decomp_network.decomp_pool(name='H2S(aq)',kind='secondary',constraints={'initial':1e-15}),
-decomp_network.decomp_pool(name='Acetate-',kind='primary',constraints={'initial':1e-1}),
+decomp_network.decomp_pool(name='Acetate-',kind='primary',constraints={'initial':1e-15}),
 decomp_network.decomp_pool(name='H2(aq)',kind='primary',constraints={'initial':1e-15}),
 decomp_network.decomp_pool(name='N2(aq)',kind='primary',constraints={'initial':1e-15}),
 
