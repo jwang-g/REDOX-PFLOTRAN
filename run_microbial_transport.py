@@ -541,7 +541,7 @@ for stnm in nm:
     #cjw transport time step
     bio_dt=1
     dt=3600
-    repyr=1            ##spin-up at least 6 cycle
+    repyr=4            ##spin-up at least 6 cycle
     nyears=3*repyr      ## frequency of rerun the entire observation dataset
     nsteps=(365+366+365)*24//(dt//3600)*repyr
     skip_tm=dt/bio_dt    ## biology skip time regarding physical time step
@@ -743,7 +743,7 @@ for stnm in nm:
     'H2(aq)':0,#0.01,
     'N2(aq)':0,#0.01,
     'N2O(aq)':0,#0.001,
-    #'H+':0,#0.01,         #this could be related to the alklinity in porewater and tide
+    'H+':0,#0.01,         #this could be related to the alklinity in porewater and tide
     #'Tracer':0,#0.01,
     }
 
@@ -766,7 +766,7 @@ for stnm in nm:
     'H2(aq)':2,
     'N2(aq)':28.0134,
     'N2O(aq)':44.013,
-    #'H+':1,         #this could be related to the alklinity in porewater and tide
+    'H+':1,         #this could be related to the alklinity in porewater and tide
     #'Tracer':1,
     }   ##molar mass is g/mol
     tide_conc={'salt':sf}
