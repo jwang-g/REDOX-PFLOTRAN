@@ -320,7 +320,7 @@ def copy_to_layers(data_xarray,layers):
             elif var.endswith('VF'):
                 layers[depth].mineral_volume_fraction[var[:-3]]=data_xarray[var].dropna(dim='time').isel(time=-1,depth=depth).item()
 
-rate_scale=1e-10
+rate_scale=1e-9
 truncate_conc=1e-30
 thresh=truncate_conc*1.01
 
@@ -339,18 +339,18 @@ rateconstants={
 '1.00e+00 DOM1  + 5.00e-01 NO3-  + 5.00e-01 H2O  -> 5.00e-01 NH4+  + 1.00e+00 HCO3-':rate_scale,
 #'1.00e+00 HS- + 1.00e+00 NO3- + 1.00e+00 H+ + 1.00e+00 H2O <-> 1.00e+00 SO4-- + 1.00e+00 NH4+':rate_scale*0.1,
 #'1.00e+00 HS- + 1.00e+00 NO3- + 1.00e+00 H+ + 1.00e+00 H2O -> 1.00e+00 SO4-- + 1.00e+00 NH4+':rate_scale*0.1,
-'1.00e+00 HS-  + 1.00e+00 NO3-  + 1.00e+00 H+  + 1.00e+00 H2O  -> 1.00e+00 SO4--  + 1.00e+00 NH4+':rate_scale,
+'1.00e+00 HS-  + 1.00e+00 NO3-  + 1.00e+00 H+  + 1.00e+00 H2O  -> 1.00e+00 SO4--  + 1.00e+00 NH4+':rate_scale*0.01,
 '1.00e+00 HS-  + 2.00e+00 O2(aq)  -> 1.00e+00 SO4--  + 1.00e+00 H+':rate_scale,
-'1.00e+00 Acetate-  + 8.00e+00 Fe+++  -> 2.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 2.00e+00 Tracer':rate_scale,
+'1.00e+00 Acetate-  + 8.00e+00 Fe+++  -> 2.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 2.00e+00 Tracer':rate_scale*0.01,
 '1.00e+00 Fe++  + 2.50e-01 O2(aq)  + 1.00e+00 H+  <-> 1.00e+00 Fe+++  + 5.00e-01 H2O':rate_scale*0,
 '1.00e+00 Fe++  + 2.50e-01 O2(aq)  + 1.00e+00 H+  -> 1.00e+00 Fe+++  + 5.00e-01 H2O':rate_scale*100,#*10000,
 '1.00e+00 CH4(aq)  + 8.00e+00 Fe+++  + 3.00e+00 H2O  -> 1.00e+00 HCO3-  + 8.00e+00 Fe++  + 9.00e+00 H+  + 1.00e+00 Tracer':rate_scale*0.01,    ##Roslev and King, 1996
-'1.00e+00 CH4(aq)  + 1.00e+00 NO3-  -> 1.00e+00 HCO3-  + 1.00e+00 NH4+  + 1.00e+00 Tracer':rate_scale*0.01,
+'1.00e+00 CH4(aq)  + 1.00e+00 NO3-  -> 1.00e+00 HCO3-  + 1.00e+00 NH4+  + 1.00e+00 Tracer':rate_scale,
 '1.00e+00 Acetate-  + 1.00e+00 SO4--  -> 2.00e+00 HCO3-  + 2.00e+00 HS-  + 2.00e+00 Tracer':rate_scale,   #Abdul M. Al-Raei et al., 2009, Ocean Dynamics 1e-8, rate_scale*1e2; sulfate reduction rate range from 1.157e-08 to 1.157e-12 mol/L/s tabel 1 and figure 1 from Pester et al., 2012, frontiers in microbiology
-'1.00e+00 CH4(aq)  + 1.00e+00 SO4--  -> 1.00e+00 HCO3-  + 1.00e+00 HS-  + 1.00e+00 H2O  + 1.00e+00 Tracer':rate_scale*0.01, #Abdul M. Al-Raei et al., 2009, Ocean Dynamics
-'1.00e+00 Acetate-  -> 1.00e+00 CH4(aq)  + 1.00e+00 HCO3-  + 1.00e+00 Tracer':rate_scale,#0.00295,#100,#,
-'SOM decay to CO2 (SOMDEC sandbox)': 1e-8,#1e-6,
-'SOM decay to DOM1 (SOMDEC sandbox)':1e-9,#1e-7,
+'1.00e+00 CH4(aq)  + 1.00e+00 SO4--  -> 1.00e+00 HCO3-  + 1.00e+00 HS-  + 1.00e+00 H2O  + 1.00e+00 Tracer':rate_scale, #Abdul M. Al-Raei et al., 2009, Ocean Dynamics
+'1.00e+00 Acetate-  -> 1.00e+00 CH4(aq)  + 1.00e+00 HCO3-  + 1.00e+00 Tracer':rate_scale*0.1,#0.00295,#100,#,
+'SOM decay to CO2 (SOMDEC sandbox)': 1e-6,#1e-6,
+'SOM decay to DOM1 (SOMDEC sandbox)':1e-7,#1e-7,
 }
 
 #cjw
@@ -395,11 +395,11 @@ for pH in numpy.arange(6.3,7.3):
         # Low bulk density causes simulation to slow or crash though. Actually CEC being too low (<100 combined with BD<1) is the problem
 #cjw        layers=[layer(0.05,rateconstants=rateconstants_warmed,BD=0.05,porosity=0.5)]+[layer(0.1,BD=0.25,rateconstants=rateconstants_warmed) for num in range(3)]
     #station 2825
-    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.15,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.15,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.13,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.88)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.89)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.91)]+[layer(0.1,BD=0.09,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
+    layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.15,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.15,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.13,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.88)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.89)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.91)]+[layer(0.1,BD=0.09,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
     ##same saturation as 3166, BD and porosity is from 2825
     #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.15,porosity=0.95,saturation=0.93)]+[layer(0.05,BD=0.15,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.91)]+[layer(0.05,BD=0.13,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.91)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.92)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.92)]+[layer(0.1,BD=0.09,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
     ##station 3166
-    layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.04,porosity=0.98,saturation=0.93)]+[layer(0.05,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.1,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.92)]
+    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.04,porosity=0.98,saturation=0.93)]+[layer(0.05,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.1,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.92)]
     ##station 3169
     #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.27,porosity=0.90,saturation=0.74)]+[layer(0.05,BD=0.18,rateconstants=rateconstants_warmed,porosity=0.93,saturation=0.81)]+[layer(0.05,BD=0.17,rateconstants=rateconstants_warmed,porosity=0.93,saturation=0.82)]+[layer(0.05,BD=0.11,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.88)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.91)]+[layer(0.1,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
 
@@ -562,10 +562,10 @@ for pH in numpy.arange(6.3,7.3):
     tdt=3600
 
     #wtl=pd.read_csv('./10WaterLevel_2825.csv')         ##
-    wtl=pd.read_csv('./10WaterLevel_3166.csv')         ##
-    salinity=pd.read_csv('./10Salinity_3166.csv')      ## when salinity is high, Fe+++ is tend to be negative or model is not converge
-    #wtl=pd.read_csv('./10WaterLevel_2825.csv')         ##
-    #salinity=pd.read_csv('./10Salinity_2825.csv')      ## when salinity is high, Fe+++ is tend to be negative or model is not converge
+    #wtl=pd.read_csv('./10WaterLevel_3166.csv')         ##
+    #salinity=pd.read_csv('./10Salinity_3166.csv')      ## when salinity is high, Fe+++ is tend to be negative or model is not converge
+    wtl=pd.read_csv('./10WaterLevel_2825.csv')         ##
+    salinity=pd.read_csv('./10Salinity_2825.csv')      ## when salinity is high, Fe+++ is tend to be negative or model is not converge
 
 #c    abmsl=2.59 #units in meter
 #c    alpha=[163,154.6,176.1,153.8,37.4,30.8,37.2,19.2]    #phase angle in degrees M2,S2,N2,K2,K1,O1,P1,Q1
@@ -807,7 +807,7 @@ for pH in numpy.arange(6.3,7.3):
     #Ebmet=n_mol*0.4/(layers[0].volume*layers[0].porosity*layers[0].saturation*1000)   ##mol/L
     #print(Ebmet)
     immobile_species=['SOM']#['SOM']
-    Fimb={'SOM':1e-7}    #immobile species flux at sediment water interface unit is molC/m3. SOM to SOC is SOM*0.56;
+    Fimb={'SOM':4e-9}    #immobile species flux at sediment water interface unit is molC/m3. SOM to SOC is SOM*0.56;
     ### fresh 376/12=9.9e-7 mol-C/m2/s or kgram unit 0.376/0.56=0.6714 kg/m2/yr (2e-8 kg/m2/s); brackish 9.116e-7 mol-C/m2/s,0.345/0.56=0.616 kg m2/yr (2e-8 kg/m2/s); saline 1.149e-6 mol-c/m2/s, 435/0.56=0.776 kg m2/yr (2e-8); reference from Suir et al., 2019, Delaung et al., 2012. #mol/m3-bluk
 #cjw define diffusion dict
     #Dt={}
