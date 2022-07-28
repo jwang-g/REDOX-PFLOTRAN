@@ -377,23 +377,40 @@ thresh=truncate_conc*1.01
 
 ##cjw update half saturation term for each substrates
 for idx in range(len(Mar.microbe_reactions)):             # a list with different reaction dict
-    rxnnm=Mar.microbe_reactions[idx]['name'].split(" ")                                  # alist of words in names of reaction seperated by space
+    #rxnnm=Mar.microbe_reactions[idx]['name'].split(" ")                                  # alist of words in names of reaction seperated by space
+    rxnnm=Mar.microbe_reactions[idx]['name']        #cjw try a new way to include cost-benefit for Ks
     for m in Mar.microbes:
         mxgrow,gnk=Mar.growth_rate(m)
-        micnm=f'({m.name})'
-        for micnm in rxnnm:
-            if 'inhibition_terms' in Mar.microbe_reactions[idx].keys():
-                inhterm=Mar.microbe_reactions[idx]['inhibition_terms']      # a list of dictionary of inhibition informariton
-                for inh in range(len(inhterm)):
-                    inhspec=inhterm[inh]['species']
-                    if inhspec in gnk.keys():
-                        inhterm[inh]['k']=gnk[inhspec]
-            if 'monod_terms' in Mar.microbe_reactions[idx].keys():
-                modterm=Mar.microbe_reactions[idx]['monod_terms'] 
-                for mod in range(len(modterm)):
-                    modspec=modterm[mod]['species']
-                    if modspec in gnk.keys():
-                        modterm[mod]['k']=gnk[modspec]
+        for igene in range(len(m.genes)):
+            micnm=m.genes[igene]['name']+ f' ({m.name})'
+            cmplx=Mar.gnpnlty[m.genes[igene]['name']]  #cost-benefit for each reaction or feature gene function
+            if micnm == rxnnm:
+                if 'inhibition_terms' in Mar.microbe_reactions[idx].keys():
+                    inhterm=Mar.microbe_reactions[idx]['inhibition_terms']      # a list of dictionary of inhibition informariton
+                    for inh in range(len(inhterm)):
+                        inhspec=inhterm[inh]['species']
+                        if inhspec in gnk.keys():
+                            inhterm[inh]['k']=gnk[inhspec]*cmplx
+                if 'monod_terms' in Mar.microbe_reactions[idx].keys():
+                    modterm=Mar.microbe_reactions[idx]['monod_terms']
+                    for mod in range(len(modterm)):
+                        modspec=modterm[mod]['species']
+                        if modspec in gnk.keys():
+                            modterm[mod]['k']=gnk[modspec]*cmplx
+#        micnm=f'({m.name})'
+#        for micnm in rxnnm:
+#            if 'inhibition_terms' in Mar.microbe_reactions[idx].keys():
+#                inhterm=Mar.microbe_reactions[idx]['inhibition_terms']      # a list of dictionary of inhibition informariton
+#                for inh in range(len(inhterm)):
+#                    inhspec=inhterm[inh]['species']
+#                    if inhspec in gnk.keys():
+#                        inhterm[inh]['k']=gnk[inhspec]
+#            if 'monod_terms' in Mar.microbe_reactions[idx].keys():
+#                modterm=Mar.microbe_reactions[idx]['monod_terms'] 
+#                for mod in range(len(modterm)):
+#                    modspec=modterm[mod]['species']
+#                    if modspec in gnk.keys():
+#                        modterm[mod]['k']=gnk[modspec]
 #print(Mar.microbe_reactions)
 reaction_network=decomp_network.decomp_network(Mar.pools,Mar.microbe_reactions)
 
@@ -442,7 +459,7 @@ for pH in numpy.arange(6.3,7.3):
         # Top (organic) layer should be thinner and have lower bulk density though
         # Low bulk density causes simulation to slow or crash though. Actually CEC being too low (<100 combined with BD<1) is the problem
 #cjw        layers=[layer(0.05,rateconstants=rateconstants_warmed,BD=0.05,porosity=0.5)]+[layer(0.1,BD=0.25,rateconstants=rateconstants_warmed) for num in range(3)]
-    layers=[layer(0.1,rateconstants=rateconstants_warmed,BD=0.08,porosity=0.95,saturation=0.8)]
+    layers=[layer(0.1,rateconstants=rateconstants_warmed,BD=0.08,porosity=0.95,saturation=1)]
     for l in layers:
         l.secondary_names=secondary_names
     for l in layers:
@@ -457,7 +474,7 @@ for pH in numpy.arange(6.3,7.3):
     dt=1
     nyears=1
     #nsteps=365*24//(dt//3600)*nyears
-    nsteps=36000
+    nsteps=3600
         # Set up initial condition
     for l in layers:
             # Initialize state data
@@ -591,6 +608,7 @@ for pH in numpy.arange(6.3,7.3):
     micro_rate=numpy.zeros((len(rateconstants),nsteps))
     Bgrow=numpy.zeros((len(Mar.microbes),nsteps))
     grw_tmp=numpy.zeros((len(Mar.microbes),len(Mar.microbes[0].genes))) 
+    C_subs=['SOM','DOM1','Acetate-','HCO3-','CH4(aq)']   ## carbon sources and also as energy source/electron donor for microbes to grow
     #mdeath=0.16/86400     #unit is per second, death rate
     #mcdeath=0.64/86400
     #rateconstants_tmp={}   #store temporary rateconstants for each reaction with microbes names
@@ -614,30 +632,57 @@ for pH in numpy.arange(6.3,7.3):
                     B_old=layers[num].total_immobile[m.name]
                     #nelim=1.0   #energy and nutrient limitation term
                     #ihlim=1.0
+                    subs_nm=[]
+##compute maximum carbon limitation term and pass it to energy only limitation term
+                    for idx in range(len(m.genes)):
+                        substrates=m.genes[idx]['reactant_pools']      ##dict of substrates with stoic microbes work on/uptake
+                        cmplx=Mar.gnpnlty[m.genes[idx]['name']]
+                        subs_nm=subs_nm+list(substrates.keys())
+                        C_tmp=list(set(subs_nm).intersection(C_subs))
+                        celim=0.0                                      #carbon + energy limitation term for non-carbon reactions
+                        for spec in C_tmp:
+                            if spec == 'SOM':
+                                soilc='SOMC'
+                                #soiln='SOMN'  #cjw soilN change ???
+                                c_tmp=layers[num].total_immobile[soilc]/(layers[num].total_immobile[soilc]+1)   #nutrient/energy limitation for growth; organic carbon species are both nutrient and engergy sources sources.
+                            else:
+                                c_tmp=layers[num].total_mobile[spec]/(layers[num].total_mobile[spec]+gnks[spec])
+                            celim=max(c_tmp,celim)
                     for idx in range(len(m.genes)):
                         nelim=1.0   #energy and nutrient limitation term
                         ihlim=1.0
                         substrates=m.genes[idx]['reactant_pools']      ##dict of substrates with stoic microbes work on/uptake
+                        cmplx=Mar.gnpnlty[m.genes[idx]['name']]
+                        C_tmp=list(set(list(substrates.keys())).intersection(C_subs))
                         for spec in substrates.keys():
-                            #if spec in layers[0].primary_names:
                             if spec == 'SOM':
                                 soilc='SOMC'
-                                tmp_lim=layers[num].total_immobile[soilc]/(layers[num].total_immobile[soilc]+1)   #nutrient/energy limitation for growth
+                                #soiln='SOMN'  #cjw soilN change ???
+                                tmp_lim=layers[num].total_immobile[soilc]/(layers[num].total_immobile[soilc]+1*cmplx)   #nutrient/energy limitation for growth; organic carbon species are both nutrient and engergy sources sources.
+                            elif spec == 'H2O':
+                                tmp_lim=1
                             else:
-                                tmp_lim=layers[num].total_mobile[spec]/(layers[num].total_mobile[spec]+gnks[spec])
+                                tmp_lim=layers[num].total_mobile[spec]/(layers[num].total_mobile[spec]+gnks[spec]*cmplx)
+                                #celim=tmp_lim
                             nelim=nelim*tmp_lim
                         if 'inhibition_terms' in m.genes[idx].keys():
                             inhterm=m.genes[idx]['inhibition_terms']      # a list of dictionary of inhibition informariton
                             for inh in range(len(inhterm)):
                                 inhspec=inhterm[inh]['species']
-                                tmp_inh=gnks[inhspec]/(layers[num].total_mobile[inhspec]+gnks[inhspec])
+                                tmp_inh=gnks[inhspec]/(layers[num].total_mobile[inhspec]+gnks[inhspec]*cmplx)
                                 ihlim=ihlim*tmp_inh
+## carbon limitation for energy only reaction impact on growth
+                        if len(C_tmp) == 0:                            ## no carbon source in the gene reaction, the reaction provides only energy
+                            nelim=celim*nelim                                  #must use carbon gene function to grow
+                        else:
+                            nelim=nelim                                #can grow without other functional genes                                                
                         grw_tmp[micdx,idx]=growth*nelim*ihlim
                         #print(growth,nelim,ihlim,m.name,idx)
                     grwconst=numpy.amax(grw_tmp[micdx,:])
                     #print(numpy.amax(grw_tmp[2,:]))
                     Bgrow[micdx,step]=grwconst*B_old
                     B_new=Bgrow[micdx,step]*dt+B_old
+                    #print(B_new,grwconst,m.name)
             ##cjw biology growing: compute the growth of biomass for each microbes
                     layers[num].total_immobile[m.name]=B_new
                     #if m.name=='microbe3':
@@ -645,7 +690,10 @@ for pH in numpy.arange(6.3,7.3):
             ##compute rateconstants for chemical reaction
                     for idx in range(len(m.genes)):  
                         microbe_yield = Mar.yield_calculation(m.genes[idx]['name'],m.genes[idx]['reactant_pools'],m.genes[idx]['product_pools'],Mar.Gib_std)                           
-                        rate_tmp=growth*B_old/microbe_yield                ##final rate constant is the sum of all microbes growth on the reaction   
+                        #rate_tmp=growth*B_old/microbe_yield                ##final rate constant is the sum of all microbes growth on the reaction   
+                        gfrac=grw_tmp[micdx,idx]/numpy.sum(grw_tmp[micdx,:])
+                        #rate_tmp=grwconst*B_old/microbe_yield
+                        rate_tmp=gfrac*grwconst*B_old/microbe_yield
                         rectnm=m.genes[idx]['name']+f' ({m.name})'
                         if rectnm in rateconstants.keys():
                             rateconstants[rectnm]=rate_tmp
@@ -710,6 +758,8 @@ for pH in numpy.arange(6.3,7.3):
                 #rateconstants_microbe=convert_rateconstants(rateconstants_bio,reaction_network,precision=precision)
                 #print('rateconst in alquimia',rateconstants_microbe)
                 l.rateconstants=rateconstants_microbe
+                #primarynames=l.primary_names
+                #print(primarynames)
 ##cjw: end of microbial activities.
                 num_cuts=l.run_onestep(chem,data,dt,status,min_dt=min_dt,diffquo=dq,bc=bc_state,truncate_concentration=truncate_concentration,rateconstants=l.rateconstants)
                 l.copy_from_alquimia(data)
@@ -771,25 +821,9 @@ def plot_output(output,axs,subsample=1,do_legend=True,**kwargs):
         axs[num,0].plot(out['Total Sorbed microbe1'],label='microbe$_1$',c='C0',**kwargs)
         axs[num,1].plot(out['Total Sorbed microbe2'],label='microbe$_2$',c='C5',**kwargs)
         axs[num,2].plot(out['Total Sorbed microbe3'],label='microbe$_3$',c='C1',**kwargs)
-        #axs[num,3].plot(subt,out['Total Fe+++'][std:etd]/(out['Total Fe+++'][std:etd]+out['Total Fe++'][std:etd]),label='Fe$^3$$^+$',c='C5',**kwargs)
-        #axs[num,3].plot(t,out['Total Na+']*1e3,label='Na$^+$',c='C5',**kwargs)
-        # axs[num,0].plot(t,out['Total Sorbed DOM1']*12/100**3,label='Sorbed DOM')
-        #axs[num,3].plot(t,out['Total SO4--']*1e6,c='C3',label='SO$_4$$^2$$^-$',**kwargs)
-        #axs[num,4].plot(t,out['Total SO4--']/out['Total Cl-'][egnr:etd],c='C2',label='SO$_4$$^2$$^-$',**kwargs)
-        #axs[num,4].plot(t,(numpy.zeros(len(subt))+0.14),c='black',label='SO$_4$$^2$$^-$',**kwargs)
-        #axs[num,5].plot(t,out['Total CH4(aq)']*1e6,c='C4',label='CH$_4$',**kwargs)
-        #axs[num,0].set_ylabel('mM')
-        #axs[num,1].set_ylabel('mM')
         axs[num,0].set_ylabel('\u03BCM')
 
-        #axs[num,0].set_yscale('log')
-        #axs[num,1].set_yscale('log')
-        #axs[num,2].set_yscale('log')
-        #axs[num,3].set_yscale('log')
-        #axs[num,4].set_yscale('log')
-        #axs[num,5].set_yscale('log')
-        #axs[num,3].set_ylabel('mM')
-        #axs[num,4].set_ylabel('mM')
+
         ###cjw methane saturation conc in water is 1746 umol/L
         
     axs[-1,0].set_xlabel('Time (second)')
@@ -797,33 +831,6 @@ def plot_output(output,axs,subsample=1,do_legend=True,**kwargs):
         axs[0,0].legend()
         axs[0,1].legend()
         axs[0,2].legend()
-
-#    axs[-1,1].set_xlabel('Time (Day)')
-#    axs[-1,2].set_xlabel('Time (Day)')
-#    axs[-1,3].set_xlabel('Time (Day)')
-#    axs[-1,4].set_xlabel('Time (Day)')
-#    axs[-1,5].set_xlabel('Time (Day)')
-    #axs[0,0].set_title('Total DOM1')
-#    axs[0,0].set_title('Total Oxygen')
-#    axs[0,2].set_title('Total Cl$^-$')
-#    axs[0,1].set_title('Total NO$_3$$^-$')
-    #axs[0,3].set_title('Total Fe$^3$$^+$')
-#    axs[0,3].set_title('Total SO$_4$$^2$$^-$')
-#    axs[0,4].set_title('Ratio SO$_4$$^2$$^-$/Cl$^-$')
-#    axs[0,5].set_title('CH$_4$')
-
-#hydrofig,(ax1,ax2,ax3)=pyplot.subplots(3, 1,figsize=(8,6))
-#ax1.plot(Zt,linewidth=2)
-#ax2.plot(tide_conc['Cl-'],linewidth=2)
-#ax3.plot(tide_conc['SO4--'],linewidth=2)
-
-#f,axs=pyplot.subplots(ncols=3,nrows=len(output.depth),sharex=True,clear=True,num='Simulation results',figsize=(14,9))
-#plot_output(output,axs)
-#pyplot.setp(axs, xticks=[59,120,181,243,304,365], xticklabels=['02','04','06','08','10','12'])
-#pyplot.setp(axs, xticks=[31,34,37,40,44], xticklabels=['31','34','37','40','44'])
-#pyplot.setp(axs, xticks=[1,14,31,45,59,73,90,104,120], xticklabels=['1',' ','31',' ','59',' ','90',' ','120'])
-#pyplot.setp(axs, xticks=[212,219,226,233,240], xticklabels=['212',' ','226',' ','240'])
-#pyplot.setp(axs, xticks=[212,215,218,221,226], xticklabels=['212','215','218','221','226'])
 out=output.isel(depth=0,time=slice(None,None,1)).dropna(dim='time')
 #pyplot.plot(out['Total Sorbed microbe1'])
 microbe,(ax1,ax2,ax3,ax4,ax5)=pyplot.subplots(5, 1,figsize=(8,6))
