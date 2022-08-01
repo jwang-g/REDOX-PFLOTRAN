@@ -651,7 +651,7 @@ if __name__ == '__main__':
     norm=matplotlib.colors.Normalize(0,max([obs_mods[sim].index.max() for sim in obs_mods]))
     cmap=plt.get_cmap()
 
-    Fescale_unit=0.3 #nmol/L/s
+    Fescale_unit=30.0 #nmol/L/s
 
     f,axs=subplots(4,2,clear=True,num='1-1 plots',figsize=(7,10))
     # f2,axs2=subplots(4,2,clear=True,num='1-1 plots no inhib',figsize=(4,12))
@@ -756,9 +756,9 @@ if __name__ == '__main__':
     for n,Fescale in enumerate(results_periodic['Fescale'].values):
         c=cm(norm(n))
         # axs[0,0].plot(results_periodic_noinhib['ndryperiods'].values[:],array([results_periodic_noinhib.sel(ndryperiods=n,pH=pH,Fescale=1)['Total Tracer'].isel(time=arctic.simlength*24-1) for n in results_periodic_noinhib['ndryperiods'].values[:]])*porosity/arctic.BD_layerest2_trough['Organic',False],'o-',label=Fescale,c=c)
-        axs[0,0].plot(x,cumulative_flux(results_periodic_noinhib_mineral,'Total Tracer',pH,'Mineral',Fescale),'o-',c=c,label=round(Fescale*Fescale_unit,2))
-        axs[0,1].plot(x,cumulative_flux(results_periodic_noinhib_mineral,'Total Tracer',pH,'Mineral',Fescale)-cumulative_flux(results_periodic_noFe_mineral,'Total Tracer',pH,'Mineral',Fescale),'o-',c=c,label=round(Fescale*Fescale_unit,2))
-        axs[0,1].plot(x,cumulative_flux(results_periodic_mineral,'Total Tracer',pH,'Mineral',Fescale=Fescale)-cumulative_flux(results_periodic_noFe_mineral,'Total Tracer',pH,'Mineral',Fescale),'^:',c=c,label=round(Fescale*Fescale_unit,2))
+        axs[0,0].plot(x,cumulative_flux(results_periodic_noinhib_mineral,'Total Tracer',pH,'Mineral',Fescale),'o-',c=c,label='%d nM s$^{-1}$'%int(Fescale*Fescale_unit))
+        axs[0,1].plot(x,cumulative_flux(results_periodic_noinhib_mineral,'Total Tracer',pH,'Mineral',Fescale)-cumulative_flux(results_periodic_noFe_mineral,'Total Tracer',pH,'Mineral',Fescale),'o-',c=c,label='%d nM s$^{-1}$'%int(Fescale*Fescale_unit))
+        axs[0,1].plot(x,cumulative_flux(results_periodic_mineral,'Total Tracer',pH,'Mineral',Fescale=Fescale)-cumulative_flux(results_periodic_noFe_mineral,'Total Tracer',pH,'Mineral',Fescale),'^:',c=c,label='%d nM s$^{-1}$'%int(Fescale*Fescale_unit))
         
         # axs[0,0].plot(results_periodic_noFe['ndryperiods'].values[:],array([results_periodic_noFe.sel(ndryperiods=n,pH=pH,Fescale=1)['Total Tracer'].isel(time=arctic.simlength*24-1) for n in results_periodic_noFe['ndryperiods'].values[:]])*porosity/arctic.BD_layerest2_trough['Organic',False],'+--',label=Fescale,c=c)
         # axs[0,0].plot(results_periodic_noFe_mineral['ndryperiods'].values[:],cumulative_flux(results_periodic_noFe_mineral,'Total Tracer',pH,'Mineral'),'+--',c=c)
@@ -902,7 +902,7 @@ if __name__ == '__main__':
             axs[x,nn].set_xlim(0,arctic.simlength)
             axs[x,nn].set_title('('+ascii_lowercase[x*len(ndry_plotted)+nn]+')',loc='left')
             
-    l1=axs[1,0].legend(labels=[round(x*Fescale_unit,2) for x in results_periodic['Fescale'][Fescales].values],
+    l1=axs[1,0].legend(labels=[int(x*Fescale_unit) for x in results_periodic['Fescale'][Fescales].values],
                        handles=(axs[0,0].lines[1],axs[0,0].lines[4]),
                        title='Ferm. rate (nM s$^{-1}$)',ncol=3,loc=(0.1,1.05))
     l2=axs[1,0].legend(labels=['Fe(III) inhibition','No inhibition','No Fe'],title='Fe(III) inhibition of CH$_4$',
@@ -978,8 +978,8 @@ if __name__ == '__main__':
         axs[2,nn].set_title('Fe(II) production rate')
 
         axs[3,nn].set_xlabel('Time (days)')
-        axs[3,nn].set_ylabel('Fe oxides \n(mmol g dwt$^{-1}$)')
-        axs[3,nn].set_title('Fe oxide minerals ')
+        axs[3,nn].set_ylabel('Fe oxide \n(mmol g dwt$^{-1}$)')
+        axs[3,nn].set_title('Reactive Fe oxide minerals')
 
         axs[4,nn].set_xlabel('Time (days)')
         axs[4,nn].set_ylabel('pH')
@@ -998,7 +998,7 @@ if __name__ == '__main__':
             axs[x,nn].set_title('('+ascii_lowercase[x*len(ndry_plotted)+nn]+')',loc='left')
 
             
-    l1=axs[1,0].legend(labels=[round(x*Fescale_unit,2) for x in results_periodic['Fescale'][Fescales].values],
+    l1=axs[1,0].legend(labels=[int(x*Fescale_unit) for x in results_periodic['Fescale'][Fescales].values],
                        handles=(axs[0,0].lines[1],axs[0,0].lines[4]),
                        title='Ferm. rate (nM s$^{-1}$)',ncol=3,loc=(0.1,1.05))
     l2=axs[1,0].legend(labels=['Fe(III) inhibition','No inhibition','No Fe'],title='Fe(III) inhibition of CH$_4$',
