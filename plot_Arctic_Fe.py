@@ -579,7 +579,9 @@ if __name__ == '__main__':
     colors={'Anaerobic':'C1','Periodic':'C2','Low Fe':'C3','Aerobic':'C0'}
 
     if len(sys.argv)<2:
-        fname='Arctic_Fe_output/results_2021-03-31.nc'
+        # fname='Arctic_Fe_output/results_2021-03-31.nc'
+        import glob
+        fname=sorted(glob.glob('Arctic_Fe_output/output_2022-06-30_0?.nc'))
     else:
         fname=sys.argv[1:]
 
@@ -813,7 +815,13 @@ if __name__ == '__main__':
 
 
     ndry_plotted=[4]
-    fig,axs=subplots(ncols=len(ndry_plotted),nrows=6,num='Periodic comparison organic',clear=True,figsize=(10,8.5),squeeze=False)
+    # fig,axs=subplots(ncols=len(ndry_plotted),nrows=6,num='Periodic comparison organic',clear=True,figsize=(10,8.5),squeeze=False)
+    fig=figure(num='Periodic comparison organic',clear=True,figsize=(10,8.5),constrained_layout=False)
+    gs=matplotlib.gridspec.GridSpec(nrows=6,ncols=1,figure=fig,left=0.1,right=0.9,bottom=0.1,top=0.9,hspace=0.1)
+    gs2=matplotlib.gridspec.GridSpecFromSubplotSpec(2,1,gs[1,0],hspace=0.1)
+
+    axs=atleast_2d([fig.add_subplot(gs[0,0]),fig.add_subplot(gs2[1,0]),fig.add_subplot(gs[2,0]),
+        fig.add_subplot(gs[3,0]),fig.add_subplot(gs[4,0]),fig.add_subplot(gs[5,0]),fig.add_subplot(gs2[0,0])]).T
 
     Fescales=[1,3]
     pH=5.0
@@ -826,6 +834,8 @@ if __name__ == '__main__':
             c=cm(matplotlib.colors.Normalize(0,len(results_periodic_mineral['Fescale']))(nnn))
             d=results_periodic.sel(ndryperiods=ndry,pH=pH,Fescale=Fescale)
             plot_result(d,CH4flux_ax=axs[0,nn],gdrywt=True,CO2flux_ax=axs[1,nn],ls=ls,color=c,
+                    BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={},CO2flux_args={})
+            plot_result(d,gdrywt=True,CO2flux_ax=axs[6,nn],ls=ls,color=c,
                     BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={},CO2flux_args={})
             axs[2,nn].plot(results_periodic['time'][:-1],(d['Total Fe++'].diff(dim='time')*24*1e3*porosity+d['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Organic',False],ls,c=c,label=str(ndry))
 
@@ -841,6 +851,8 @@ if __name__ == '__main__':
             d=results_periodic_noinhib.sel(ndryperiods=ndry,pH=pH,Fescale=Fescale)
             plot_result(d,CH4flux_ax=axs[0,nn],gdrywt=True,CO2flux_ax=axs[1,nn],ls=ls,color=c,
                     BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={},CO2flux_args={})
+            plot_result(d,gdrywt=True,CO2flux_ax=axs[6,nn],ls=ls,color=c,
+                    BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={},CO2flux_args={})
             axs[2,nn].plot(d['time'][:-1],(d['Total Fe++'].diff(dim='time')*24*1e3*porosity+d['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Organic',False],ls,c=c,label=str(ndry))
 
             axs[3,nn].plot(results_periodic_noinhib['time'],d['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Organic',False],ls,c=c)
@@ -854,6 +866,8 @@ if __name__ == '__main__':
             ls='--'
             d=results_periodic_noFe.sel(ndryperiods=ndry,pH=pH,Fescale=Fescale)
             plot_result(d,CH4flux_ax=axs[0,nn],gdrywt=True,CO2flux_ax=axs[1,nn],ls=ls,color=c,
+                    BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={},CO2flux_args={})
+            plot_result(d,gdrywt=True,CO2flux_ax=axs[6,nn],ls=ls,color=c,
                     BD=arctic.BD_layerest2_trough['Organic',False],SOC_pct=arctic.SOC_layermean['Organic'],CH4flux_args={},CO2flux_args={})
             axs[2,nn].plot(results_periodic_noFe['time'][:-1],(d['Total Fe++'].diff(dim='time')*24*1e3*porosity+d['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Organic',False],ls,c=c,label=str(ndry))
 
@@ -875,7 +889,13 @@ if __name__ == '__main__':
         # axs[1,nn].set_xlabel('Time (days)')
         axs[0,nn].set_title('CH$_4$ flux rate')
 
-        axs[1,nn].set_ylim(0,40)
+        axs[1,nn].set_ylim(0,18)
+        axs[1,nn].set_ylabel(axs[1,nn].get_ylabel(),y=1.0)
+        axs[6,nn].set_ylim(40,150)
+        axs[6,nn].set_ylabel('')
+        axs[6,nn].get_xaxis().set_visible(False)
+        axs[6,nn].spines['bottom'].set_linestyle('--')
+        axs[1,nn].spines['top'].set_linestyle('--')
 
         axs[2,nn].set_ylim(bottom=0)
         axs[2,nn].set_xlabel('Time (days)')
@@ -901,15 +921,25 @@ if __name__ == '__main__':
             axs[x,nn].pcolormesh(results_periodic['time'],axs[x,nn].get_ylim(),d['Total O2(aq)'].to_masked_array()[:-1,None].T,cmap=cmap_O2,zorder=-1,shading='flat',alpha=0.15)
             axs[x,nn].set_xlim(0,arctic.simlength)
             axs[x,nn].set_title('('+ascii_lowercase[x*len(ndry_plotted)+nn]+')',loc='left')
+        axs[6,0].set_title('(b)',loc='left')
             
-    l1=axs[1,0].legend(labels=[int(x*Fescale_unit) for x in results_periodic['Fescale'][Fescales].values],
+    l1=axs[2,0].legend(labels=[int(x*Fescale_unit) for x in results_periodic['Fescale'][Fescales].values],
                        handles=(axs[0,0].lines[1],axs[0,0].lines[4]),
                        title='Ferm. rate (nM s$^{-1}$)',ncol=3,loc=(0.1,1.05))
-    l2=axs[1,0].legend(labels=['Fe(III) inhibition','No inhibition','No Fe'],title='Fe(III) inhibition of CH$_4$',
+    l2=axs[2,0].legend(labels=['Fe(III) inhibition','No inhibition','No Fe'],title='Fe(III) inhibition of CH$_4$',
                         handles=[axs[0,0].lines[0],axs[0,0].lines[1],axs[0,0].lines[2]],ncol=3,loc=(0.565,1.05))
-    axs[1,0].add_artist(l1)
+    axs[2,0].add_artist(l1)
+    gs.update(hspace=0.85,bottom=0.05,top=0.96,left=0.08,right=0.98)
 
-    fig,axs=subplots(ncols=len(ndry_plotted),nrows=6,num='Periodic comparison mineral',clear=True,figsize=(10,8.5),squeeze=False)
+
+
+    # fig,axs=subplots(ncols=len(ndry_plotted),nrows=6,num='Periodic comparison mineral',clear=True,figsize=(10,8.5),squeeze=False)
+    fig=figure(num='Periodic comparison mineral',clear=True,figsize=(10,8.5),constrained_layout=False)
+    gs=matplotlib.gridspec.GridSpec(nrows=6,ncols=1,figure=fig,left=0.1,right=0.9,bottom=0.1,top=0.9,hspace=0.1)
+    gs2=matplotlib.gridspec.GridSpecFromSubplotSpec(2,1,gs[1,0],hspace=0.1)
+
+    axs=atleast_2d([fig.add_subplot(gs[0,0]),fig.add_subplot(gs2[1,0]),fig.add_subplot(gs[2,0]),
+        fig.add_subplot(gs[3,0]),fig.add_subplot(gs[4,0]),fig.add_subplot(gs[5,0]),fig.add_subplot(gs2[0,0])]).T
 
     from string import ascii_lowercase
 
@@ -922,6 +952,8 @@ if __name__ == '__main__':
             c=cm(matplotlib.colors.Normalize(0,len(results_periodic_mineral['Fescale']))(nnn))
             d=results_periodic_mineral.sel(ndryperiods=ndry,pH=pH,Fescale=Fescale)
             plot_result(d,CH4flux_ax=axs[0,nn],gdrywt=True,CO2flux_ax=axs[1,nn],ls=ls,color=c,
+                    BD=arctic.BD_layerest2_trough['Mineral',False],SOC_pct=arctic.SOC_layermean['Mineral'],CH4flux_args={},CO2flux_args={})
+            plot_result(d,gdrywt=True,CO2flux_ax=axs[6,nn],ls=ls,color=c,
                     BD=arctic.BD_layerest2_trough['Mineral',False],SOC_pct=arctic.SOC_layermean['Mineral'],CH4flux_args={},CO2flux_args={})
             axs[2,nn].plot(d['time'][:-1],(d['Total Fe++'].diff(dim='time')*24*1e3*porosity+d['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Mineral',False],ls,c=c,label=str(ndry))
 
@@ -937,6 +969,8 @@ if __name__ == '__main__':
             d=results_periodic_noinhib_mineral.sel(ndryperiods=ndry,pH=pH,Fescale=Fescale)
             plot_result(d,CH4flux_ax=axs[0,nn],gdrywt=True,CO2flux_ax=axs[1,nn],ls=ls,color=c,
                     BD=arctic.BD_layerest2_trough['Mineral',False],SOC_pct=arctic.SOC_layermean['Mineral'],CH4flux_args={},CO2flux_args={})
+            plot_result(d,gdrywt=True,CO2flux_ax=axs[6,nn],ls=ls,color=c,
+                    BD=arctic.BD_layerest2_trough['Mineral',False],SOC_pct=arctic.SOC_layermean['Mineral'],CH4flux_args={},CO2flux_args={})
             axs[2,nn].plot(d['time'][:-1],(d['Total Fe++'].diff(dim='time')*24*1e3*porosity+d['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Mineral',False],ls,c=c,label=str(ndry))
 
             axs[3,nn].plot(d['time'],d['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Mineral',False],ls,c=c)
@@ -951,6 +985,8 @@ if __name__ == '__main__':
             d=results_periodic_noFe_mineral.sel(ndryperiods=ndry,pH=pH,Fescale=Fescale)
             plot_result(d,CH4flux_ax=axs[0,nn],gdrywt=True,CO2flux_ax=axs[1,nn],ls=ls,color=c,
                     BD=arctic.BD_layerest2_trough['Mineral',False],SOC_pct=arctic.SOC_layermean['Mineral'],CH4flux_args={},CO2flux_args={})
+            plot_result(d,gdrywt=True,CO2flux_ax=axs[6,nn],ls=ls,color=c,
+                    BD=arctic.BD_layerest2_trough['Mineral',False],SOC_pct=arctic.SOC_layermean['Mineral'],CH4flux_args={},CO2flux_args={})        
             axs[2,nn].plot(d['time'][:-1],(d['Total Fe++'].diff(dim='time')*24*1e3*porosity+d['Total Sorbed Fe++'].diff(dim='time')*24*1e6/100**3)/arctic.BD_layerest2_trough['Mineral',False],ls,c=c,label=str(ndry))
 
             axs[3,nn].plot(d['time'],d['Fe(OH)3 VF']/arctic.molar_volume_FeOH3*1e3/arctic.BD_layerest2_trough['Mineral',False],ls,c=c)
@@ -971,10 +1007,16 @@ if __name__ == '__main__':
         axs[0,nn].set_title('CH$_4$ flux rate')
 
         axs[1,nn].set_ylim(0,3.5)
+        axs[1,nn].set_ylabel(axs[1,nn].get_ylabel(),y=1.0)
+        axs[6,nn].set_ylim(12,38)
+        axs[6,nn].set_ylabel('')
+        axs[6,nn].get_xaxis().set_visible(False)
+        axs[6,nn].spines['bottom'].set_linestyle('--')
+        axs[1,nn].spines['top'].set_linestyle('--')
 
         axs[2,nn].set_ylim(bottom=0)
         axs[2,nn].set_xlabel('Time (days)')
-        axs[2,nn].set_ylabel('Fe(II) production rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
+        axs[2,nn].set_ylabel('Fe(II) prod. rate\n($\mu$mol g dwt$^{-1}$ day$^{-1}$)')
         axs[2,nn].set_title('Fe(II) production rate')
 
         axs[3,nn].set_xlabel('Time (days)')
@@ -996,14 +1038,16 @@ if __name__ == '__main__':
             axs[x,nn].pcolormesh(results_periodic['time'],axs[x,nn].get_ylim(),d['Total O2(aq)'].to_masked_array()[:-1,None].T,cmap=cmap_O2,zorder=-1,shading='flat',alpha=0.15)
             axs[x,nn].set_xlim(0,arctic.simlength)
             axs[x,nn].set_title('('+ascii_lowercase[x*len(ndry_plotted)+nn]+')',loc='left')
-
+        axs[6,0].set_title('(b)',loc='left')
             
-    l1=axs[1,0].legend(labels=[int(x*Fescale_unit) for x in results_periodic['Fescale'][Fescales].values],
+    l1=axs[2,0].legend(labels=[int(x*Fescale_unit) for x in results_periodic['Fescale'][Fescales].values],
                        handles=(axs[0,0].lines[1],axs[0,0].lines[4]),
                        title='Ferm. rate (nM s$^{-1}$)',ncol=3,loc=(0.1,1.05))
-    l2=axs[1,0].legend(labels=['Fe(III) inhibition','No inhibition','No Fe'],title='Fe(III) inhibition of CH$_4$',
-                        handles=[axs[0,0].lines[0],axs[0,0].lines[1],axs[0,0].lines[2]],ncol=3,loc=(0.565,1.05))
-    axs[1,0].add_artist(l1)
+    l2=axs[2,0].legend(labels=['Fe(III) inhibition','No inhibition','No Fe'],title='Fe(III) inhibition of CH$_4$',
+                        handles=[axs[0,0].lines[0],axs[0,0].lines[1],axs[0,0].lines[2]],ncol=3,loc=(0.7,1.05))
+    axs[2,0].add_artist(l1)
+    gs.update(hspace=0.85,bottom=0.05,top=0.96,left=0.08,right=0.98)
+
 
     f,a=subplots(num='DOM concentrations',nrows=3,clear=True)
     results_periodic_noinhib_mineral['Total Acetate-'].sel(ndryperiods=3,pH=5.0,Fescale=0.5).plot(ls='-',label='Acetate',color='C0',ax=a[0])
@@ -1029,6 +1073,21 @@ if __name__ == '__main__':
 
     a[0].legend()
 
-    save_all_figs('Arctic_Fe_output/figs/2022-07-19',format='jpg',dpi=300)
+    # Comparing fermentation rates with organic acid accumulation from Herndon et al. 2015
+    # Convert from umol C/g SOC/30 days to nmol C/L/s
+    print(' Fermentation rate values from Herndon et al. 2015, Figure 5') 
+    print('organic center',200e-6/(30*24*3600)*arctic.BD_organic_nottrough/arctic.SOC_organic_nottrough*1000*arctic.porosity_organic_nottrough*1e9)
+    print('mineral center',20e-6/(30*24*3600)*arctic.BD_mineral_nottrough/arctic.SOC_mineral_nottrough*1000*arctic.porosity_mineral_nottrough*1e9)
+    print('organic trough',75e-6/(30*24*3600)*arctic.BD_organic_trough/arctic.SOC_organic_trough*1000*arctic.porosity_organic_trough*1e9)
+    print('mineral trough',10e-6/(30*24*3600)*arctic.BD_mineral_trough/arctic.SOC_mineral_trough*1000*arctic.porosity_mineral_trough*1e9)
+    
+    # Values from "Acetate production" in Table 4
+    print(' Fermentation rate values from Herndon et al. 2015, Table 4 "Acetate production"') 
+    print('organic center',310e-6/(30*24*3600)*arctic.BD_organic_nottrough/arctic.SOC_organic_nottrough*1000*arctic.porosity_organic_nottrough*1e9)
+    print('mineral center',60e-6/(30*24*3600)*arctic.BD_mineral_nottrough/arctic.SOC_mineral_nottrough*1000*arctic.porosity_mineral_nottrough*1e9)
+    print('organic trough',66e-6/(30*24*3600)*arctic.BD_organic_trough/arctic.SOC_organic_trough*1000*arctic.porosity_organic_trough*1e9)
+    print('mineral trough',40e-6/(30*24*3600)*arctic.BD_mineral_trough/arctic.SOC_mineral_trough*1000*arctic.porosity_mineral_trough*1e9)
+    
+    save_all_figs('Arctic_Fe_output/figs/2022-09-08',format='jpg',dpi=300)
 
     show()
