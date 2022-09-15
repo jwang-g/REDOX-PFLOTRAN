@@ -1,0 +1,67 @@
+# These are steps to get python-alquimia-PFLOTRAN running on Macbook
+## prerequist: Homebrew, Xcode (google to install or install from AppleApp)
+## Receipt to install petsc on macbook needs to be updated 
+
+# Install PFLOTRAN and build chemical reactions library
+# This is a fork of PFLOTRAN with some additional reactions and infrastructure for coupling with ELM
+git clone https://github.com/bsulman/pflotran-elm-interface.git
+pushd pflotran-elm-interface/src/pflotran
+git checkout pflotran-elm-interface
+export PETSC_DIR='local petsc install directory'  #e.g., '/Users/yourname/petsc'
+export PETSC_ARCH='local petsc arch install directory' ##e.g., 'arch-darwin-c-opt'
+export OPENMPI_DIR='which openmpi directory'      # may need to homebrew openmpi for alquimia and pflotran compiling
+make pflotran pflotran_rxn
+popd
+export PFLOTRAN_DIR=$PWD/pflotran-elm-interface
+
+# Install required python packages
+#following the link to install anaconda on Mac
+
+https://docs.anaconda.com/anaconda/install/mac-os/
+
+# This configures your shell so it works better with conda. Only need to run once
+conda init
+# May need to log out and log in again
+
+# This makes a local copy of the python installations that you can update (only need to run once)
+conda create --name myanaconda3 --clone base
+conda activate myanaconda3
+conda install -c conda-forge pygraphviz ## this will allow to install pygraphviz 
+conda install xarray netCDF4 cftime
+conda install -c conda-forge mpi4py ## this will allow to install mpi4py
+#pip install mpi4py
+pip install nc-time-axis
+
+# Install python scripts for running alquimia-based biogeochemical simulations
+git clone --recursive https://github.com/bsulman/REDOX-PFLOTRAN.git
+
+# Build alquimia interface
+cd REDOX-PFLOTRAN/alquimia
+mkdir build
+cd build
+
+## make sure cmake is installed on Mac, if not, should install homebrew first to use brew
+brew install cmake
+
+cmake .. \
+  -DCMAKE_INSTALL_PREFIX=. \
+  #-DCMAKE_C_COMPILER=$PETSC_DIR/$PETSC_ARCH/bin/mpicc \     ##using one of the the following three compilers, not all three of them, e., either mpicc or mpicxx or mpif90
+  #-DCMAKE_CXX_COMPILER=$PETSC_DIR/$PETSC_ARCH/bin/mpicxx \
+  -DCMAKE_Fortran_COMPILER=$PETSC_DIR/$PETSC_ARCH/bin/mpif90 \   ## choose one the above three compilers
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DXSDK_WITH_PFLOTRAN=ON \
+  -DTPL_PFLOTRAN_LIBRARIES=$PFLOTRAN_DIR/src/pflotran/libpflotranchem.a \
+  -DTPL_PFLOTRAN_INCLUDE_DIRS=$PFLOTRAN_DIR/src/pflotran \
+  -DCMAKE_Fortran_FLAGS="-DPFLOTRAN_SOMDEC"
+
+make install
+
+cd ../..
+
+# This script builds the code needed for connecting python scripts with alquimia
+python make_alquimia_python_interface.py   ##make sure the script has the right directory for Macbook (e.g., PETSC_DIR and PETSC_ARCH, and may need to comment out PETSC_PATH because macbook does not really need it)
+
+# Try running a script:
+python tidal.py            ## makesure tidal.py has the right directory for pflotran.exe file (e.g.,$PFLOTRAN_DIR/src/pflotran)
+
+
