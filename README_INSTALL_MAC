@@ -1,6 +1,6 @@
 # These are steps to get python-alquimia-PFLOTRAN running on Macbook
 ## prerequist: Homebrew, Xcode (google to install or install from AppleApp)
-## Receipt to install petsc on macbook needs to be updated 
+## Receipts to install petsc on macbook need to be updated 
 
 # Install PFLOTRAN and build chemical reactions library
 # This is a fork of PFLOTRAN with some additional reactions and infrastructure for coupling with ELM
