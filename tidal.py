@@ -371,7 +371,7 @@ node_colors={
 
 reaction_network=decomp_network.decomp_network(pools=pools,reactions=reactions)
 
-pflotran_exe='../pflotran-interface/src/pflotran/pflotran'
+pflotran_exe='Users/jiaze/pflotran-elm-interface/src/pflotran/pflotran'
 simlength=30
 
 # Run using standard PFLOTRAN and generated input file
