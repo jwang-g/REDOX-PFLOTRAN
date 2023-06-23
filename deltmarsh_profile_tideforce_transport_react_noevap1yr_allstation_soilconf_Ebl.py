@@ -2,7 +2,7 @@
 
 from run_alquimia import get_alquimiavector,ffi,lib,check_status,init_alquimia,convert_condition_to_alquimia,print_metadata
 import decomp_network
-import delmar_network_tidev3 as Mar       #delmar_network_tidev3 is methanogenesis without inhibition
+import MRDwet_RedoxNet as Mar       #delmar_network_tidev3 is methanogenesis without inhibition
 from matplotlib import pyplot
 import numpy
 import xarray
