@@ -9,7 +9,7 @@ def soils():
     pfl_bavg={}
     pfl_poravg={}
     pfl_satavg={}
-    path="/Users/46w/Documents/estuary wetland/CRMS_data/CRMS_SOIL"
+    path="/Users/jiaze/Documents/ornl_data/CRMS/CRMS_SOIL"
     #os.chdir(path)
     # iterate through all file
     for file in os.listdir(path):
