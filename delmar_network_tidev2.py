@@ -6,7 +6,7 @@ from matplotlib import pyplot
 import matplotlib
 
 pools = [
-decomp_network.decomp_pool(name='SOM',CN=13,constraints={'initial':2.8},kind='immobile'),  #ref 60 mg/cm3 organic matter to C-mol/L at Wax lake McClellan et al., 2021 
+decomp_network.decomp_pool(name='SOM',CN=13,constraints={'initial':2.8},kind='immobile'),  #ref 60 mg/cm3 organic matter to C-mol/L at Wax lake McClellan et al., 2021
 decomp_network.decomp_pool(name='HRimm',constraints={'initial':1e-20},kind='immobile'),
 #decomp_network.decomp_pool(name='Root_biomass',constraints={'initial':1e-20},kind='immobile'),
 
@@ -56,7 +56,7 @@ decomp_network.decomp_pool(name='FeCO3(aq)',kind='secondary'),
 decomp_network.decomp_pool(name='Fe(OH)3',rate='1.d-6 mol/m^2-sec',constraints={'initial':'0.1d-3  1.d2 m^2/m^3'},kind='mineral'),
 decomp_network.decomp_pool(name='Fe(OH)2',rate='1.d-7 mol/m^2-sec',constraints={'initial':'0.0e-20  1.d2 m^2/m^3'},kind='mineral'),
 decomp_network.decomp_pool(name='Pyrite',rate='0.d-3 mol/m^2-sec',constraints={'initial':'0.0d-3  1.d2 m^2/m^3'},kind='mineral'),
-decomp_network.decomp_pool(name='Calcite',rate='0.d-3 mol/m^2-sec',constraints={'initial':'0.875d-3  1.d2 m^2/m^3'},kind='mineral'),
+#decomp_network.decomp_pool(name='Calcite',rate='0.d-3 mol/m^2-sec',constraints={'initial':'0.875d-3  1.d2 m^2/m^3'},kind='mineral'),
 decomp_network.decomp_pool(name='Pyrrhotite',rate='0.d-3 mol/m^2-sec',constraints={'initial':'0.0d-3  1.d2 m^2/m^3'},kind='mineral'),
 
 ]
@@ -81,6 +81,7 @@ def make_network(change_constraints={},change_rate={}):
     #	'O2(aq)':1e-4,
     #}
     ##cjw new half saturation values for each reaction from Egger et al., 2016, Biogeosciences. Reed et al., gene-centric model, PNNL.
+###half saturation unit is M.
     conc_scales={
     	'DOM1':1e-2,#1e-2,#7e-7,       #reed et al, PNAS
     	'Acetate-':1e-3,#1e-3,#7e-6,
@@ -94,7 +95,7 @@ def make_network(change_constraints={},change_rate={}):
     	'CH4(aq)':1e-5,
     	'H2(aq)':1e-5,
     	'O2(aq)':1e-4,    ## literature range is 0.0005-0.015 mM
-    }    
+    }
     rate_scale=2e-10
     truncate_conc=1e-30
     thresh=truncate_conc*1.01
@@ -142,7 +143,7 @@ def make_network(change_constraints={},change_rate={}):
         # Currently assuming backward reaction rate is zero
         decomp_network.reaction(name='Fe(II) abiotic oxidation',stoich='1.0 Fe++ + 0.25 O2(aq) + 1.0 H+ <-> 1.0 Fe+++ + 0.5 H2O',
                                                 rate_constant=1e-2,backward_rate_constant=0.0,reactiontype='GENERAL'),
-                                            
+
         decomp_network.reaction(name='Fe(II) microbial oxidation',stoich='1.0 Fe++ + 0.25 O2(aq) + 1.0 H+ -> 1.0 Fe+++ + 0.5 H2O',
                                                 monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh),decomp_network.monod(species='Fe++',k=conc_scales['Fe++'],threshold=thresh)],
                                                 rate_constant=1e-8,reactiontype='MICROBIAL'),
@@ -184,7 +185,7 @@ def make_network(change_constraints={},change_rate={}):
 	                                            inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD')],
 	                                            rate_constant=rate_scale,reactiontype='MICROBIAL'),
         ##added by Jiaze MMMM
-        # Fermentative DNRA  CH2O + 0.5 NO3- +0.5 H2O= 0.5NH4+ + HCO3- or C2H3O2- +  NO3- + H2O + H+ -> 2 HCO3- + NH4+ 
+        # Fermentative DNRA  CH2O + 0.5 NO3- +0.5 H2O= 0.5NH4+ + HCO3- or C2H3O2- +  NO3- + H2O + H+ -> 2 HCO3- + NH4+
         #decomp_network.reaction(name='Fermentative DNRA abiotic',stoich='1.0 DOM1 + 0.5 NO3- + 0.5 H2O <-> 0.5 NH4+ + 1.0 HCO3-',
         #                                        rate_constant=1e-2,backward_rate_constant=0.0,reactiontype='GENERAL'),
 
@@ -204,7 +205,7 @@ def make_network(change_constraints={},change_rate={}):
                                                 monod_terms=[decomp_network.monod(species='NO3-',k=conc_scales['NO3-'],threshold=thresh),decomp_network.monod(species='HS-',k=conc_scales['HS-'],threshold=thresh)],
                                                 inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD'),decomp_network.inhibition(species='CH4(aq)',k=conc_scales['CH4(aq)'],type='MONOD')],
 	                                            rate_constant=rate_scale,reactiontype='MICROBIAL'),
-        ##added by Jiaze wwww        
+        ##added by Jiaze wwww
 
 	    # Sulfate reduction C2H3O2- + SO4--  -> 2 HCO3- + HS-
 	    decomp_network.reaction(name='Sulfate reduction',stoich='1.0 Acetate- + 1.0 SO4--  -> 2.0 HCO3- + 2.0 HS- +  2.0 Tracer',
@@ -212,7 +213,7 @@ def make_network(change_constraints={},change_rate={}):
 	                                            inhibition_terms=[decomp_network.inhibition(species='O2(aq)',k=conc_scales['O2(aq)'],type='MONOD'),
 	                                                                decomp_network.inhibition(species='NO3-',k=conc_scales['NO3-'],type='MONOD'),
 	                                                                decomp_network.inhibition(species='Fe+++',k=conc_scales['Fe+++'],type='MONOD')],
-	                                            rate_constant=rate_scale,reactiontype='MICROBIAL'),   
+	                                            rate_constant=rate_scale,reactiontype='MICROBIAL'),
 	    # Methane oxidation (O2)
 	    decomp_network.reaction(name='Methane oxidation (O2)',stoich='1.0 CH4(aq)  + 1.0 O2(aq)  -> 1.0 HCO3-  + 1.0 H+ + 1.0 H2O + 1.0 Tracer',
 	                                            monod_terms=[decomp_network.monod(species='O2(aq)',k=conc_scales['O2(aq)'],threshold=thresh),decomp_network.monod(species='CH4(aq)',k=conc_scales['CH4(aq)'],threshold=thresh)],
@@ -437,7 +438,7 @@ if __name__ == '__main__':
 #            namechanges={'cellulose':'Cellulose','DOM1':'DOM','O2(aq)':'O$_2$(aq)','CH4(aq)':'CH$_4$(aq)','HCO3-':'HCO$_3^-$','DOM2':'Exposed lignin','sorbed_DOM1':'Sorbed DOM',
 #                         'Fe(OH)2':'Fe(OH)$_2$','Fe(OH)3':'Fe(OH)$_3$','Mn++':r'Mn$^\mathrm{+\!\!+}$','Mn+++':r'Mn$^\mathrm{+\!\!+\!\!\!+}$','Acetate-':'Acetate',})
     drawn,pos=decomp_network.draw_network_with_reactions(reaction_network,
-            omit=['gas','secondary','H+','>Carboxylate-','Carboxylic_acid','H2O','Na+','Cl-','Calcite','Ca++','mineral','HCO3-'],
+            omit=['gas','secondary','H+','H2O','Na+','Cl-','Calcite','Ca++','HCO3-','mineral'],
             font_size='x-large',node_size=500,font_color='w',arrowstyle='-|>',arrowsize=20.0,width=1.5,edge_color='k',node_alpha=0.9,node_colors=node_colors,markers={'Reaction':'h','mineral':'8'},
             namechanges={'SOM':'SOM','DOM1':'DOM','O2(aq)':'O$_2$','CH4(aq)':'CH$_4$','HCO3-':'CO$_2$','DOM2':'Exposed lignin','sorbed_DOM1':'Sorbed DOM',
                          'Fe(OH)2':'Fe(OH)$_2$','Fe(OH)3':'Fe(OH)$_3$','Mn++':r'Mn$^\mathrm{+\!\!+}$','Mn+++':r'Mn$^\mathrm{+\!\!+\!\!\!+}$','Acetate-':'Acetate',
