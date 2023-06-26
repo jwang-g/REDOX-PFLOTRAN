@@ -1,5 +1,6 @@
 # REDOX-PFLOTRAN
-This branch is developed to investigate subsurface redox reaction control over greenhouse gas emission from Mississippi Delta wetland.
+This branch is developed to investigate subsurface redox reaction control over greenhouse gas emission from Mississippi Delta wetland. Please note that this is research code, and it is made available as it is being deployed in the interest of open science and open applications. In particular, some poor coding practices like hardcoded paths are still in place, though should fade with time.
+
 1. The initial simulation is conducted along a salinity gradient in Barataria Basin.
 2. Hourly hydrological measurements to each site are used to force the reactive-transport model (Forcing folder)
 3. Soil properties data for each site are used to set up the single soil column for each site (soil folder)
