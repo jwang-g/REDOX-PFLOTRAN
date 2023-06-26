@@ -9,6 +9,7 @@ import xarray
 import pdb
 #cjw
 import READSOIL_CRMS
+import os
 
 class layer:
     def __init__(self,volume,saturation=0.9,temperature=20.0,water_density=1000.0,porosity=0.25,pressure=101325.0,BD=1.5,CEC=None,rateconstants={},diffquo={}):
@@ -1252,7 +1253,12 @@ for stnm in nm:#bavg.keys():
         ebp='EBP'
     else:
         ebp=''
+    
     today=datetime.datetime.today()
+##cjw check if Outputs folder exists for model output, if not create one under current directory.
+    if not os.path.exists('Outputs'):
+        os.makedirs('Outputs')
+
     fname='./Outputs/wnd_temp_Methane_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
     fname=fname[:-3]+ebp+stnm[4:8]+'.nc'
     Lname='./Outputs/wnd_temp_LtranR_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
