@@ -479,13 +479,6 @@ rateconstants={
 input_file='deltamarsh.in'
 
 decomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt',input_file,log_formulation=False,truncate_concentration=truncate_conc)
-#cjwdecomp_network.PF_network_writer(reaction_network).write_into_input_deck('SOMdecomp_template.txt','deltamarsh.in',length_days=30,log_formulation=False)
-
-#cjw incubation_length=5 # Years of litter decomp
-
-#cjw molar_mass={'N':14.007}
-#cjw  molar_mass={'Mg++':24.305,'Al+++':26.982,'K+':39.098,'Ca++':40.078,'Mn':54.938,'Na+':22.99,'N':14.007}
-#cjw  init_exch_cations={'Mg++':1.5,'Al+++':7.0,'K+':1.3,'Ca++':5.0,'Na+':0.2,'Mn++':0.3} # mmol/kg. From Jin et al 2010 Table 3
 
 # Read secondary complex names from input file since Alquimia does not provide them
 
@@ -508,77 +501,33 @@ starting_time=time.time()
 
 rateconstants_warmed=rateconstants.copy()
 #cjw pH for fresh, brackish and salt is from DeLaune, 1983 (average data from 0-50cm).
-#formatter = "{:04d}".format
-#stnm=[33,164,175,178,190,307,396,479,464,463,479,2825,3166,3169,5373,6304]
-#stnm=list(map(formatter, stnm))   #str format with leading zeros
 #cjw getting soil properties for all stations
 bavg,poravg,satavg=READSOIL_CRMS.soils()
 #wind station name
 wndid='Gisl'        #wind data from grand isle
 #for station in stnm:
-nm=['CRMS4245','CRMS3166']#['CRMS2825']['CRMS0220','CRMS4245','CRMS6304','CRMS0178','CRMS0307','CRMS0464','CRMS0463','CRMS0224','CRMS0175','CRMS0164','CRMS3169','CRMS5373','CRMS0479']#['CRMS0164','CRMS0175','CRMS0190','CRMS0396','CRMS0192']  #rerun 0164,0479,0307,0192,0175,0396 (,'CRMS0479','CRMS0307') CRMS6304,464,307,463,224,479,178 is negative with HS-
-##for pH in numpy.arange(6.3,7.3):
+nm=['CRMS4245','CRMS3166','CRMS2825','CRMS0220','CRMS0224']
 for stnm in nm:#bavg.keys():
     chem,data,sizes,status=init_alquimia(input_file,hands_off=False)
-    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=bavg[stnm][0],porosity=poravg[stnm][0],saturation=satavg[stnm][0])]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][1],porosity=poravg[stnm][1],saturation=satavg[stnm][1])]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][2],porosity=poravg[stnm][2],saturation=satavg[stnm][2])]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][3],porosity=poravg[stnm][3],saturation=satavg[stnm][3])]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][4],porosity=poravg[stnm][4],saturation=satavg[stnm][4])]+[layer(0.1,rateconstants=rateconstants_warmed,BD=bavg[stnm][5],porosity=poravg[stnm][5],saturation=satavg[stnm][5])]
+    
 #cjw assume it is always saturated even when water table is low (precipitation could bring water or river diversion)
     layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=bavg[stnm][0],porosity=poravg[stnm][0],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][1],porosity=poravg[stnm][1],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][2],porosity=poravg[stnm][2],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][3],porosity=poravg[stnm][3],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][4],porosity=poravg[stnm][4],saturation=1)]+[layer(0.1,rateconstants=rateconstants_warmed,BD=bavg[stnm][5],porosity=poravg[stnm][5],saturation=1)]
-        #cjw below is the codes for layer setting up.
-        # Set up layers
-        # Top (organic) layer should be thinner and have lower bulk density though
-        # Low bulk density causes simulation to slow or crash though. Actually CEC being too low (<100 combined with BD<1) is the problem
-#cjw        layers=[layer(0.05,rateconstants=rateconstants_warmed,BD=0.05,porosity=0.5)]+[layer(0.1,BD=0.25,rateconstants=rateconstants_warmed) for num in range(3)]
-    #station 2825
-    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.15,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.15,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.85)]+[layer(0.05,BD=0.13,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.88)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.89)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.91)]+[layer(0.1,BD=0.09,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
-    ##same saturation as 3166, BD and porosity is from 2825
-    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.15,porosity=0.95,saturation=0.93)]+[layer(0.05,BD=0.15,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.91)]+[layer(0.05,BD=0.13,rateconstants=rateconstants_warmed,porosity=0.95,saturation=0.91)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.92)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.92)]+[layer(0.1,BD=0.09,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
-    #test whether it works.
-    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.0716,porosity=0.9729,saturation=0.9033)]+[layer(0.05,BD=0.1066,rateconstants=rateconstants_warmed,porosity=0.9597,saturation=0.8786)]+[layer(0.05,BD=0.1,rateconstants=rateconstants_warmed,porosity=0.9622,saturation=0.8917)]+[layer(0.05,BD=0.08,rateconstants=rateconstants_warmed,porosity=0.9698,saturation=0.9145)]+[layer(0.05,BD=0.075,rateconstants=rateconstants_warmed,porosity=0.9716,saturation=0.9221)]+[layer(0.1,BD=0.0683,rateconstants=rateconstants_warmed,porosity=0.9742,saturation=0.9252)]
-    ##station 3166
-    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.04,porosity=0.98,saturation=0.93)]+[layer(0.05,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.91)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]+[layer(0.1,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.98,saturation=0.92)]
-    ##station 3169
-    #layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=0.27,porosity=0.90,saturation=0.74)]+[layer(0.05,BD=0.18,rateconstants=rateconstants_warmed,porosity=0.93,saturation=0.81)]+[layer(0.05,BD=0.17,rateconstants=rateconstants_warmed,porosity=0.93,saturation=0.82)]+[layer(0.05,BD=0.11,rateconstants=rateconstants_warmed,porosity=0.96,saturation=0.88)]+[layer(0.05,BD=0.07,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.91)]+[layer(0.1,BD=0.06,rateconstants=rateconstants_warmed,porosity=0.97,saturation=0.92)]
-
     for l in layers:
         l.secondary_names=secondary_names
     for l in layers:
-#           l.initcond=Mar.pools.copy()
         l.initcond=decomp_network.change_constraints(Mar.pools,{'Ca++':'1e-30',
                                                         'Na+':'1e-30','Cl-':'1e-30','CH4(aq)':'2.37998572e-09',
                                                         'SO4--':'1e-30',#})     #'%1.8f'%((0.75-suldpth[sulidx])*1e-15/30)})
                                                         'O2(aq)':'0.2 G O2(g)'})               #cjw: set the sulfate profile so4 decrease with depth (0.75-suldpth[sulidx])/30)
-        #sulidx=sulidx+1
-#cjw    for l in layers[0:3]:
-#cjw        l.initcond=decomp_network.change_constraints(Mar.pools,{'Fe++':'%1.8f'%(l.volume/100)})      #cjw Fe++ profile
-        # initcond=decomp_network.change_site_density(initcond, '>DOM1', 1e4)
-#cjw        sed_air_interface=layers[0].initcond
-#cjw        sed_water_interface=layers[0].initcond
+       
     pools_tide=Mar.pools.copy()
     for n,p in enumerate(pools_tide):
         if p['name']=='O2(aq)':
             pools_tide[n]=pools_tide[n].copy()
             pools_tide[n].update(constraints={'initial':'0.2 G O2(g)'})
-        #elif p['name']=='SO4--':
-        #    pools_tide[n]=pools_tide[n].copy()
-        #    pools_tide[n].update(constraints={'initial':'1e-15'})
-        #elif p['name']=='Ca++':
-        #    pools_tide[n]=pools_tide[n].copy()
-        #    pools_tide[n].update(constraints={'initial':'1e-15'})
-        #elif p['name']=='CH4(aq)':
-        #    pools_tide[n]=pools_tide[n].copy()
-        #    pools_tide[n].update(constraints={'initial':'1e-15'})
-        #elif p['name']=='Fe+++':
-        #    pools_tide[n]=pools_tide[n].copy()
-        #    pools_tide[n].update(constraints={'initial':'1e-15'})
-    #bc=pools_tide
     bc=layers[0].initcond
 
-#cjw    bc=None
     dt=3600
-#cjw 3-yr run set up for 2011,2012,2013
-#    repyr=6            ##spin-up at least 6 cycle
-#    nyears=3*repyr      ## frequency of rerun the entire observation dataset
-#    nsteps=(365+366+365)*24//(dt//3600)*repyr
 #cjw 10-yr run set up, change to the following setting for 10-year run including leap year and non-leap year
     repyr=3
     yrchain=[2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019]
@@ -602,10 +551,6 @@ for stnm in nm:#bavg.keys():
         data.state.water_density=l.water_density
         data.state.porosity=l.porosity
         data.state.aqueous_pressure=l.pressure
-
-        #print('layer porosity,BD: %1.4f,%1.4f'%(l.porosity,l.BD))
-
-
             # Set properties: surface site density and mineral rate constants
             # This is necessary when running in hands-on mode
         if l.initcond is not None:
@@ -675,15 +620,9 @@ for stnm in nm:#bavg.keys():
 
 
     initial_HCO3 = l.total_mobile['HCO3-']
-    #print(initial_HCO3,layers[2].total_mobile['HCO3-'])
     initial_O2 = l.total_mobile['O2(aq)']
     initial_H = l.total_mobile['H+']
 
-    #print(initial_HCO3,initial_O2,layers[2].total_mobile['HCO3-'])
-        # Flow rate cm/s = 10 L/m2/s, positive is downward
-#    flow_rate=numpy.linspace(1e-6,1e-7,len(layers)) # Rate declines linearly with depth, assumes removal or accumulation in lower layers
-    #flow_rate=numpy.zeros(len(layers))*1e-7
-#    flow_rate=numpy.linspace(1e-7,1e-8,len(layers))
     min_dt=0.1
     truncate_concentration=1e-20
 
@@ -698,48 +637,29 @@ for stnm in nm:#bavg.keys():
     import operator
     import seaborn as sns
 
+## cjw set flag for ebullition scheme flag=0 means concentration threshold, flag=1 means pressure threshold
+    Ebul_flag=1   #choose ebullition method, flag=0 means concentration threshold, flag=1 means pressure threshold
 ##cjw parameter needed for transport
     tide_t=range(0,nsteps)
     Nlyr=range(0,len(layers))
     tdt=3600
-    #hypath=r"/Users/46w/Documents/estuary wetland/CRMS_data/10WaterLevel_3166.csv"
+    ##cjw path for hydrological and meterological hourly data.
+    hypath='./forcing/'
     hyfile1='10WaterLevel_'+stnm[4:8]+'.csv'
     hyfile2='10Salinity_'+stnm[4:8]+'.csv'
     hyfile3='10temp_'+stnm[4:8]+'.csv'
     hyfile4='10wind_'+wndid+'.csv'
-    wtl=pd.read_csv('/Users/jiaze/Documents/ornl_data/CRMS/'+hyfile1)         ##
-    salinity=pd.read_csv('/Users/jiaze/Documents/ornl_data/CRMS/'+hyfile2)
-    wtemp=pd.read_csv('/Users/jiaze/Documents/ornl_data/CRMS/'+hyfile3)
+    wtl=pd.read_csv(hypath+hyfile1)         ##
+    salinity=pd.read_csv(hypath+hyfile2)
+    wtemp=pd.read_csv(hypath+hyfile3)
     wtemp=wtemp.interpolate()
-    wnd=pd.read_csv('/Users/jiaze/Documents/ornl_data/CRMS/wind/'+hyfile4)
+    wnd=pd.read_csv(hypath+hyfile4)
 
-    #wtl=pd.read_csv('./10WaterLevel_2825.csv')         ##
-    #wtl=pd.read_csv('./10WaterLevel_3166.csv')         ##
-    #salinity=pd.read_csv('./10Salinity_3166.csv')      ## when salinity is high, Fe+++ is tend to be negative or model is not converge
-    #wtl=pd.read_csv('./10WaterLevel_2825.csv')         ##
-    #salinity=pd.read_csv('./10Salinity_2825.csv')      ## when salinity is high, Fe+++ is tend to be negative or model is not converge
-
-#c    abmsl=2.59 #units in meter
-#c    alpha=[163,154.6,176.1,153.8,37.4,30.8,37.2,19.2]    #phase angle in degrees M2,S2,N2,K2,K1,O1,P1,Q1
-#c    aM2=[0.013,0.007,0.005,0.002,0.114,0.114,0.036,0.025]       #amplitude in meters M2,S2,N2,K2,K1,O1,P1,Q1
-#c    w=[28.984104,30.0,28.43973,30.082138,15.041069,13.943035,14.958931,13.398661] #angual speed degree/hour
-#c    tide_t=range(0,nsteps)        #t in hours
-#c    Zs=2.59+0.1   #marsh elevation above mean sea level in meters
     Zs=0.0
     Zt=[]
     sf=[]       #salinity in tide
     Tw=[]
     wdspd=[]
-#c    for i in tide_t:
-#c        sz=abmsl
-#c        for j in range(0,len(w)):
-#c            z=aM2[j]*math.cos(w[j]*math.pi/(180*dt)*i*dt+alpha[j])
-#c            sz=sz+z
-#c        Zt+=[sz,]
-##create salinity time series in tide, this is just an arbitrary pattern for testing
-#c    for i in tide_t:
-#c        sal = 36*math.cos(w[1]*i+alpha[1])
-#c        sf+=[abs(sal),]
     Zt=wtl['WaterLevel'].values.tolist()
     sf=salinity['Salinity'].values.tolist()
     Tw=wtemp['Temperature'].values.tolist()
@@ -754,11 +674,6 @@ for stnm in nm:#bavg.keys():
     sf=[rep_sal if math.isnan(x) else x for x in sf]
     Tw=[rep_temp if math.isnan(x) else x for x in Tw]
     #wdspd=[rep_wnd if math.isnan(x) else x for x in wdspd]
-##subset data to match rainfall data, here subset data to year 2009. subset 2011-2013.
-#    Zt=[x for x in Zt[24*365*2:24*(365*4+366)-1]]
-#    sf=[x for x in sf[24*365*2:24*(365*4+366)-1]]
-#    Tw=[x for x in Tw[24*365*2:24*(365*4+366)-1]]
-
 
     if len(Zt) < nsteps//repyr:               #run twice of the observation data.
         Zt=Zt+[rep_wtl]*(nsteps//repyr-len(Zt))
@@ -778,10 +693,7 @@ for stnm in nm:#bavg.keys():
     sf=sf*(repyr-1)
     Tw=Tw*(repyr-1)
     wdspd=wdspd*(repyr-1)
-    #print(len(Zt))
-    #Zt=[i for i in Zt]
-    ##uniform salinity
-    #sf=[5+x*0 for x in sf]
+
     ## set senario runs for flooding, the relative sea level rising rate is 10mm/yr in MR (Jankowski et al., 2017); assume elevated mean sea level does not impact hydrodynamic is the same but
     ## elevated water level after 20 yrs will be 20*10mm=200mm=20cm=0.2m; after 10 yrs will be 0.1m, after 40 yrs will be 0.4m
     MSL=0.0      ## elevated mean sea level in meters after 20 yrs with 10mm/yr rising rate; 10 yrs with 10mm/yr
@@ -792,10 +704,9 @@ for stnm in nm:#bavg.keys():
     sf=sf+sf_tmp
     Tw=Tw+Tw_tmp
     wdspd=wdspd+wdspd_tmp
-    #print(len(Zt))
+
 #cjw create a tidal forcing concentration of compounds in tide for water-sediment interface boundary
 ##tconc_frac is the fraction of each primary species relative to salinity in water.
-#    rstcl=0.14   #unit is mg/ml:mg/ml
     salfc=0.00180665
 #ppt to sulfate concetration
 #    sulfc=salfc/0.14 ## sulfate concetration is mg/L, and 1e-3*mg/L/molar_mass=M
@@ -868,7 +779,6 @@ for stnm in nm:#bavg.keys():
             tmp=[i*tconc_fc[spec]/molar_mass[spec] for i in sf]
         tide_conc[spec]=tmp                            ##all gas species are set to be equilibrium with atmosphere, so the above setting is changed in the below code
 
-    #    soillyr=[l.volume for l in layers]
     zbio=0.1                #maximum bioturbation depth in meter below which bioturbation decrease exponentially
     thick=[l.volume for l in layers]
     mid_thick=[i/2 for i in thick]
@@ -877,7 +787,7 @@ for stnm in nm:#bavg.keys():
 
     #wInf=(3.3*10**(-0.87478367-0.00043512*zdpth[len(layers)-1]))*0.01/(3600*24*365)   ## advection rate or sedimentation rate in cm/yr -> m/s and zdpth in meter is the depth of the bottom layer
     porInf=layers[len(layers)-1].porosity-0.05#0.9#poravg[stnm][5]-0.05#0.9               ## porosity at the bottom layer or deepest depth of the column
-    #print(porInf)
+
     por0=layers[0].porosity #0.95#poravg[stnm][0]#0.95
 
     coeffp=4*0.01                 ## unit in cm, coeffecient for exponential porosity change -> change unit to m
@@ -889,7 +799,7 @@ for stnm in nm:#bavg.keys():
     #    print(protmp,por[i])
 
     pori=porInf+(por0-porInf)*np.exp([i*(-1/coeffp) for i in zdpth])  #porosity at interfaces
-    #print(pori)
+
     alpha=np.array([0]+[(thick[i]+thick[i+1])/2 for i in range(len(thick)-1)])   ##[0] create a 0 value for alpha to have an extra column or element ie without [0], alpha will have 3 element, with it will have 4 element
 
     Temp=0                   ## temperature in degree.
@@ -947,36 +857,17 @@ for stnm in nm:#bavg.keys():
         D0[nm]=D0[nm]*DFc
 ### cjw Zt is tide water level
 ##update bc state by different layer property
-#cjw    idxbc=0
-    #Ini_tidec=tide_conc
     z=numpy.array([0]+[l.volume for l in layers]).cumsum()
     z_mid=(z[:-1]+z[1:])/2
 
-#    for l in range(len(layers)):
-#        for spec in layers[l].primary_names:
-#            if spec in Dsed.keys():
-#                layers[l].diffquo[spec]=Dsed[spec][l]
-#        'SO4--':0.00001**((l+1)*0.75)}
-#            'H2(aq)':0.001**((l+1)*0.75),
-#            'N2(aq)':0.001**((l+1)*0.75),
-#            'N2O(aq)':0.001**((l+1)*0.75)
-#            }
-
-#    layers[0].surface_site_density['>DOM1']=1e2
-
     for l in layers:
         l.write_output(0,dt)
-
-    #flow_in=numpy.zeros(len(layers),dtype=float)
-    #flow_out=numpy.zeros(len(layers),dtype=float)
 
     t0=time.time()
     tprev=t0
 
     tstart=0
 
-        # Restart from existing state?
-#cjw        restart_state='Mn_saved.nc'
     restart_state=None
     if isinstance(restart_state,str):
         restart_state=xarray.open_dataset(restart_state)
@@ -986,8 +877,7 @@ for stnm in nm:#bavg.keys():
     elif isinstance(restart_state,list) and isinstance(restart_state[0],layer):
         layers=restart_state
 
-#cjw tmp for bc state to be reset as the way it is at dry condition; set dumpy layers for flux diffusion
-    #bc_tmp=bc_state
+#cjw tmp for bc state to be reset as the way it is at dry condition; set dummy layers for flux diffusion
     satur_initial=[l.saturation for l in layers]   #layer thickness
     gas_species={'O2(aq)':initial_O2,#0.00027235027,#0.000282, O2 partial pressure/kH=0.20950/769.23
     'CH4(aq)':2.37998572e-09,#0.00175,#1e-9, partial pressure/ henry constant=1.7*1e-6/714.29 under standard condition T=25, Wania R. et al., 2010
@@ -1009,20 +899,11 @@ for stnm in nm:#bavg.keys():
     T0=273.15+25    ## kalvin temp K
     Tstd=273.15
     Patm=101325     ##unit is Pa
-    #met_frac=0.4    #
-    #ebS=0.05708-0.001545*T+0.00002069*T*T
-    #ebV=ebS*layers[0].volume*layers[0].porosity*layers[0].saturation
-    #press=Patm+ryo*g*H     #g in 9.81 m/s2; h is 1 m, water density in 1000 kg/m3, pressure in 9810 Pa
-    #n_mol=Patm*ebV/(R*T)
-    #Ebmet=n_mol*0.4/(layers[0].volume*layers[0].porosity*layers[0].saturation*1000)   ##mol/L
-    #print(Ebmet)
+
     immobile_species=['SOM']#['SOM']
     Fimb={'SOM':4e-9}    #4e-9 #immobile species flux at sediment water interface unit is molC/m3. SOM to SOC is SOM*0.56;
     ### fresh 376/12=9.9e-7 mol-C/m2/s or kgram unit 0.376/0.56=0.6714 kg/m2/yr (2e-8 kg/m2/s); brackish 9.116e-7 mol-C/m2/s,0.345/0.56=0.616 kg m2/yr (2e-8 kg/m2/s); saline 1.149e-6 mol-c/m2/s, 435/0.56=0.776 kg m2/yr (2e-8); reference from Suir et al., 2019, Delaung et al., 2012. #mol/m3-bluk
-#cjw define diffusion dict
-    #Dt={}
-    #Dsed={}
-    #Dsedi={}
+
     ##cjw define dict for flux
     LtranR=numpy.zeros((len(D0),len(layers),nsteps))
     SOMtranR=numpy.zeros((len(layers),nsteps))
@@ -1030,8 +911,7 @@ for stnm in nm:#bavg.keys():
     gas_conc={}
 ##flux at sediment water surface
     Jswi=numpy.zeros((len(D0),nsteps))
-    Ebflag=1   #choose ebullition method, flag=0 means concentration threshold, flag=1 means pressure threshold
-#    Rc={}                     #flux between layers
+    Ebflag=Ebul_flag   #choose ebullition method, flag=0 means concentration threshold, flag=1 means pressure threshold
 #cjw question about the unit of total_mobile (mol/L?) and immobile species (immobile seems to have mol/m3-bulk)
     success=True
     for step in range(nsteps):
@@ -1043,8 +923,6 @@ for stnm in nm:#bavg.keys():
         Rc={}                     #flux between layers
         Ebgas={}
         dzw=Zt[step]-Zs
-        #dzw=abs(dzw)
-        #Temp=Tw[step]
         T=Tw[step]+273.15
 
         Hcp={'O2(aq)':1.2*1e-5*np.exp(-1700*(1/T-1/T0)),
@@ -1123,52 +1001,23 @@ for stnm in nm:#bavg.keys():
                             if spec in D0.keys():
                                 #Ebflux=0.0
                                 if spec in tconc_fc.keys():            ##the upper boundary of sediment column or SWI is imposed to be the tide_conc.
-                                    #if spec in ['HCO3-','CH4(aq)']:
-                                    #    Cw_tmp=tide_conc[spec][step]
-                                    #elif spec in Hcp.keys():
                                     if spec in Hcp.keys() and spec != 'CH4(aq)':
                                         Cw_tmp=Hcp[spec]*(Patm+9.81*1000*(dzw/2))*gas_frac[spec]*1e-3#*Tstd/(T*1000)   ##mol/L#gas_species[spec]
                                         ##print(Cw_tmp,spec,initial_HCO3)
                                     else:
                                         Cw_tmp=tide_conc[spec][step]              ##concentration in overlaying water supposed is uniform within water column, otherwise this value should be bottomwater concentration
-                                    #print(Cw_tmp,spec,initial_HCO3)
-                                    #Cw_tmp=tide_conc[spec][step]              ##concentration in overlaying water supposed is uniform within water column, otherwise this value should be bottomwater concentration
-                                    ##Cswi=(layers[num].total_mobile[spec]-Cw_tmp)*sig/(sig+thick[0]/2)+Cw_tmp    ##concentration at sediment-water interface
                                     Cswi=Cw_tmp
-                                    #Jflx=layers[num].porosity**2*Dsedi[spec][num]*(Cw_tmp-layers[num].total_mobile[spec])*1e3/(layers[0].volume)   #(lyrdpth[0]+lyrdpth[1]) mol/m2/s ; Jflx positive means downward flux or flux into soil and negative means upward flux outside of soil
                                 else:
-                                    #Jflx=0
                                     Cswi=layers[num].total_mobile[spec]
-##cjw ebullition for gas
-                                #if spec in gas_species.keys():
-                                #    if spec in Eb_tmp.keys():
-                                #        Ebflux=Eb_tmp[spec]
-                                #        #print(Eb_tmp[spec],spec)
-                                #    else:
-                                #        Ebflux=0.0
-                                #    if spec == 'HCO3-':
-                                #        layers[num].total_immobile['H+']=layers[num].total_immobile['H+']-Ebflux*1000*layers[num].porosity*layers[num].saturation*dt
-                                #    if spec == 'CH4(aq)':
-                                #        Ebull[num,step]=Ebflux*1000/thick[num]
-                                #else:
-                                #    Ebflux=0.0
-
                                 #cje compute flux from underlie layer to top layer
                                 rtmp1=pori[num]*Dsedi[spec][num]*(layers[num+1].total_mobile[spec]-layers[num].total_mobile[spec])/(layers[num].porosity*dz*thick[num])
                                 rtmp2=wInf*porInf*(alpha[num+1]*layers[num].total_mobile[spec]+(1-alpha[num+1])*layers[num+1].total_mobile[spec])/(layers[num].porosity*thick[num])
                                 rtmp3=por[num]*Dsed[spec][num]*(layers[num].total_mobile[spec]-Cswi)/(layers[num].porosity*(thick[num]/2+sig)*thick[num])
                                 rtmp4=wInf*porInf*(0.5*Cswi+(1-0.5)*layers[num].total_mobile[spec])/(layers[num].porosity*thick[num])
                                 Rtmp=rtmp1-rtmp2-rtmp3+rtmp4#-Ebflux
-                                #print(rtmp1,rtmp3,por[num],Dsed[spec][num],wInf)
-                                #if spec =='NO3-':
-                                #    print('Rtmp of NO3 %2.30f'%Rtmp)
                                 ##cjw SWI flux -- first order fick's law
                                 Jflx=(rtmp3*1000-rtmp4*1000)*layers[num].porosity*thick[num]#+Ebflux*1000/thick[num]                         ##unit is mol/m2/s
-                                #Jidx=list(D0.keys()).index(spec)
-                                #Jswi[Jidx,step]=Jflx
                                 gaswt=Cswi+Jflx/(dzw*1000)
-                                ##if spec in Hcp.keys():
-                                ##    gaseq=Hcp[spec]*(Patm+9.81*1000*(dzw/2))*gas_frac[spec]*1e-3#*Tstd/(T*1000)   ##mol/L#gas_species[spec]
                                 if spec in Sc_s.keys():
                                     if spec in Hcp.keys():
                                         gaseq=Hcp[spec]*(Patm+9.81*1000*(dzw/2))*gas_frac[spec]*1e-3#*Tstd/(T*1000)   ##mol/L#gas_species[spec]
@@ -1184,9 +1033,6 @@ for stnm in nm:#bavg.keys():
                                     Jflx=(rtmp3*1000-rtmp4*1000)*layers[num].porosity*thick[num]#+Ebflux*1000/thick[num]                         ##unit is mol/m2/s
                                 Jidx=list(D0.keys()).index(spec)
                                 Jswi[Jidx,step]=Jflx
-                                #Ebull[num,step]=Ebflux*1000/thick[num]
-                                #print('before Ebflux %2.9f,%2.9f at surface wet',Jswi[Jidx,step],Ebflux*1000/thick[num] )
-                                #print('Jflx %2.30f'%Rtmp)
                             elif spec in immobile_species:
                                 rtmp1=(1-pori[num])*Dbi[num]*(layers[num+1].total_immobile[spec]-layers[num].total_immobile[spec])/((1-layers[num].porosity)*dz*thick[num])
                                 rtmp2=wInf*(1-porInf)*(alpha[num+1]*layers[num].total_immobile[spec]+(1-alpha[num+1])*layers[num+1].total_immobile[spec])/((1-layers[num].porosity)*thick[num])
@@ -1199,7 +1045,6 @@ for stnm in nm:#bavg.keys():
                                 Rc[spec]=[Rtmp]     ##suppose the flux happens at one unit m2 surface
                             else:
                                 Rc[spec].append(Rtmp)
-                                #print('Jflx %2.30f'%Rtmp)
                 elif dzw <=0 :
                     #bc_state=bc_tmp
                     if bc is not None:
@@ -1207,7 +1052,6 @@ for stnm in nm:#bavg.keys():
                         for spec in primarynames:
                             pos=get_alquimiavector(data.meta_data.primary_names).index(spec)  ##this should work because data is copied to alquimia#is empty now
                             if spec in D0.keys():
-                                #Ebflux=0.0
                                 if spec in gas_species.keys():
                                     if spec in Hcp.keys():
                                         Cw_tmp=Hcp[spec]*Patm*gas_frac[spec]*1e-3#*Tstd/(T*1000)   ##mol/L#gas_species[spec]
@@ -1216,21 +1060,6 @@ for stnm in nm:#bavg.keys():
                                         Cw_tmp=gas_species[spec]
                                         #print(Hcp[spec],Cw_tmp)
                                     Cswi=Cw_tmp
-                                    #Ebflux=0.0
-                                    #if spec == 'CH4(aq)':
-                                    #Ebtmp=Ebmet
-                                    #Ebtmp=Ebtmp*gas_frac[spec]
-                                    #print('Ebull limit',Ebmet,gas_frac[spec],spec,layers[num].total_mobile[spec])
-                                    #layers[num].total_immobile['H+']=layers[num].total_immobile['H+']-dCO2*1000*layers[num].porosity*layers[num].saturation
-                                    #if spec in Eb_tmp.keys():
-                                    #    Ebflux=Eb_tmp[spec]
-                                    #    #print(Eb_tmp[spec],spec)
-                                    #else:
-                                    #    Ebflux=0.0
-                                    #if spec == 'HCO3-':
-                                    #    layers[num].total_immobile['H+']=layers[num].total_immobile['H+']-Ebflux*1000*layers[num].porosity*layers[num].saturation*dt
-                                    #if spec == 'CH4(aq)':
-                                    #    Ebull[num,step]=Ebflux*1000/thick[num]
                                 else:
                                     Cswi=layers[num].total_mobile[spec]
                                     #Ebflux=0.0
@@ -1287,8 +1116,6 @@ for stnm in nm:#bavg.keys():
                             else:
                                 Rc[spec].append(Rtmp)
             elif num < len(layers)-1 and num >0:
-                #layers[num].copy_to_alquimia(data)
-                #layers[num+1].porosity=por[num+1]
                 primarynames=layers[num].primary_names
                 for spec in primarynames:
                     if spec in D0.keys():
@@ -1312,7 +1139,6 @@ for stnm in nm:#bavg.keys():
                     else:
                         Rc[spec].append(Rtmp)
             elif num==len(layers)-1:
-                #layers[num].copy_to_alquimia(data)
                 primarynames=layers[num].primary_names
                 for spec in primarynames:
                     Cbtm=layers[num].total_mobile[spec]      ##bottom boundary layer for mobile concentration
@@ -1339,9 +1165,6 @@ for stnm in nm:#bavg.keys():
                         Rc[spec]=[Rtmp]     ##suppose the flux happens at one unit m2 surface
                     else:
                         Rc[spec].append(Rtmp)
-        #dCO2=layers[0].total_mobile['HCO3-']-initial_HCO3
-        #layers[0].total_mobile['HCO3-']=layers[0].total_mobile['HCO3-']-dCO2
-        #layers[0].total_immobile['H+']=layers[0].total_immobile['H+']-dCO2*1000*layers[0].porosity*layers[0].saturation
 ##cjw above is the first try on migrating boundary condition setup into time step loop.
         try:
             for n,l in enumerate(layers):
@@ -1410,9 +1233,6 @@ for stnm in nm:#bavg.keys():
             success=False
             break
 
-
-
-
         if step%100==0 and step>0:
             t1=time.time()
             cuts=[l.output['ncuts'][step-100:step].mean() for l in layers]
@@ -1422,7 +1242,7 @@ for stnm in nm:#bavg.keys():
             tprev=t1
 
 
-#cjw not sure what is in output
+#cjw output
     output=convert_to_xarray(layers,t0=tstart)
     if isinstance(restart_state,xarray.Dataset):
         output=xarray.concat([restart_state,output.isel(time=slice(1,None))],dim='time')
@@ -1433,29 +1253,17 @@ for stnm in nm:#bavg.keys():
     else:
         ebp=''
     today=datetime.datetime.today()
-    fname='./5V3166Results/wnd_temp_Methane_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
+    fname='./Outputs/wnd_temp_Methane_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
     fname=fname[:-3]+ebp+stnm[4:8]+'.nc'
-    Lname='./5V3166Results/wnd_temp_LtranR_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
+    Lname='./Outputs/wnd_temp_LtranR_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
     Lname=Lname[:-4]+ebp+stnm[4:8]+'.npy'
-    Jname='./5V3166Results/wnd_temp_Jswi_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
+    Jname='./Outputs/wnd_temp_Jswi_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
     Jname=Jname[:-4]+ebp+stnm[4:8]+'.npy'
-    Ename='./5V3166Results/wnd_temp_Ebull_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
+    Ename='./Outputs/wnd_temp_Ebull_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
     Ename=Ename[:-4]+ebp+stnm[4:8]+'.npy'
-    #output.to_netcdf(path='/lustre/or-scratch/cades-ccsi/46w/Methane_output_1yr_lowsal4.nc')
     output.to_netcdf(path=fname)
     numpy.save(Lname,LtranR)
     numpy.save(Jname,Jswi)
     numpy.save(Ename,Ebull)
-    #LtranR.to_xarray().to_netcdf(path='./TransportRate.nc')
-    #Jswi.to_xarray().to_netcdf(path='./Surfaceflux.nc')
-    #Jswi.to_csv(path='./Jswi.csv')
-    #LtranR.to_csv(path='./LtranR.csv')
-    #numpy.save("/lustre/or-scratch/cades-ccsi/46w/LtranR_1yr_lowsal4.npy",LtranR)
-    #numpy.save("/lustre/or-scratch/cades-ccsi/46w/Jswi_1yr_lowsal4.npy",Jswi)
-    #numpy.save("/lustre/or-scratch/cades-ccsi/46w/Ebull_1yr_lowsal4.npy",Ebull)
-    #pd.DataFrame(LtranR).to_csv('./LtranR.csv')
-    #pd.DataFrame(Jswi).to_csv('./Jswi.csv')
-    #convert_to_xarray([incubation_layer],leaf_Mn=leaf_Mn_concs).to_netcdf('Mn_output/Mn_incubations_pH{ph:1.1f}_Ndep{Ndep:03d}_warming{warming:d}_{year:04d}-{month:02d}-{day:02d}.nc'.format(ph=pH,Ndep=int(Ndep/(1000/molar_mass['N']/100**2/(365*24*3600) )),year=today.year,month=today.month,day=today.day,warming=warming))
-
 
 print('\n\n\n Simulation finished. Total time: %1.1f minutes\n'%((time.time()-starting_time)/60))
