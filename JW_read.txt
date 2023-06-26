@@ -1,7 +1,0 @@
-1. deltmarsh_profile2.py is able to generate plots
-2. delmar_networkv2.py has updated initial constraints for some substrates
-3. SOMdecomp_template_JW.txt is revised to include boundary conditions etc. in input decks
-4. A try has been done about how to change constraints names and values such as constaint for tide, sed-water-interface
-   delmar_network.py is the one add constraint{'tide':1e-10}, deltmarsh_profile.py is the runing file
-   which has deltamarsh_tide.in.
-
