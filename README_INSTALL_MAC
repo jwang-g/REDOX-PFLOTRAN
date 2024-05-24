@@ -51,7 +51,7 @@ cmake .. \
   -DCMAKE_BUILD_TYPE=Debug \
   -DXSDK_WITH_PFLOTRAN=ON \
   -DTPL_PFLOTRAN_LIBRARIES=$PFLOTRAN_DIR/src/pflotran/libpflotranchem.a \
-  -DTPL_PFLOTRAN_INCLUDE_DIRS=$PFLOTRAN_DIR/src/pflotran_rxn \
+  -DTPL_PFLOTRAN_INCLUDE_DIRS=$PFLOTRAN_DIR/src/pflotran \
   -DCMAKE_Fortran_FLAGS="-DPFLOTRAN_SOMDEC"
 
 make install
