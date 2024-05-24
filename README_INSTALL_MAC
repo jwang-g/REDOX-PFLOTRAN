@@ -43,6 +43,7 @@ cd build
 ## make sure cmake is installed on Mac, if not, should install homebrew first to use brew
 brew install cmake
 
+#zsh cannot recognize splitter \ in the cmake command.
 cmake .. \
   -DCMAKE_INSTALL_PREFIX=. \
   #-DCMAKE_C_COMPILER=$PETSC_DIR/$PETSC_ARCH/bin/mpicc \     ##using one of the the following three compilers, not all three of them, e., either mpicc or mpicxx or mpif90
