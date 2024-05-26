@@ -49,6 +49,7 @@ cmake .. \
   #-DCMAKE_C_COMPILER=$PETSC_DIR/$PETSC_ARCH/bin/mpicc \     ##using one of the the following three compilers, not all three of them, e., either mpicc or mpicxx or mpif90
   #-DCMAKE_CXX_COMPILER=$PETSC_DIR/$PETSC_ARCH/bin/mpicxx \
   -DCMAKE_Fortran_COMPILER=$PETSC_DIR/$PETSC_ARCH/bin/mpif90 \   ## choose one the above three compilers
+  -DPETSC_EXECUTABLE_RUNS=ON                ## this is a trick that may solve some compiling issues for apple M2 sonoma 14.5 or above 
   -DCMAKE_BUILD_TYPE=Debug \
   -DXSDK_WITH_PFLOTRAN=ON \
   -DTPL_PFLOTRAN_LIBRARIES=$PFLOTRAN_DIR/src/pflotran/libpflotranchem.a \
