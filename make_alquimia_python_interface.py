@@ -2,6 +2,14 @@ from cffi import FFI
 ffi_builder=FFI()
 import os
 
+## for AppleM2 sonoma, default compiler is clang which does not support float128, and need to define gcc compiler
+## gcc compiler is installed through homebrew, and may need to creat symbolic link in /usr/local/bin and /usr/local/lib/gcc to homebrew gcc location 
+## echo $PATH   #check if usr/bin/ which is the default clang is in front of usr/local/bin
+## sudo ln -s $(which gcc-14) /usr/local/bin/gcc 
+
+os.environ["CC"] = "gcc"
+os.environ["CXX"] = "g++"
+
 alquimia_dir='alquimia/build/alquimia'
 alquimia_include='alquimia/build/include'
 pflotran_dir=os.environ['PFLOTRAN_DIR']
