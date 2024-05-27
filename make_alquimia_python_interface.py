@@ -6,6 +6,8 @@ import os
 ## gcc compiler is installed through homebrew, and may need to creat symbolic link in /usr/local/bin and /usr/local/lib/gcc to homebrew gcc location 
 ## echo $PATH   #check if usr/bin/ which is the default clang is in front of usr/local/bin
 ## sudo ln -s $(which gcc-14) /usr/local/bin/gcc 
+## ln -s /opt/homebrew/lib/gcc/14/libgfortran.dylib /usr/local/lib/libgfortran.dylib
+## ln -s /opt/homebrew/lib/gcc/14/libgfortran.a /usr/local/lib/libgfortran.a
 
 os.environ["CC"] = "gcc"
 os.environ["CXX"] = "g++"
