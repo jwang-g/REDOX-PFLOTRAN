@@ -9,6 +9,7 @@ import os
 ## ln -s /opt/homebrew/lib/gcc/14/libgfortran.dylib /usr/local/lib/libgfortran.dylib
 ## ln -s /opt/homebrew/lib/gcc/14/libgfortran.a /usr/local/lib/libgfortran.a
 
+## below CC and CXX flags can be assigned to mpicc/mpicxx in petsc path for apple M2, if symbolic links are not assigned. 
 os.environ["CC"] = "gcc"
 os.environ["CXX"] = "g++"
 
