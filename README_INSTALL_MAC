@@ -28,7 +28,8 @@ conda create --name myanaconda3 --clone base
 conda activate myanaconda3
 conda install -c conda-forge pygraphviz ## this will allow to install pygraphviz 
 conda install xarray netCDF4 cftime
-conda install -c conda-forge mpi4py ## this will allow to install mpi4py
+conda install -c conda-forge mpi4py ##this will allow to install mpi4py; 
+##if MacOs with apple chip M2 Ultra, petsc may require openmpi, in that case, use conda install -c conda-forge mpi4py openmpi
 #pip install mpi4py
 pip install nc-time-axis
 
