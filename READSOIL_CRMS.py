@@ -9,7 +9,7 @@ def soils():
     pfl_bavg={}
     pfl_poravg={}
     pfl_satavg={}
-    path="./soildata"
+    path="./MEsoil"     #"./soildata"
     #os.chdir(path)
     # iterate through all file
     for file in os.listdir(path):
@@ -35,7 +35,12 @@ def soils():
             por=1-blkd/pdens
             std='2017-01-01'
             edd='2018-01-01'
-            corenm=['-S01','-S02','-S03','-S04','-S05','-S06']
+            if stid[0][0:8]in['CRMS0147','CRMS0157','CRMS0118','CRMS0139']:
+                corenm=['-S01','-S02','-S03']
+            elif stid[0][0:8]in['CRMS0114','CRMS0131','CRMS0162']:
+                corenm=['-S04','-S05','-S06']
+            else:
+                corenm=['-S01','-S02','-S03','-S04','-S05','-S06']
             stnm=[]
             for n in corenm:
                 stnm.append(file[:8]+n)
