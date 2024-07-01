@@ -655,7 +655,7 @@ for stnm in nm:#bavg.keys():
     Nlyr=range(0,len(layers))
     tdt=3600
     ##cjw path for hydrological and meterological hourly data.
-    hypath='/Users/jiaze/Documents/24OSM_Sim4Rachael/'               #'./forcing/'
+    hypath='./MEhydro/'#'/Users/jiaze/Documents/24OSM_Sim4Rachael/'               #'./forcing/'
     hyfile1='micro_tidal_'+'waterlevel'+'.csv'#'2011_'+'waterlevel'+'.csv'#'10WaterLevel_'+stnm[4:8]+'.csv'
     hyfile2='micro_tidal_'+'salinity'+'.csv'#'2011_'+'watersalinity'+'.csv'#'10Salinity_'+stnm[4:8]+'.csv'
     hyfile3='micro_tidal_'+'watertemp'+'.csv'#'2011_'+'watertemp'+'.csv'#'10temp_'+stnm[4:8]+'.csv'
