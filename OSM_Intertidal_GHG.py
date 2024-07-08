@@ -448,7 +448,7 @@ rateconstants={
 #'1.25e+00 Acetate-  + 2.00e+00 NO3-  + 7.50e-01 H+  -> 2.50e+00 HCO3-  + 1.00e+00 N2(aq)  + 1.00e+00 H2O  + 2.50e+00 Tracer':rate_scale*0.0036,#0.00407,#0.00652,#   ##Kanchan 2020 paper, barataria bay lake direct rate at 20 degree convert from flux to rate constant unit.[6.52e-13 marsh, 3.6e-13 lake3166, 4.07e-13channel3169]
 #'2.25e+00 Acetate-  + 4.00e+00 NO3-  + 1.75e+00 H+  -> 4.50e+00 HCO3-  + 1.00e+00 N2(aq)  + 1.00e+00 N2O(aq)  + 2.00e+00 H2O  + 4.50e+00 Tracer':rate_scale*0.0036,
 '1.00e+00 Acetate-  + 2.00e+00 NO3-  + 1.00e+00 H+  -> 2.00e+00 HCO3-  + 1.00e+00 N2O(aq)  + 1.00e+00 H2O  + 2.00e+00 Tracer':rate_scale*0.0036,
-'2.50e-01 Acetate-  + 1.00e+00 N2O(aq)  -> 5.00e-01 HCO3-  + 1.00e+00 N2(aq)  + 2.50e-01 H+  + 5.00e-01 Tracer':rate_scale*0.0036,
+'2.50e-01 Acetate-  + 1.00e+00 N2O(aq)  + 1.00e+00 H+  -> 5.00e-01 HCO3-  + 1.00e+00 N2(aq)  + 2.50e-01 H+  + 5.00e-01 Tracer':rate_scale*0.0036,
 '1.00e+00 Acetate-  + 2.00e+00 O2(aq)  -> 2.00e+00 HCO3-  + 2.00e+00 H+  + 2.00e+00 Tracer':rate_scale*1e2,
 '1.00e+00 CH4(aq)  + 2.00e+00 O2(aq)  -> 1.00e+00 HCO3-  + 1.00e+00 H+  + 1.00e+00 H2O  + 1.00e+00 Tracer':rate_scale*2.31,    ## Roslev and King, 1996
 '2.00e+00 NH4+  + 4.00e+00 O2(aq)  -> 2.00e+00 NO3-  + 2.00e+00 H2O  + 4.00e+00 H+':rate_scale*0.23, #0.358,          ## oxy uptake rate from Kanchan 2020 [3.58e-11 marsh, 2.3e-11 lake, 2.3e-11channel]
