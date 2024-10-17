@@ -8,7 +8,7 @@ import numpy
 import xarray
 import pdb
 #cjw
-import READSOIL_CRMS
+import MESOILPARAM
 import os
 
 class layer:
@@ -502,14 +502,17 @@ import math
 starting_time=time.time()
 
 rateconstants_warmed=rateconstants.copy()
-#cjw pH for fresh, brackish and salt is from DeLaune, 1983 (average data from 0-50cm).
-#cjw getting soil properties for all stations
-bavg,poravg,satavg=READSOIL_CRMS.soils()
+#tagert tidal environment
+tide_env=['Little River','Webhannet','Drakes Island']
+flag_env='Little River'
+#cjw getting soil properties for all stations; latgrd is lateral grid resolution in meter
+bavg,poravg=MESOILPARAM.soils(tidenv=flag_env,latgrd=1)
+
 #wind station name
 wndid='Gisl'        #wind data from grand isle
 slope=8    ## geomorphology slope degree
 #for station in stnm:
-nm=['CRMS0115','CRMS0224','CRMS3166']#,'CRMS0115','CRMS0117','CRMS0118']#['CRMS4245','CRMS3166','CRMS2825','CRMS0220','CRMS0224']
+nm=['low','middle','high']
 dist=len(nm)*1  #intertidal zone length
 clnum=0
 ##gental slope gradient
@@ -522,7 +525,7 @@ for stnm in nm:#bavg.keys():
     chem,data,sizes,status=init_alquimia(input_file,hands_off=False)
     
 #cjw assume it is always saturated even when water table is low (precipitation could bring water or river diversion)
-    layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=bavg[stnm][0],porosity=poravg[stnm][0],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][1],porosity=poravg[stnm][1],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][2],porosity=poravg[stnm][2],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][3],porosity=poravg[stnm][3],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][4],porosity=poravg[stnm][4],saturation=1)]+[layer(0.1,rateconstants=rateconstants_warmed,BD=bavg[stnm][5],porosity=poravg[stnm][5],saturation=1)]
+    layers=[layer(0.01,rateconstants=rateconstants_warmed,BD=bavg[stnm][0],porosity=poravg[stnm][0],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][0],porosity=poravg[stnm][0],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][1],porosity=poravg[stnm][1],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][2],porosity=poravg[stnm][2],saturation=1)]+[layer(0.05,rateconstants=rateconstants_warmed,BD=bavg[stnm][3],porosity=poravg[stnm][3],saturation=1)]
     for l in layers:
         l.secondary_names=secondary_names
     for l in layers:
