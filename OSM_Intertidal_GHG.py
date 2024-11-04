@@ -1297,14 +1297,14 @@ for stnm in nm:#bavg.keys():
     if not os.path.exists('OSMResults'):
         os.makedirs('OSMResults')
 
-    fname='./OSMResults/micro_wnd_temp_Methane_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
-    fname=fname[:-3]+ebp+stnm[4:8]+'.nc'
-    Lname='./OSMResults/micro_wnd_temp_LtranR_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
-    Lname=Lname[:-4]+ebp+stnm[4:8]+'.npy'
-    Jname='./OSMResults/micro_wnd_temp_Jswi_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
-    Jname=Jname[:-4]+ebp+stnm[4:8]+'.npy'
-    Ename='./OSMResults/micro_wnd_temp_Ebull_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
-    Ename=Ename[:-4]+ebp+stnm[4:8]+'.npy'
+    fname='./OSMResults/ME_wnd_temp_Methane_output_{year:04d}-{month:02d}-{day:02d}.nc'.format(year=today.year,month=today.month,day=today.day)
+    fname=fname[:-3]+ebp+stnm+'.nc'
+    Lname='./OSMResults/ME_wnd_temp_LtranR_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
+    Lname=Lname[:-4]+ebp+stnm+'.npy'
+    Jname='./OSMResults/ME_wnd_temp_Jswi_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
+    Jname=Jname[:-4]+ebp+stnm+'.npy'
+    Ename='./OSMResults/ME_wnd_temp_Ebull_{year:04d}-{month:02d}-{day:02d}.npy'.format(year=today.year,month=today.month,day=today.day)
+    Ename=Ename[:-4]+ebp+stnm+'.npy'
     output.to_netcdf(path=fname)
     numpy.save(Lname,LtranR)
     numpy.save(Jname,Jswi)
